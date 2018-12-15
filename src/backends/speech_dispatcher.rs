@@ -17,6 +17,18 @@ impl SpeechDispatcher {
     }
 }
 
+fn u8_to_i32(v: u8) -> i32 {
+    let ratio: f32 = v as f32/u8::MAX as f32;
+    (ratio * 200. - 100.) as i32
+}
+
+fn i32_to_u8(v: i32) -> u8 {
+    let v = v as f32;
+    let ratio: f32 = (v + 100.) / 200.;
+    let v = ratio * u8::MAX as f32;
+    v as u8
+}
+
 impl Backend for SpeechDispatcher {
     fn speak(&self, text: &str, interrupt: bool) {
         trace!("speak({}, {})", text, interrupt);
@@ -27,19 +39,26 @@ impl Backend for SpeechDispatcher {
     }
 
     fn get_rate(&self) -> u8 {
-        let rate = self.0.get_voice_rate() as f32;
-        trace!("get_voice_rate() = {}", rate);
-        let ratio: f32 = (rate + 100.) / 200.;
-        trace!("ratio = {}", ratio);
-        let rate = ratio * u8::MAX as f32;
-        trace!("rate = {}", rate);
-        rate as u8
+        i32_to_u8(self.0.get_voice_rate())
     }
 
     fn set_rate(&self, rate: u8) {
-        trace!("set_rate({})", rate);
-        let ratio: f32 = rate as f32/u8::MAX as f32;
-        let rate = ratio * 200. - 100.;
-        self.0.set_voice_rate(rate as i32);
+        self.0.set_voice_rate(u8_to_i32(rate));
+    }
+
+    fn get_pitch(&self) -> u8 {
+        i32_to_u8(self.0.get_voice_pitch())
+    }
+
+    fn set_pitch(&self, pitch: u8) {
+        self.0.set_voice_pitch(u8_to_i32(pitch));
+    }
+
+    fn get_volume(&self) -> u8 {
+        i32_to_u8(self.0.get_volume())
+    }
+
+    fn set_volume(&self, volume: u8) {
+        self.0.set_volume(u8_to_i32(volume));
     }
 }
