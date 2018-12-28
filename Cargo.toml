@@ -2,6 +2,9 @@
 name = "tts"
 version = "0.1.0"
 authors = ["Nolan Darilek <nolan@thewordnerd.info>"]
+repository = "https://fossil.thewordnerd.info/tts-rs"
+description = "High-level Text-To-Speech (TTS) interface"
+license = "MIT"
 edition = "2018"
 
 [dependencies]
