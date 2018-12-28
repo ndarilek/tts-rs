@@ -38,6 +38,11 @@ impl Backend for SpeechDispatcher {
         self.0.say(Priority::Important, text);
     }
 
+    fn stop(&self) {
+        trace!("stop()");
+        self.0.cancel();
+    }
+
     fn get_rate(&self) -> u8 {
         i32_to_u8(self.0.get_voice_rate())
     }

@@ -9,6 +9,7 @@ pub enum Backends {
 
 trait Backend {
     fn speak(&self, text: &str, interrupt: bool);
+    fn stop(&self);
     fn get_rate(&self) -> u8;
     fn set_rate(&self, rate: u8);
     fn get_pitch(&self) -> u8;
@@ -29,6 +30,11 @@ impl TTS {
 
     pub fn speak<S: Into<String>>(&self, text: S, interrupt: bool) -> &Self {
         self.0.speak(text.into().as_str(), interrupt);
+        self
+    }
+
+    pub fn stop(&self) -> &Self {
+        self.0.stop();
         self
     }
 
