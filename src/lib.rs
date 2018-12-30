@@ -1,6 +1,8 @@
 /*!
  * a Text-To-Speech (TTS) library providing high-level interfaces to a variety of backends.
- * Currently supported backends are [Speech Dispatcher](https://freebsoft.org/speechd) (Linux).
+ * Currently supported backends are:
+ * *  [Speech Dispatcher](https://freebsoft.org/speechd) (Linux)
+ * * WebAssembly
 */
 
 use std::boxed::Box;
