@@ -5,7 +5,7 @@ use std::u8;
 use log::{info, trace};
 use speech_dispatcher::*;
 
-use crate::Backend;
+use crate::{Backend, Error};
 
 pub struct SpeechDispatcher(Connection);
 
@@ -30,40 +30,45 @@ fn i32_to_u8(v: i32) -> u8 {
 }
 
 impl Backend for SpeechDispatcher {
-    fn speak(&self, text: &str, interrupt: bool) {
+    fn speak(&self, text: &str, interrupt: bool) -> Result<(), Error> {
         trace!("speak({}, {})", text, interrupt);
         if interrupt {
-            self.0.cancel();
+            self.stop()?;
         }
         self.0.say(Priority::Important, text);
+        Ok(())
     }
 
-    fn stop(&self) {
+    fn stop(&self) -> Result<(), Error> {
         trace!("stop()");
         self.0.cancel();
+        Ok(())
     }
 
-    fn get_rate(&self) -> u8 {
-        i32_to_u8(self.0.get_voice_rate())
+    fn get_rate(&self) -> Result<u8, Error> {
+        Ok(i32_to_u8(self.0.get_voice_rate()))
     }
 
-    fn set_rate(&self, rate: u8) {
+    fn set_rate(&mut self, rate: u8) -> Result<(), Error> {
         self.0.set_voice_rate(u8_to_i32(rate));
+        Ok(())
     }
 
-    fn get_pitch(&self) -> u8 {
-        i32_to_u8(self.0.get_voice_pitch())
+    fn get_pitch(&self) -> Result<u8, Error> {
+        Ok(i32_to_u8(self.0.get_voice_pitch()))
     }
 
-    fn set_pitch(&self, pitch: u8) {
+    fn set_pitch(&mut self, pitch: u8) -> Result<(), Error> {
         self.0.set_voice_pitch(u8_to_i32(pitch));
+        Ok(())
     }
 
-    fn get_volume(&self) -> u8 {
-        i32_to_u8(self.0.get_volume())
+    fn get_volume(&self) -> Result<u8, Error> {
+        Ok(i32_to_u8(self.0.get_volume()))
     }
 
-    fn set_volume(&self, volume: u8) {
+    fn set_volume(&mut self, volume: u8) -> Result<(), Error> {
         self.0.set_volume(u8_to_i32(volume));
+        Ok(())
     }
 }
