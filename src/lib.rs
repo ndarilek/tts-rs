@@ -50,6 +50,10 @@ trait Backend {
 
 pub struct TTS(Box<Backend>);
 
+unsafe impl std::marker::Send for TTS {}
+
+unsafe impl std::marker::Sync for TTS {}
+
 impl TTS {
     /**
      * Create a new `TTS` instance with the specified backend.
