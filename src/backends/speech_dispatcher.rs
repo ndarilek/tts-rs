@@ -1,5 +1,4 @@
 #[cfg(target_os = "linux")]
-
 use std::u8;
 
 use log::{info, trace};
@@ -18,7 +17,7 @@ impl SpeechDispatcher {
 }
 
 fn u8_to_i32(v: u8) -> i32 {
-    let ratio: f32 = v as f32/u8::MAX as f32;
+    let ratio: f32 = v as f32 / u8::MAX as f32;
     (ratio * 200. - 100.) as i32
 }
 

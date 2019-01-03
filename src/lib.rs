@@ -51,10 +51,9 @@ trait Backend {
 pub struct TTS(Box<Backend>);
 
 impl TTS {
-
     /**
      * Create a new `TTS` instance with the specified backend.
-    */
+     */
     pub fn new(backend: Backends) -> Result<TTS, Error> {
         match backend {
             #[cfg(target_os = "linux")]
@@ -63,7 +62,7 @@ impl TTS {
             Backends::Web => {
                 let tts = backends::Web::new()?;
                 Ok(TTS(Box::new(tts)))
-            },
+            }
         }
     }
 
@@ -77,7 +76,7 @@ impl TTS {
 
     /**
      * Speaks the specified text, optionally interrupting current speech.
-    */
+     */
     pub fn speak<S: Into<String>>(&self, text: S, interrupt: bool) -> Result<&Self, Error> {
         self.0.speak(text.into().as_str(), interrupt)?;
         Ok(self)
@@ -85,7 +84,7 @@ impl TTS {
 
     /**
      * Stops current speech.
-    */
+     */
     pub fn stop(&self) -> Result<&Self, Error> {
         self.0.stop()?;
         Ok(self)
@@ -93,14 +92,14 @@ impl TTS {
 
     /**
      * Gets the current speech rate.
-    */
+     */
     pub fn get_rate(&self) -> Result<u8, Error> {
         self.0.get_rate()
     }
 
     /**
      * Sets the desired speech rate.
-    */
+     */
     pub fn set_rate(&mut self, rate: u8) -> Result<&Self, Error> {
         self.0.set_rate(rate)?;
         Ok(self)
@@ -108,14 +107,14 @@ impl TTS {
 
     /**
      * Gets the current speech pitch.
-    */
+     */
     pub fn get_pitch(&self) -> Result<u8, Error> {
         self.0.get_pitch()
     }
 
     /**
      * Sets the desired speech pitch.
-    */
+     */
     pub fn set_pitch(&mut self, pitch: u8) -> Result<&Self, Error> {
         self.0.set_pitch(pitch)?;
         Ok(self)
@@ -123,14 +122,14 @@ impl TTS {
 
     /**
      * Gets the current speech volume.
-    */
+     */
     pub fn get_volume(&self) -> Result<u8, Error> {
         self.0.get_volume()
     }
 
     /**
      * Sets the desired speech volume.
-    */
+     */
     pub fn set_volume(&mut self, volume: u8) -> Result<&Self, Error> {
         self.0.set_volume(volume)?;
         Ok(self)

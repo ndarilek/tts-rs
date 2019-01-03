@@ -1,5 +1,4 @@
 #[cfg(target_arch = "wasm32")]
-
 use std::u8;
 
 use log::{info, trace};
