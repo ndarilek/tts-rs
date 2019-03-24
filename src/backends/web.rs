@@ -24,6 +24,15 @@ impl Web {
 }
 
 impl Backend for Web {
+    fn supported_features(&self) -> Features {
+        Features {
+            stop: true,
+            rate: true,
+            pitch: true,
+            volume: true,
+        }
+    }
+
     fn speak(&self, text: &str, interrupt: bool) -> Result<(), Error> {
         trace!("speak({}, {})", text, interrupt);
         let utterance = SpeechSynthesisUtterance::new_with_text(text).unwrap();

@@ -37,7 +37,15 @@ impl convert::From<Error> for io::Error {
     }
 }
 
-trait Backend {
+pub struct Features {
+    stop: bool,
+    rate: bool,
+    pitch: bool,
+    volume: bool,
+}
+
+pub trait Backend {
+    fn supported_features(&self) -> Features;
     fn speak(&self, text: &str, interrupt: bool) -> Result<(), Error>;
     fn stop(&self) -> Result<(), Error>;
     fn get_rate(&self) -> Result<u8, Error>;
@@ -79,6 +87,13 @@ impl TTS {
     }
 
     /**
+     * Returns the features supported by this TTS engine
+     */
+    pub fn supported_features(&self) -> Features {
+        self.0.supported_features()
+    }
+
+    /**
      * Speaks the specified text, optionally interrupting current speech.
      */
     pub fn speak<S: Into<String>>(&self, text: S, interrupt: bool) -> Result<&Self, Error> {
@@ -90,52 +105,87 @@ impl TTS {
      * Stops current speech.
      */
     pub fn stop(&self) -> Result<&Self, Error> {
-        self.0.stop()?;
-        Ok(self)
+        let Features { stop, .. } = self.supported_features();
+        if stop {
+            self.0.stop()?;
+            Ok(self)
+        } else {
+            Err(Error("Feature not supported".to_string()))
+        }
     }
 
     /**
      * Gets the current speech rate.
      */
     pub fn get_rate(&self) -> Result<u8, Error> {
-        self.0.get_rate()
+        let Features { rate, .. } = self.supported_features();
+        if rate {
+            self.0.get_rate()
+        } else {
+            Err(Error("Feature not supported".to_string()))
+        }
     }
 
     /**
      * Sets the desired speech rate.
      */
     pub fn set_rate(&mut self, rate: u8) -> Result<&Self, Error> {
-        self.0.set_rate(rate)?;
-        Ok(self)
+        let Features { rate: rate_feature, .. } = self.supported_features();
+        if rate_feature {
+            self.0.set_rate(rate)?;
+            Ok(self)
+        } else {
+            Err(Error("Unsupported feature".to_string()))
+        }
     }
 
     /**
      * Gets the current speech pitch.
      */
     pub fn get_pitch(&self) -> Result<u8, Error> {
-        self.0.get_pitch()
+        let Features { pitch, .. } = self.supported_features();
+        if pitch {
+            self.0.get_pitch()
+        } else {
+            Err(Error("Feature not supported".to_string()))
+        }
     }
 
     /**
      * Sets the desired speech pitch.
      */
     pub fn set_pitch(&mut self, pitch: u8) -> Result<&Self, Error> {
-        self.0.set_pitch(pitch)?;
-        Ok(self)
+        let Features { pitch: pitch_feature, .. } = self.supported_features();
+        if pitch_feature {
+            self.0.set_pitch(pitch)?;
+            Ok(self)
+        } else {
+            Err(Error("Unsupported feature".to_string()))
+        }
     }
 
     /**
      * Gets the current speech volume.
      */
     pub fn get_volume(&self) -> Result<u8, Error> {
-        self.0.get_volume()
+        let Features { volume, .. } = self.supported_features();
+        if volume {
+            self.0.get_volume()
+        } else {
+            Err(Error("Unsupported feature".to_string()))
+        }
     }
 
     /**
      * Sets the desired speech volume.
      */
     pub fn set_volume(&mut self, volume: u8) -> Result<&Self, Error> {
-        self.0.set_volume(volume)?;
-        Ok(self)
+        let Features { volume: volume_feature, .. } = self.supported_features();
+        if volume_feature {
+            self.0.set_volume(volume)?;
+            Ok(self)
+        } else {
+            Err(Error("Unsupported feature".to_string()))
+        }
     }
 }

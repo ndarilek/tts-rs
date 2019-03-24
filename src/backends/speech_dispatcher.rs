@@ -4,7 +4,7 @@ use std::u8;
 use log::{info, trace};
 use speech_dispatcher::*;
 
-use crate::{Backend, Error};
+use crate::{Backend, Error, Features};
 
 pub struct SpeechDispatcher(Connection);
 
@@ -29,6 +29,15 @@ fn i32_to_u8(v: i32) -> u8 {
 }
 
 impl Backend for SpeechDispatcher {
+    fn supported_features(&self) -> Features {
+        Features {
+            stop: true,
+            rate: true,
+            pitch: true,
+            volume: true,
+        }
+    }
+
     fn speak(&self, text: &str, interrupt: bool) -> Result<(), Error> {
         trace!("speak({}, {})", text, interrupt);
         if interrupt {
