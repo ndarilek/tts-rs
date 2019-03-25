@@ -81,7 +81,7 @@ impl TTS {
             Backends::Tolk => {
                 let tts = backends::Tolk::new();
                 Ok(TTS(Box::new(tts)))
-            }
+            },
         }
     }
 
