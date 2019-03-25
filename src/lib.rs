@@ -38,10 +38,10 @@ impl convert::From<Error> for io::Error {
 }
 
 pub struct Features {
-    stop: bool,
-    rate: bool,
-    pitch: bool,
-    volume: bool,
+    pub stop: bool,
+    pub rate: bool,
+    pub pitch: bool,
+    pub volume: bool,
 }
 
 pub trait Backend {
@@ -130,7 +130,9 @@ impl TTS {
      * Sets the desired speech rate.
      */
     pub fn set_rate(&mut self, rate: u8) -> Result<&Self, Error> {
-        let Features { rate: rate_feature, .. } = self.supported_features();
+        let Features {
+            rate: rate_feature, ..
+        } = self.supported_features();
         if rate_feature {
             self.0.set_rate(rate)?;
             Ok(self)
@@ -155,7 +157,10 @@ impl TTS {
      * Sets the desired speech pitch.
      */
     pub fn set_pitch(&mut self, pitch: u8) -> Result<&Self, Error> {
-        let Features { pitch: pitch_feature, .. } = self.supported_features();
+        let Features {
+            pitch: pitch_feature,
+            ..
+        } = self.supported_features();
         if pitch_feature {
             self.0.set_pitch(pitch)?;
             Ok(self)
@@ -180,7 +185,10 @@ impl TTS {
      * Sets the desired speech volume.
      */
     pub fn set_volume(&mut self, volume: u8) -> Result<&Self, Error> {
-        let Features { volume: volume_feature, .. } = self.supported_features();
+        let Features {
+            volume: volume_feature,
+            ..
+        } = self.supported_features();
         if volume_feature {
             self.0.set_volume(volume)?;
             Ok(self)
