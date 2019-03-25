@@ -15,6 +15,9 @@ log = "0.4"
 [dev-dependencies]
 env_logger = "0.6"
 
+[target.'cfg(windows)'.dependencies]
+tolk = { git = "https://github.com/ndarilek/tolk-rs" }
+
 [target.'cfg(target_os = "linux")'.dependencies]
 speech-dispatcher = "0.2"
 
