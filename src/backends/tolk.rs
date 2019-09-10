@@ -10,6 +10,7 @@ impl Tolk {
     pub fn new() -> impl Backend {
         info!("Initializing Tolk backend");
         let tolk = TolkPtr::new();
+        tolk.try_sapi(true);
         Tolk(tolk)
     }
 }
@@ -17,7 +18,7 @@ impl Tolk {
 impl Backend for Tolk {
     fn supported_features(&self) -> Features {
         Features {
-            stop: false,
+            stop: true,
             rate: false,
             pitch: false,
             volume: false,
@@ -32,7 +33,8 @@ impl Backend for Tolk {
 
     fn stop(&self) -> Result<(), Error> {
         trace!("stop()");
-        unimplemented!();
+        self.0.silence();
+        Ok(())
     }
 
     fn get_rate(&self) -> Result<u8, Error> {

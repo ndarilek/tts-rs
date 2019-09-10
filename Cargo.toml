@@ -1,6 +1,6 @@
 [package]
 name = "tts"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["Nolan Darilek <nolan@thewordnerd.info>"]
 repository = "https://gitlab.com/ndarilek/tts-rs"
 description = "High-level Text-To-Speech (TTS) interface"
@@ -16,7 +16,7 @@ log = "0.4"
 env_logger = "0.6"
 
 [target.'cfg(windows)'.dependencies]
-tolk = { git = "https://github.com/ndarilek/tolk-rs" }
+tolk = "0.2"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 speech-dispatcher = "0.3"

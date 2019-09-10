@@ -1,3 +1,4 @@
+use std::io;
 use std::u8;
 
 use tts::*;
@@ -35,5 +36,7 @@ fn main() -> Result<(), std::io::Error> {
         tts.set_volume(original_volume)?;
     }
     tts.speak("Goodbye.", false)?;
+    let mut _input = String::new();
+    io::stdin().read_line(&mut _input)?;
     Ok(())
 }
