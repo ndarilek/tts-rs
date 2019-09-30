@@ -58,7 +58,7 @@ pub trait Backend {
     fn set_volume(&mut self, volume: u8) -> Result<(), Error>;
 }
 
-pub struct TTS(Box<Backend>);
+pub struct TTS(Box<dyn Backend>);
 
 unsafe impl std::marker::Send for TTS {}
 
