@@ -43,7 +43,14 @@ impl Backend for SpeechDispatcher {
         if interrupt {
             self.stop()?;
         }
+        let single_char = text.to_string().capacity() == 1;
+        if single_char {
+            self.0.set_punctuation(Punctuation::All);
+        }
         self.0.say(Priority::Important, text);
+        if single_char {
+            self.0.set_punctuation(Punctuation::None);
+        }
         Ok(())
     }
 
