@@ -9,7 +9,7 @@ use crate::{Backend, Error, Features};
 pub struct SpeechDispatcher(Connection);
 
 impl SpeechDispatcher {
-    pub fn new() -> impl Backend {
+    pub fn new() -> Self {
         info!("Initializing SpeechDispatcher backend");
         let connection = speech_dispatcher::Connection::open("tts", "tts", "tts", Mode::Single);
         SpeechDispatcher(connection)

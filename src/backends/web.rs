@@ -13,7 +13,7 @@ pub struct Web {
 }
 
 impl Web {
-    pub fn new() -> Result<impl Backend, Error> {
+    pub fn new() -> Result<Self, Error> {
         info!("Initializing Web backend");
         Ok(Web {
             rate: 25,

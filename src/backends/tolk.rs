@@ -7,7 +7,7 @@ use crate::{Backend, Error, Features};
 pub struct Tolk(TolkPtr);
 
 impl Tolk {
-    pub fn new() -> impl Backend {
+    pub fn new() -> Self {
         info!("Initializing Tolk backend");
         let tolk = TolkPtr::new();
         tolk.try_sapi(true);
