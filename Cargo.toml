@@ -1,6 +1,6 @@
 [package]
 name = "tts"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Nolan Darilek <nolan@thewordnerd.info>"]
 repository = "https://gitlab.com/ndarilek/tts-rs"
 description = "High-level Text-To-Speech (TTS) interface"
@@ -13,13 +13,13 @@ failure = "0.1"
 log = "0.4"
 
 [dev-dependencies]
-env_logger = "0.6"
+env_logger = "0.7"
 
 [target.'cfg(windows)'.dependencies]
 tolk = "0.2"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-speech-dispatcher = "0.3"
+speech-dispatcher = "0.4"
 
 [target.wasm32-unknown-unknown.dependencies]
 wasm-bindgen = "0.2"
