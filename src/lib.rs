@@ -1,16 +1,14 @@
 /*!
  * a Text-To-Speech (TTS) library providing high-level interfaces to a variety of backends.
  * Currently supported backends are:
- * *  [Speech Dispatcher](https://freebsoft.org/speechd) (Linux)
+ * * [Speech Dispatcher](https://freebsoft.org/speechd) (Linux)
+ * * Windows screen readers and SAPI via [Tolk](https://github.com/dkager/tolk/)
  * * WebAssembly
 */
 
 use std::boxed::Box;
-use std::convert;
-use std::fmt;
-use std::io;
 
-use failure::Fail;
+use thiserror::Error;
 
 mod backends;
 
@@ -21,22 +19,8 @@ pub enum Backends {
     Web,
     #[cfg(windows)]
     Tolk,
-}
-
-#[derive(Debug, Fail)]
-pub struct Error(String);
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "{}", self.0)?;
-        Ok(())
-    }
-}
-
-impl convert::From<Error> for io::Error {
-    fn from(e: Error) -> io::Error {
-        io::Error::new(io::ErrorKind::Other, e.0)
-    }
+    #[cfg(windows)]
+    WinRT,
 }
 
 pub struct Features {
@@ -44,6 +28,17 @@ pub struct Features {
     pub rate: bool,
     pub pitch: bool,
     pub volume: bool,
+}
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("IO error: {0}")]
+    IO(#[from] std::io::Error),
+    #[cfg(windows)]
+    #[error("WinRT error")]
+    WinRT(winrt::Error),
+    #[error("Unsupported feature")]
+    UnsupportedFeature,
 }
 
 pub trait Backend {
@@ -82,6 +77,11 @@ impl TTS {
                 let tts = backends::Tolk::new();
                 Ok(TTS(Box::new(tts)))
             }
+            #[cfg(windows)]
+            Backends::WinRT => {
+                let tts = backends::winrt::WinRT::new()?;
+                Ok(TTS(Box::new(tts)))
+            }
         }
     }
 
@@ -89,7 +89,14 @@ impl TTS {
         #[cfg(target_os = "linux")]
         let tts = TTS::new(Backends::SpeechDispatcher);
         #[cfg(windows)]
-        let tts = TTS::new(Backends::Tolk);
+        let tts = {
+            let tolk = tolk::Tolk::new();
+            if tolk.detect_screen_reader().is_some() {
+                TTS::new(Backends::Tolk)
+            } else {
+                TTS::new(Backends::WinRT)
+            }
+        };
         #[cfg(target_arch = "wasm32")]
         let tts = TTS::new(Backends::Web);
         tts
@@ -119,7 +126,7 @@ impl TTS {
             self.0.stop()?;
             Ok(self)
         } else {
-            Err(Error("Feature not supported".to_string()))
+            Err(Error::UnsupportedFeature)
         }
     }
 
@@ -131,7 +138,7 @@ impl TTS {
         if rate {
             self.0.get_rate()
         } else {
-            Err(Error("Feature not supported".to_string()))
+            Err(Error::UnsupportedFeature)
         }
     }
 
@@ -146,7 +153,7 @@ impl TTS {
             self.0.set_rate(rate)?;
             Ok(self)
         } else {
-            Err(Error("Unsupported feature".to_string()))
+            Err(Error::UnsupportedFeature)
         }
     }
 
@@ -158,7 +165,7 @@ impl TTS {
         if pitch {
             self.0.get_pitch()
         } else {
-            Err(Error("Feature not supported".to_string()))
+            Err(Error::UnsupportedFeature)
         }
     }
 
@@ -174,7 +181,7 @@ impl TTS {
             self.0.set_pitch(pitch)?;
             Ok(self)
         } else {
-            Err(Error("Unsupported feature".to_string()))
+            Err(Error::UnsupportedFeature)
         }
     }
 
@@ -186,7 +193,7 @@ impl TTS {
         if volume {
             self.0.get_volume()
         } else {
-            Err(Error("Unsupported feature".to_string()))
+            Err(Error::UnsupportedFeature)
         }
     }
 
@@ -202,7 +209,7 @@ impl TTS {
             self.0.set_volume(volume)?;
             Ok(self)
         } else {
-            Err(Error("Unsupported feature".to_string()))
+            Err(Error::UnsupportedFeature)
         }
     }
 }

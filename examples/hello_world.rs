@@ -3,7 +3,7 @@ use std::u8;
 
 use tts::*;
 
-fn main() -> Result<(), std::io::Error> {
+fn main() -> Result<(), Error> {
     env_logger::init();
     let mut tts = TTS::default()?;
     tts.speak("Hello, world.", false)?;

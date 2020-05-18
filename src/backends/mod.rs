@@ -4,6 +4,9 @@ mod speech_dispatcher;
 #[cfg(windows)]
 mod tolk;
 
+#[cfg(windows)]
+pub(crate) mod winrt;
+
 #[cfg(target_arch = "wasm32")]
 mod web;
 
