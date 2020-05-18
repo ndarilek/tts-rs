@@ -1,6 +1,4 @@
 #[cfg(target_os = "linux")]
-use std::u8;
-
 use log::{info, trace};
 use speech_dispatcher::*;
 
@@ -14,18 +12,6 @@ impl SpeechDispatcher {
         let connection = speech_dispatcher::Connection::open("tts", "tts", "tts", Mode::Single);
         SpeechDispatcher(connection)
     }
-}
-
-fn u8_to_i32(v: u8) -> i32 {
-    let ratio: f32 = v as f32 / u8::MAX as f32;
-    (ratio * 200. - 100.) as i32
-}
-
-fn i32_to_u8(v: i32) -> u8 {
-    let v = v as f32;
-    let ratio: f32 = (v + 100.) / 200.;
-    let v = ratio * u8::MAX as f32;
-    v as u8
 }
 
 impl Backend for SpeechDispatcher {
@@ -60,30 +46,66 @@ impl Backend for SpeechDispatcher {
         Ok(())
     }
 
-    fn get_rate(&self) -> Result<u8, Error> {
-        Ok(i32_to_u8(self.0.get_voice_rate()))
+    fn min_rate(&self) -> f32 {
+        -100.
     }
 
-    fn set_rate(&mut self, rate: u8) -> Result<(), Error> {
-        self.0.set_voice_rate(u8_to_i32(rate));
+    fn max_rate(&self) -> f32 {
+        100.
+    }
+
+    fn normal_rate(&self) -> f32 {
+        0.
+    }
+
+    fn get_rate(&self) -> Result<f32, Error> {
+        Ok(self.0.get_voice_rate() as f32)
+    }
+
+    fn set_rate(&mut self, rate: f32) -> Result<(), Error> {
+        self.0.set_voice_rate(rate as i32);
         Ok(())
     }
 
-    fn get_pitch(&self) -> Result<u8, Error> {
-        Ok(i32_to_u8(self.0.get_voice_pitch()))
+    fn min_pitch(&self) -> f32 {
+        -100.
     }
 
-    fn set_pitch(&mut self, pitch: u8) -> Result<(), Error> {
-        self.0.set_voice_pitch(u8_to_i32(pitch));
+    fn max_pitch(&self) -> f32 {
+        100.
+    }
+
+    fn normal_pitch(&self) -> f32 {
+        0.
+    }
+
+    fn get_pitch(&self) -> Result<f32, Error> {
+        Ok(self.0.get_voice_pitch() as f32)
+    }
+
+    fn set_pitch(&mut self, pitch: f32) -> Result<(), Error> {
+        self.0.set_voice_pitch(pitch as i32);
         Ok(())
     }
 
-    fn get_volume(&self) -> Result<u8, Error> {
-        Ok(i32_to_u8(self.0.get_volume()))
+    fn min_volume(&self) -> f32 {
+        -100.
     }
 
-    fn set_volume(&mut self, volume: u8) -> Result<(), Error> {
-        self.0.set_volume(u8_to_i32(volume));
+    fn max_volume(&self) -> f32 {
+        100.
+    }
+
+    fn normal_volume(&self) -> f32 {
+        0.
+    }
+
+    fn get_volume(&self) -> Result<f32, Error> {
+        Ok(self.0.get_volume() as f32)
+    }
+
+    fn set_volume(&mut self, volume: f32) -> Result<(), Error> {
+        self.0.set_volume(volume as i32);
         Ok(())
     }
 }

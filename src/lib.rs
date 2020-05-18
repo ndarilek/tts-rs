@@ -39,18 +39,29 @@ pub enum Error {
     WinRT(winrt::Error),
     #[error("Unsupported feature")]
     UnsupportedFeature,
+    #[error("Out of range")]
+    OutOfRange,
 }
 
 pub trait Backend {
     fn supported_features(&self) -> Features;
     fn speak(&self, text: &str, interrupt: bool) -> Result<(), Error>;
     fn stop(&self) -> Result<(), Error>;
-    fn get_rate(&self) -> Result<u8, Error>;
-    fn set_rate(&mut self, rate: u8) -> Result<(), Error>;
-    fn get_pitch(&self) -> Result<u8, Error>;
-    fn set_pitch(&mut self, pitch: u8) -> Result<(), Error>;
-    fn get_volume(&self) -> Result<u8, Error>;
-    fn set_volume(&mut self, volume: u8) -> Result<(), Error>;
+    fn min_rate(&self) -> f32;
+    fn max_rate(&self) -> f32;
+    fn normal_rate(&self) -> f32;
+    fn get_rate(&self) -> Result<f32, Error>;
+    fn set_rate(&mut self, rate: f32) -> Result<(), Error>;
+    fn min_pitch(&self) -> f32;
+    fn max_pitch(&self) -> f32;
+    fn normal_pitch(&self) -> f32;
+    fn get_pitch(&self) -> Result<f32, Error>;
+    fn set_pitch(&mut self, pitch: f32) -> Result<(), Error>;
+    fn min_volume(&self) -> f32;
+    fn max_volume(&self) -> f32;
+    fn normal_volume(&self) -> f32;
+    fn get_volume(&self) -> Result<f32, Error>;
+    fn set_volume(&mut self, volume: f32) -> Result<(), Error>;
 }
 
 pub struct TTS(Box<dyn Backend>);
@@ -131,9 +142,30 @@ impl TTS {
     }
 
     /**
+     * Returns the minimum rate for this speech synthesizer.
+     */
+    pub fn min_rate(&self) -> f32 {
+        self.0.min_rate()
+    }
+
+    /**
+     * Returns the maximum rate for this speech synthesizer.
+     */
+    pub fn max_rate(&self) -> f32 {
+        self.0.max_rate()
+    }
+
+    /**
+     * Returns the normal rate for this speech synthesizer.
+     */
+    pub fn normal_rate(&self) -> f32 {
+        self.0.normal_rate()
+    }
+
+    /**
      * Gets the current speech rate.
      */
-    pub fn get_rate(&self) -> Result<u8, Error> {
+    pub fn get_rate(&self) -> Result<f32, Error> {
         let Features { rate, .. } = self.supported_features();
         if rate {
             self.0.get_rate()
@@ -145,22 +177,47 @@ impl TTS {
     /**
      * Sets the desired speech rate.
      */
-    pub fn set_rate(&mut self, rate: u8) -> Result<&Self, Error> {
+    pub fn set_rate(&mut self, rate: f32) -> Result<&Self, Error> {
         let Features {
             rate: rate_feature, ..
         } = self.supported_features();
         if rate_feature {
-            self.0.set_rate(rate)?;
-            Ok(self)
+            if rate < self.0.min_rate() || rate > self.0.max_rate() {
+                Err(Error::OutOfRange)
+            } else {
+                self.0.set_rate(rate)?;
+                Ok(self)
+            }
         } else {
             Err(Error::UnsupportedFeature)
         }
     }
 
     /**
+     * Returns the minimum pitch for this speech synthesizer.
+     */
+    pub fn min_pitch(&self) -> f32 {
+        self.0.min_pitch()
+    }
+
+    /**
+     * Returns the maximum pitch for this speech synthesizer.
+     */
+    pub fn max_pitch(&self) -> f32 {
+        self.0.max_pitch()
+    }
+
+    /**
+     * Returns the normal pitch for this speech synthesizer.
+     */
+    pub fn normal_pitch(&self) -> f32 {
+        self.0.normal_pitch()
+    }
+
+    /**
      * Gets the current speech pitch.
      */
-    pub fn get_pitch(&self) -> Result<u8, Error> {
+    pub fn get_pitch(&self) -> Result<f32, Error> {
         let Features { pitch, .. } = self.supported_features();
         if pitch {
             self.0.get_pitch()
@@ -172,23 +229,48 @@ impl TTS {
     /**
      * Sets the desired speech pitch.
      */
-    pub fn set_pitch(&mut self, pitch: u8) -> Result<&Self, Error> {
+    pub fn set_pitch(&mut self, pitch: f32) -> Result<&Self, Error> {
         let Features {
             pitch: pitch_feature,
             ..
         } = self.supported_features();
         if pitch_feature {
-            self.0.set_pitch(pitch)?;
-            Ok(self)
+            if pitch < self.0.min_pitch() || pitch > self.0.max_pitch() {
+                Err(Error::OutOfRange)
+            } else {
+                self.0.set_pitch(pitch)?;
+                Ok(self)
+            }
         } else {
             Err(Error::UnsupportedFeature)
         }
     }
 
     /**
+     * Returns the minimum volume for this speech synthesizer.
+     */
+    pub fn min_volume(&self) -> f32 {
+        self.0.min_volume()
+    }
+
+    /**
+     * Returns the maximum volume for this speech synthesizer.
+     */
+    pub fn max_volume(&self) -> f32 {
+        self.0.max_volume()
+    }
+
+    /**
+     * Returns the normal volume for this speech synthesizer.
+     */
+    pub fn normal_volume(&self) -> f32 {
+        self.0.normal_volume()
+    }
+
+    /**
      * Gets the current speech volume.
      */
-    pub fn get_volume(&self) -> Result<u8, Error> {
+    pub fn get_volume(&self) -> Result<f32, Error> {
         let Features { volume, .. } = self.supported_features();
         if volume {
             self.0.get_volume()
@@ -200,14 +282,18 @@ impl TTS {
     /**
      * Sets the desired speech volume.
      */
-    pub fn set_volume(&mut self, volume: u8) -> Result<&Self, Error> {
+    pub fn set_volume(&mut self, volume: f32) -> Result<&Self, Error> {
         let Features {
             volume: volume_feature,
             ..
         } = self.supported_features();
         if volume_feature {
-            self.0.set_volume(volume)?;
-            Ok(self)
+            if volume < self.0.min_volume() || volume > self.0.max_volume() {
+                Err(Error::OutOfRange)
+            } else {
+                self.0.set_volume(volume)?;
+                Ok(self)
+            }
         } else {
             Err(Error::UnsupportedFeature)
         }

@@ -48,9 +48,9 @@ impl Backend for WinRT {
     fn supported_features(&self) -> Features {
         Features {
             stop: true,
-            rate: false,
-            pitch: false,
-            volume: false,
+            rate: true,
+            pitch: true,
+            volume: true,
         }
     }
 
@@ -71,27 +71,69 @@ impl Backend for WinRT {
         Ok(())
     }
 
-    fn get_rate(&self) -> std::result::Result<u8, Error> {
-        unimplemented!();
+    fn min_rate(&self) -> f32 {
+        0.5
     }
 
-    fn set_rate(&mut self, _rate: u8) -> std::result::Result<(), Error> {
-        unimplemented!();
+    fn max_rate(&self) -> f32 {
+        6.0
     }
 
-    fn get_pitch(&self) -> std::result::Result<u8, Error> {
-        unimplemented!();
+    fn normal_rate(&self) -> f32 {
+        1.
     }
 
-    fn set_pitch(&mut self, _pitch: u8) -> std::result::Result<(), Error> {
-        unimplemented!();
+    fn get_rate(&self) -> std::result::Result<f32, Error> {
+        let rate = self.synth.options()?.speaking_rate()?;
+        Ok(rate as f32)
     }
 
-    fn get_volume(&self) -> std::result::Result<u8, Error> {
-        unimplemented!();
+    fn set_rate(&mut self, rate: f32) -> std::result::Result<(), Error> {
+        self.synth.options()?.set_speaking_rate(rate.into())?;
+        Ok(())
     }
 
-    fn set_volume(&mut self, _volume: u8) -> std::result::Result<(), Error> {
-        unimplemented!();
+    fn min_pitch(&self) -> f32 {
+        0.
+    }
+
+    fn max_pitch(&self) -> f32 {
+        2.
+    }
+
+    fn normal_pitch(&self) -> f32 {
+        1.
+    }
+
+    fn get_pitch(&self) -> std::result::Result<f32, Error> {
+        let pitch = self.synth.options()?.audio_pitch()?;
+        Ok(pitch as f32)
+    }
+
+    fn set_pitch(&mut self, pitch: f32) -> std::result::Result<(), Error> {
+        self.synth.options()?.set_audio_pitch(pitch.into())?;
+        Ok(())
+    }
+
+    fn min_volume(&self) -> f32 {
+        0.
+    }
+
+    fn max_volume(&self) -> f32 {
+        1.
+    }
+
+    fn normal_volume(&self) -> f32 {
+        1.
+    }
+
+    fn get_volume(&self) -> std::result::Result<f32, Error> {
+        let volume = self.synth.options()?.audio_volume()?;
+        Ok(volume as f32)
+    }
+
+    fn set_volume(&mut self, volume: f32) -> std::result::Result<(), Error> {
+        self.synth.options()?.set_audio_volume(volume.into())?;
+        Ok(())
     }
 }

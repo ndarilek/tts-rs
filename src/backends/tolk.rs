@@ -37,27 +37,63 @@ impl Backend for Tolk {
         Ok(())
     }
 
-    fn get_rate(&self) -> Result<u8, Error> {
+    fn min_rate(&self) -> f32 {
+        unimplemented!()
+    }
+
+    fn max_rate(&self) -> f32 {
+        unimplemented!()
+    }
+
+    fn normal_rate(&self) -> f32 {
+        unimplemented!()
+    }
+
+    fn get_rate(&self) -> Result<f32, Error> {
         unimplemented!();
     }
 
-    fn set_rate(&mut self, _rate: u8) -> Result<(), Error> {
+    fn set_rate(&mut self, _rate: f32) -> Result<(), Error> {
         unimplemented!();
     }
 
-    fn get_pitch(&self) -> Result<u8, Error> {
+    fn min_pitch(&self) -> f32 {
+        unimplemented!()
+    }
+
+    fn max_pitch(&self) -> f32 {
+        unimplemented!()
+    }
+
+    fn normal_pitch(&self) -> f32 {
+        unimplemented!()
+    }
+
+    fn get_pitch(&self) -> Result<f32, Error> {
         unimplemented!();
     }
 
-    fn set_pitch(&mut self, _pitch: u8) -> Result<(), Error> {
+    fn set_pitch(&mut self, _pitch: f32) -> Result<(), Error> {
         unimplemented!();
     }
 
-    fn get_volume(&self) -> Result<u8, Error> {
+    fn min_volume(&self) -> f32 {
+        unimplemented!()
+    }
+
+    fn max_volume(&self) -> f32 {
+        unimplemented!()
+    }
+
+    fn normal_volume(&self) -> f32 {
+        unimplemented!()
+    }
+
+    fn get_volume(&self) -> Result<f32, Error> {
         unimplemented!();
     }
 
-    fn set_volume(&mut self, _volume: u8) -> Result<(), Error> {
+    fn set_volume(&mut self, _volume: f32) -> Result<(), Error> {
         unimplemented!();
     }
 }
