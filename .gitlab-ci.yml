@@ -12,7 +12,9 @@ before_script:
 test:
   stage: test
   script:
-  - cargo test
+  - cargo build
+  - rustup target add wasm32-unknown-unknown
+  - cargo build --target wasm32-unknown-unknown
 
 publish:
   stage: publish
