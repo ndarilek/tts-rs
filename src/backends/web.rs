@@ -28,6 +28,7 @@ impl Backend for Web {
             rate: true,
             pitch: true,
             volume: true,
+            is_speaking: true,
         }
     }
 
@@ -117,5 +118,17 @@ impl Backend for Web {
     fn set_volume(&mut self, volume: f32) -> Result<(), Error> {
         self.volume = volume;
         Ok(())
+    }
+
+    fn is_speaking(&self) -> Result<bool, Error> {
+        trace!("is_speaking()");
+        if let Some(window) = web_sys::window() {
+            match window.speech_synthesis() {
+                Ok(speech_synthesis) => Ok(speech_synthesis.speaking()),
+                Err(e) => Err(Error::JavaScriptError(e)),
+            }
+        } else {
+            Err(Error::NoneError)
+        }
     }
 }

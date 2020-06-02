@@ -22,6 +22,7 @@ impl Backend for Tolk {
             rate: false,
             pitch: false,
             volume: false,
+            is_speaking: false,
         }
     }
 
@@ -95,5 +96,9 @@ impl Backend for Tolk {
 
     fn set_volume(&mut self, _volume: f32) -> Result<(), Error> {
         unimplemented!();
+    }
+
+    fn is_speaking(&self) -> Result<bool, Error> {
+        unimplemented!()
     }
 }

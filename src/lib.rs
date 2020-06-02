@@ -28,12 +28,17 @@ pub struct Features {
     pub rate: bool,
     pub pitch: bool,
     pub volume: bool,
+    pub is_speaking: bool,
 }
 
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("IO error: {0}")]
     IO(#[from] std::io::Error),
+    #[error("Value not received")]
+    NoneError,
+    #[error("JavaScript error: [0])]")]
+    JavaScriptError(wasm_bindgen::JsValue),
     #[cfg(windows)]
     #[error("WinRT error")]
     WinRT(winrt::Error),
@@ -62,6 +67,7 @@ pub trait Backend {
     fn normal_volume(&self) -> f32;
     fn get_volume(&self) -> Result<f32, Error>;
     fn set_volume(&mut self, volume: f32) -> Result<(), Error>;
+    fn is_speaking(&self) -> Result<bool, Error>;
 }
 
 pub struct TTS(Box<dyn Backend>);
@@ -294,6 +300,18 @@ impl TTS {
                 self.0.set_volume(volume)?;
                 Ok(self)
             }
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
+    }
+
+    /**
+     * Returns whether this speech synthesizer is speaking.
+     */
+    pub fn is_speaking(&self) -> Result<bool, Error> {
+        let Features { is_speaking, .. } = self.supported_features();
+        if is_speaking {
+            self.0.is_speaking()
         } else {
             Err(Error::UnsupportedFeature)
         }

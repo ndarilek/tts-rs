@@ -21,6 +21,7 @@ impl Backend for SpeechDispatcher {
             rate: true,
             pitch: true,
             volume: true,
+            is_speaking: false,
         }
     }
 
@@ -107,5 +108,9 @@ impl Backend for SpeechDispatcher {
     fn set_volume(&mut self, volume: f32) -> Result<(), Error> {
         self.0.set_volume(volume as i32);
         Ok(())
+    }
+
+    fn is_speaking(&self) -> Result<bool, Error> {
+        unimplemented!()
     }
 }

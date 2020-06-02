@@ -51,6 +51,7 @@ impl Backend for WinRT {
             rate: true,
             pitch: true,
             volume: true,
+            is_speaking: false,
         }
     }
 
@@ -135,5 +136,9 @@ impl Backend for WinRT {
     fn set_volume(&mut self, volume: f32) -> std::result::Result<(), Error> {
         self.synth.options()?.set_audio_volume(volume.into())?;
         Ok(())
+    }
+
+    fn is_speaking(&self) -> Result<bool, Error> {
+        unimplemented!()
     }
 }
