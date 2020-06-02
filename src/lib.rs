@@ -37,6 +37,7 @@ pub enum Error {
     IO(#[from] std::io::Error),
     #[error("Value not received")]
     NoneError,
+    #[cfg(target_arch = "wasm32")]
     #[error("JavaScript error: [0])]")]
     JavaScriptError(wasm_bindgen::JsValue),
     #[cfg(windows)]
