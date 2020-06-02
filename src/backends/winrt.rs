@@ -138,7 +138,7 @@ impl Backend for WinRT {
         Ok(())
     }
 
-    fn is_speaking(&self) -> Result<bool, Error> {
+    fn is_speaking(&self) -> std::result::Result<bool, Error> {
         unimplemented!()
     }
 }
