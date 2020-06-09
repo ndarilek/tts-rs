@@ -4,15 +4,15 @@ use winrt::*;
 import!(
     dependencies
         os
-    modules
-        "windows.media.core"
-        "windows.media.playback"
-        "windows.media.speechsynthesis"
+    types
+        windows::media::core::MediaSource
+        windows::media::playback::{MediaPlaybackItem, MediaPlaybackList, MediaPlaybackState, MediaPlayer}
+        windows::media::speech_synthesis::SpeechSynthesizer
 );
 
 use log::{info, trace};
 use windows::media::core::MediaSource;
-use windows::media::playback::{MediaPlaybackItem, MediaPlaybackList, MediaPlayer};
+use windows::media::playback::{MediaPlaybackItem, MediaPlaybackList, MediaPlaybackState, MediaPlayer};
 use windows::media::speech_synthesis::SpeechSynthesizer;
 
 use crate::{Backend, Error, Features};
@@ -139,6 +139,8 @@ impl Backend for WinRT {
     }
 
     fn is_speaking(&self) -> std::result::Result<bool, Error> {
-        unimplemented!()
+        let state = self.player.playback_session()?.playback_state()?;
+        let playing = state == MediaPlaybackState::Playing;
+        Ok(playing)
     }
 }

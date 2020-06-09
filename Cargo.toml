@@ -15,7 +15,7 @@ thiserror = "1"
 
 [target.'cfg(windows)'.dependencies]
 tolk = "0.2"
-winrt = { git = "https://github.com/microsoft/winrt-rs", rev = "ed46a71f506c343b3eb4fa6c15a4d9db1397ebcf" }
+winrt = "0.7"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 speech-dispatcher = "0.4"
