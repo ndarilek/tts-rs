@@ -1,0 +1,40 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build_linux:
+    name: Build Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y libspeechd-dev
+          cargo build --release
+
+  build_windows:
+    name: Build Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: |
+          choco install -y llvm
+          cargo build --release
+
+  publish:
+    name: Publish
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TOKEN: ${{ secrets.CARGO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v2
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y libspeechd-dev
+          cargo login $CARGO_TOKEN
+          cargo package
+          cargo publish
