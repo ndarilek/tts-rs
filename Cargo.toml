@@ -2,7 +2,7 @@
 name = "tts"
 version = "0.2.3"
 authors = ["Nolan Darilek <nolan@thewordnerd.info>"]
-repository = "https://gitlab.com/ndarilek/tts-rs"
+repository = "https://github.com/ndarilek/tts-rs"
 description = "High-level Text-To-Speech (TTS) interface"
 license = "MIT"
 exclude = ["*.cfg", "*.yml"]
