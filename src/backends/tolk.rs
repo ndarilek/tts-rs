@@ -7,11 +7,14 @@ use crate::{Backend, Error, Features};
 pub struct Tolk(TolkPtr);
 
 impl Tolk {
-    pub fn new() -> Self {
+    pub fn new() -> Option<Self> {
         info!("Initializing Tolk backend");
         let tolk = TolkPtr::new();
-        tolk.try_sapi(true);
-        Tolk(tolk)
+        if tolk.detect_screen_reader().is_some() {
+            Some(Tolk(tolk))
+        } else {
+            None
+        }
     }
 }
 

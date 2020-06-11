@@ -93,7 +93,11 @@ impl TTS {
             #[cfg(windows)]
             Backends::Tolk => {
                 let tts = backends::Tolk::new();
-                Ok(TTS(Box::new(tts)))
+                if let Some(tts) = tts {
+                    Ok(TTS(Box::new(tts)))
+                } else {
+                    Err(Error::NoneError)
+                }
             }
             #[cfg(windows)]
             Backends::WinRT => {
@@ -107,13 +111,10 @@ impl TTS {
         #[cfg(target_os = "linux")]
         let tts = TTS::new(Backends::SpeechDispatcher);
         #[cfg(windows)]
-        let tts = {
-            let tolk = tolk::Tolk::new();
-            if tolk.detect_screen_reader().is_some() {
-                TTS::new(Backends::Tolk)
-            } else {
-                TTS::new(Backends::WinRT)
-            }
+        let tts = if let Some(tts) = TTS::new(Backends::Tolk).ok() {
+            Ok(tts)
+        } else {
+            TTS::new(Backends::WinRT)
         };
         #[cfg(target_arch = "wasm32")]
         let tts = TTS::new(Backends::Web);
