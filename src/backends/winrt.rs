@@ -12,7 +12,9 @@ import!(
 
 use log::{info, trace};
 use windows::media::core::MediaSource;
-use windows::media::playback::{MediaPlaybackItem, MediaPlaybackList, MediaPlaybackState, MediaPlayer};
+use windows::media::playback::{
+    MediaPlaybackItem, MediaPlaybackList, MediaPlaybackState, MediaPlayer,
+};
 use windows::media::speech_synthesis::SpeechSynthesizer;
 
 use crate::{Backend, Error, Features};
@@ -57,6 +59,9 @@ impl Backend for WinRT {
 
     fn speak(&self, text: &str, interrupt: bool) -> std::result::Result<(), Error> {
         trace!("speak({}, {})", text, interrupt);
+        if interrupt {
+            self.stop()?;
+        }
         let stream = self.synth.synthesize_text_to_stream_async(text)?.get()?;
         let content_type = stream.content_type()?;
         let source = MediaSource::create_from_stream(stream, content_type)?;
@@ -67,7 +72,7 @@ impl Backend for WinRT {
 
     fn stop(&self) -> std::result::Result<(), Error> {
         trace!("stop()");
-        self.player.close()?;
+        self.player.pause()?;
         self.playback_list.items()?.clear()?;
         Ok(())
     }
