@@ -35,7 +35,6 @@ impl WinRT {
     pub fn new() -> std::result::Result<Self, Error> {
         info!("Initializing WinRT backend");
         let player = MediaPlayer::new()?;
-        player.set_auto_play(true)?;
         let playback_list = MediaPlaybackList::new()?;
         player.set_source(&playback_list)?;
         Ok(Self {
