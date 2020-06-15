@@ -67,6 +67,9 @@ impl Backend for WinRT {
         let source = MediaSource::create_from_stream(stream, content_type)?;
         let item = MediaPlaybackItem::create(source)?;
         self.playback_list.items()?.append(item)?;
+        if !self.is_speaking()? {
+            self.player.play()?;
+        }
         Ok(())
     }
 
