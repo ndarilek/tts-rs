@@ -1,7 +1,8 @@
 [package]
-name = "winrt_bindings"
+name = "tts_winrt_bindings"
 version = "0.1.0"
 authors = ["Nolan Darilek <nolan@thewordnerd.info>"]
+description = "Internal crate used by `tts`"
 edition = "2018"
 
 [dependencies]
