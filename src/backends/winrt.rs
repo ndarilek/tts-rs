@@ -1,21 +1,11 @@
 #[cfg(windows)]
-use winrt::*;
-
-import!(
-    dependencies
-        os
-    types
-        windows::media::core::MediaSource
-        windows::media::playback::{MediaPlaybackItem, MediaPlaybackList, MediaPlaybackState, MediaPlayer}
-        windows::media::speech_synthesis::SpeechSynthesizer
-);
-
 use log::{info, trace};
-use windows::media::core::MediaSource;
-use windows::media::playback::{
+
+use winrt_bindings::windows::media::core::MediaSource;
+use winrt_bindings::windows::media::playback::{
     MediaPlaybackItem, MediaPlaybackList, MediaPlaybackState, MediaPlayer,
 };
-use windows::media::speech_synthesis::SpeechSynthesizer;
+use winrt_bindings::windows::media::speech_synthesis::SpeechSynthesizer;
 
 use crate::{Backend, Error, Features};
 
@@ -35,6 +25,7 @@ impl WinRT {
     pub fn new() -> std::result::Result<Self, Error> {
         info!("Initializing WinRT backend");
         let player = MediaPlayer::new()?;
+        player.set_auto_play(true)?;
         let playback_list = MediaPlaybackList::new()?;
         player.set_source(&playback_list)?;
         Ok(Self {
@@ -147,7 +138,7 @@ impl Backend for WinRT {
 
     fn is_speaking(&self) -> std::result::Result<bool, Error> {
         let state = self.player.playback_session()?.playback_state()?;
-        let playing = state == MediaPlaybackState::Playing;
+        let playing = state == MediaPlaybackState::Opening || state == MediaPlaybackState::Playing;
         Ok(playing)
     }
 }

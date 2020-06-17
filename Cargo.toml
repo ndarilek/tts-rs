@@ -18,6 +18,7 @@ env_logger = "0.7"
 [target.'cfg(windows)'.dependencies]
 tolk = "0.2"
 winrt = "0.7"
+winrt_bindings = {path="winrt_bindings"}
 
 [target.'cfg(target_os = "linux")'.dependencies]
 speech-dispatcher = "0.4"
