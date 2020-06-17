@@ -33,6 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - run: |
+          choco install -y llvm
           cargo login $CARGO_TOKEN
           cd winrt_bindings
           cargo package
