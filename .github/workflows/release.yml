@@ -37,6 +37,6 @@ jobs:
           sudo apt-get install -y libspeechd-dev
           cargo login $CARGO_TOKEN
           cd winrt_bindings
-          cargo publish
+          cargo publish --no-verify
           cd ..
           cargo publish
