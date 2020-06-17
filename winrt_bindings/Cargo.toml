@@ -3,6 +3,7 @@ name = "tts_winrt_bindings"
 version = "0.1.0"
 authors = ["Nolan Darilek <nolan@thewordnerd.info>"]
 description = "Internal crate used by `tts`"
+license = "MIT"
 edition = "2018"
 
 [dependencies]
