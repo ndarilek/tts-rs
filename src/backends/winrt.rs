@@ -56,6 +56,14 @@ impl Backend for WinRT {
         let content_type = stream.content_type()?;
         let source = MediaSource::create_from_stream(stream, content_type)?;
         let item = MediaPlaybackItem::create(source)?;
+        let state = self.player.playback_session()?.playback_state()?;
+        if state == MediaPlaybackState::Paused {
+            let index = self.playback_list.current_item_index()?;
+            let total = self.playback_list.items()?.size()?;
+            if index == total - 1 {
+                self.playback_list.items()?.clear()?;
+            }
+        }
         self.playback_list.items()?.append(item)?;
         if !self.is_speaking()? {
             self.player.play()?;
