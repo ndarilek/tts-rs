@@ -1,11 +1,11 @@
 #[cfg(windows)]
 use log::{info, trace};
 
-use winrt_bindings::windows::media::core::MediaSource;
-use winrt_bindings::windows::media::playback::{
+use tts_winrt_bindings::windows::media::core::MediaSource;
+use tts_winrt_bindings::windows::media::playback::{
     MediaPlaybackItem, MediaPlaybackList, MediaPlaybackState, MediaPlayer,
 };
-use winrt_bindings::windows::media::speech_synthesis::SpeechSynthesizer;
+use tts_winrt_bindings::windows::media::speech_synthesis::SpeechSynthesizer;
 
 use crate::{Backend, Error, Features};
 
