@@ -29,13 +29,13 @@ impl Backend for Tolk {
         }
     }
 
-    fn speak(&self, text: &str, interrupt: bool) -> Result<(), Error> {
+    fn speak(&mut self, text: &str, interrupt: bool) -> Result<(), Error> {
         trace!("speak({}, {})", text, interrupt);
         self.0.speak(text, interrupt);
         Ok(())
     }
 
-    fn stop(&self) -> Result<(), Error> {
+    fn stop(&mut self) -> Result<(), Error> {
         trace!("stop()");
         self.0.silence();
         Ok(())

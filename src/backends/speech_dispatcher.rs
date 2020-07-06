@@ -25,7 +25,7 @@ impl Backend for SpeechDispatcher {
         }
     }
 
-    fn speak(&self, text: &str, interrupt: bool) -> Result<(), Error> {
+    fn speak(&mut self, text: &str, interrupt: bool) -> Result<(), Error> {
         trace!("speak({}, {})", text, interrupt);
         if interrupt {
             self.stop()?;
@@ -41,7 +41,7 @@ impl Backend for SpeechDispatcher {
         Ok(())
     }
 
-    fn stop(&self) -> Result<(), Error> {
+    fn stop(&mut self) -> Result<(), Error> {
         trace!("stop()");
         self.0.cancel();
         Ok(())

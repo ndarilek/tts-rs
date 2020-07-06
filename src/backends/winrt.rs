@@ -24,15 +24,23 @@ pub struct WinRT {
 impl WinRT {
     pub fn new() -> std::result::Result<Self, Error> {
         info!("Initializing WinRT backend");
+        let playback_list = MediaPlaybackList::new()?;
         let player = MediaPlayer::new()?;
         player.set_auto_play(true)?;
-        let playback_list = MediaPlaybackList::new()?;
         player.set_source(&playback_list)?;
         Ok(Self {
             synth: SpeechSynthesizer::new()?,
             player: player,
             playback_list: playback_list,
         })
+    }
+
+    fn reinit_player(&mut self) -> std::result::Result<(), Error> {
+        self.playback_list = MediaPlaybackList::new()?;
+        self.player = MediaPlayer::new()?;
+        self.player.set_auto_play(true)?;
+        self.player.set_source(&self.playback_list)?;
+        Ok(())
     }
 }
 
@@ -47,7 +55,7 @@ impl Backend for WinRT {
         }
     }
 
-    fn speak(&self, text: &str, interrupt: bool) -> std::result::Result<(), Error> {
+    fn speak(&mut self, text: &str, interrupt: bool) -> std::result::Result<(), Error> {
         trace!("speak({}, {})", text, interrupt);
         if interrupt {
             self.stop()?;
@@ -61,7 +69,7 @@ impl Backend for WinRT {
             let index = self.playback_list.current_item_index()?;
             let total = self.playback_list.items()?.size()?;
             if total != 0 && index == total - 1 {
-                self.playback_list.items()?.clear()?;
+                self.reinit_player()?;
             }
         }
         self.playback_list.items()?.append(item)?;
@@ -71,10 +79,9 @@ impl Backend for WinRT {
         Ok(())
     }
 
-    fn stop(&self) -> std::result::Result<(), Error> {
+    fn stop(&mut self) -> std::result::Result<(), Error> {
         trace!("stop()");
-        self.player.pause()?;
-        self.playback_list.items()?.clear()?;
+        self.reinit_player()?;
         Ok(())
     }
 

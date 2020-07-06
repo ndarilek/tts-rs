@@ -32,7 +32,7 @@ impl Backend for Web {
         }
     }
 
-    fn speak(&self, text: &str, interrupt: bool) -> Result<(), Error> {
+    fn speak(&mut self, text: &str, interrupt: bool) -> Result<(), Error> {
         trace!("speak({}, {})", text, interrupt);
         let utterance = SpeechSynthesisUtterance::new_with_text(text).unwrap();
         utterance.set_rate(self.rate);
@@ -48,7 +48,7 @@ impl Backend for Web {
         Ok(())
     }
 
-    fn stop(&self) -> Result<(), Error> {
+    fn stop(&mut self) -> Result<(), Error> {
         trace!("stop()");
         if let Some(window) = web_sys::window() {
             let speech_synthesis = window.speech_synthesis().unwrap();

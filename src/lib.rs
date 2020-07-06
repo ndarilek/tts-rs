@@ -51,8 +51,8 @@ pub enum Error {
 
 pub trait Backend {
     fn supported_features(&self) -> Features;
-    fn speak(&self, text: &str, interrupt: bool) -> Result<(), Error>;
-    fn stop(&self) -> Result<(), Error>;
+    fn speak(&mut self, text: &str, interrupt: bool) -> Result<(), Error>;
+    fn stop(&mut self) -> Result<(), Error>;
     fn min_rate(&self) -> f32;
     fn max_rate(&self) -> f32;
     fn normal_rate(&self) -> f32;
@@ -131,7 +131,7 @@ impl TTS {
     /**
      * Speaks the specified text, optionally interrupting current speech.
      */
-    pub fn speak<S: Into<String>>(&self, text: S, interrupt: bool) -> Result<&Self, Error> {
+    pub fn speak<S: Into<String>>(&mut self, text: S, interrupt: bool) -> Result<&Self, Error> {
         self.0.speak(text.into().as_str(), interrupt)?;
         Ok(self)
     }
@@ -139,7 +139,7 @@ impl TTS {
     /**
      * Stops current speech.
      */
-    pub fn stop(&self) -> Result<&Self, Error> {
+    pub fn stop(&mut self) -> Result<&Self, Error> {
         let Features { stop, .. } = self.supported_features();
         if stop {
             self.0.stop()?;
