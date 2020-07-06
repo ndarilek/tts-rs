@@ -60,7 +60,7 @@ impl Backend for WinRT {
         if state == MediaPlaybackState::Paused {
             let index = self.playback_list.current_item_index()?;
             let total = self.playback_list.items()?.size()?;
-            if index == total - 1 {
+            if total != 0 && index == total - 1 {
                 self.playback_list.items()?.clear()?;
             }
         }
