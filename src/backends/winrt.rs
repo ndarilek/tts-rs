@@ -51,7 +51,7 @@ impl Backend for WinRT {
             rate: true,
             pitch: true,
             volume: true,
-            is_speaking: false,
+            is_speaking: true,
         }
     }
 
