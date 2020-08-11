@@ -9,7 +9,7 @@ use objc::*;
 
 use crate::{Backend, Error, Features};
 
-pub struct NSSpeechSynthesizerBackend(*mut Object);
+pub struct NSSpeechSynthesizerBackend(*mut Object, *mut Object);
 
 impl NSSpeechSynthesizerBackend {
     pub fn new() -> Self {
@@ -27,9 +27,9 @@ impl NSSpeechSynthesizerBackend {
             )
         };
         let delegate_class = decl.register();
-        let delegate_object: Object = unsafe { msg_send![delegate_class, alloc] };
-        let _: () = unsafe { msg_send![obj, setDelegate: delegate_object] };
-        NSSpeechSynthesizerBackend(obj)
+        let delegate_obj: *mut Object = unsafe { msg_send![delegate_class, new] };
+        let _: () = unsafe { msg_send![obj, setDelegate: delegate_obj] };
+        NSSpeechSynthesizerBackend(obj, delegate_obj)
     }
 }
 
