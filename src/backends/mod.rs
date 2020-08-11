@@ -10,6 +10,9 @@ pub(crate) mod winrt;
 #[cfg(target_arch = "wasm32")]
 mod web;
 
+#[cfg(target_os = "macos")]
+mod ns_speech_synthesizer;
+
 #[cfg(target_os = "linux")]
 pub use self::speech_dispatcher::*;
 
@@ -18,3 +21,6 @@ pub use self::tolk::*;
 
 #[cfg(target_arch = "wasm32")]
 pub use self::web::*;
+
+#[cfg(target_os = "macos")]
+pub use self::ns_speech_synthesizer::*;
