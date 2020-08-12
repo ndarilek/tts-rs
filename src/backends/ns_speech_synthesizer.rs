@@ -51,16 +51,10 @@ impl Backend for NSSpeechSynthesizerBackend {
     }
 
     fn speak(&mut self, text: &str, interrupt: bool) -> Result<(), Error> {
-        println!("speak({}, {})", text, interrupt);
+        trace!("speak({}, {})", text, interrupt);
         let str = unsafe { NSString::alloc(nil).init_str(text) };
-        let success: BOOL = unsafe { msg_send![self.0, startSpeakingString: str] };
-        println!("Comparing");
-        if success == NO {
-            println!("Failed");
-            Ok(())
-        } else {
-            Ok(())
-        }
+        let _: BOOL = unsafe { msg_send![self.0, startSpeakingString: str] };
+        Ok(())
     }
 
     fn stop(&mut self) -> Result<(), Error> {
