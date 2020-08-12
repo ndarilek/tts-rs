@@ -132,3 +132,12 @@ impl Backend for NSSpeechSynthesizerBackend {
         unimplemented!()
     }
 }
+
+impl Drop for NSSpeechSynthesizerBackend {
+    fn drop(&mut self) {
+        unsafe {
+            let _: Object = msg_send!(self.0, release);
+            let _: Object = msg_send!(self.1, release);
+        }
+    }
+}
