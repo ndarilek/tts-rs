@@ -3,6 +3,8 @@
  * Currently supported backends are:
  * * [Speech Dispatcher](https://freebsoft.org/speechd) (Linux)
  * * Windows screen readers and SAPI via [Tolk](https://github.com/dkager/tolk/)
+ * * Windows WinRT
+ * * MacOS `NSSpeechSynthesizer`
  * * WebAssembly
 */
 

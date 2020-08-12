@@ -7,3 +7,5 @@ This library provides a high-level Text-To-Speech (TTS) interface supporting var
 * Windows
   * Screen readers/SAPI via Tolk
   * WinRT
+* MacOS
+  * `NSSpeechSynthesizer`
