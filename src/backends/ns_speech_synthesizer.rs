@@ -17,18 +17,24 @@ impl NSSpeechSynthesizerBackend {
         let mut obj: *mut Object = unsafe { msg_send![class!(NSSpeechSynthesizer), alloc] };
         obj = unsafe { msg_send![obj, init] };
         let mut decl = ClassDecl::new("MyNSSpeechSynthesizerDelegate", class!(NSObject)).unwrap();
-        extern "C" fn speech_synthesizer_did_finish_speaking(_: &Object, _: Sel, _: BOOL) {
+        extern "C" fn speech_synthesizer_did_finish_speaking(
+            _: &Object,
+            _: Sel,
+            _: *const Object,
+            _: BOOL,
+        ) {
             println!("Got it");
         }
         unsafe {
             decl.add_method(
-                sel!(didFinishSpeaking:),
-                speech_synthesizer_did_finish_speaking as extern "C" fn(&Object, Sel, BOOL) -> (),
+                sel!(speechSynthesizer:didFinishSpeaking:),
+                speech_synthesizer_did_finish_speaking
+                    as extern "C" fn(&Object, Sel, *const Object, BOOL) -> (),
             )
         };
         let delegate_class = decl.register();
         let delegate_obj: *mut Object = unsafe { msg_send![delegate_class, new] };
-        let _: () = unsafe { msg_send![obj, setDelegate: delegate_obj] };
+        let _: Object = unsafe { msg_send![obj, setDelegate: delegate_obj] };
         NSSpeechSynthesizerBackend(obj, delegate_obj)
     }
 }
