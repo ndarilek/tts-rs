@@ -20,6 +20,7 @@ impl NSSpeechSynthesizerBackend {
                 ClassDecl::new("MyNSSpeechSynthesizerDelegate", class!(NSObject)).unwrap();
             decl.add_ivar::<id>("synth");
             decl.add_ivar::<id>("strings");
+
             extern "C" fn enqueue_and_speak(this: &Object, _: Sel, string: id) {
                 unsafe {
                     let strings: id = *this.get_ivar("strings");
@@ -32,6 +33,11 @@ impl NSSpeechSynthesizerBackend {
                     }
                 }
             }
+            decl.add_method(
+                sel!(enqueueAndSpeak:),
+                enqueue_and_speak as extern "C" fn(&Object, Sel, id) -> (),
+            );
+
             extern "C" fn speech_synthesizer_did_finish_speaking(
                 this: &Object,
                 _: Sel,
@@ -50,6 +56,12 @@ impl NSSpeechSynthesizerBackend {
                     }
                 }
             }
+            decl.add_method(
+                sel!(speechSynthesizer:didFinishSpeaking:),
+                speech_synthesizer_did_finish_speaking
+                    as extern "C" fn(&Object, Sel, *const Object, BOOL) -> (),
+            );
+
             extern "C" fn clear_queue(this: &Object, _: Sel) {
                 unsafe {
                     let strings: id = *this.get_ivar("strings");
@@ -63,18 +75,10 @@ impl NSSpeechSynthesizerBackend {
                 }
             }
             decl.add_method(
-                sel!(speechSynthesizer:didFinishSpeaking:),
-                speech_synthesizer_did_finish_speaking
-                    as extern "C" fn(&Object, Sel, *const Object, BOOL) -> (),
-            );
-            decl.add_method(
-                sel!(enqueueAndSpeak:),
-                enqueue_and_speak as extern "C" fn(&Object, Sel, id) -> (),
-            );
-            decl.add_method(
                 sel!(clearQueue),
                 clear_queue as extern "C" fn(&Object, Sel) -> (),
             );
+
             let delegate_class = decl.register();
             let delegate_obj: *mut Object = msg_send![delegate_class, new];
             delegate_obj.as_mut().unwrap().set_ivar("synth", obj);
@@ -84,22 +88,16 @@ impl NSSpeechSynthesizerBackend {
             NSSpeechSynthesizerBackend(obj, delegate_obj)
         }
     }
-
-    /*fn pop_and_speak(&mut self) {
-        if let Some(str) = self.2.first() {
-            let _: BOOL = unsafe { msg_send![self.0, startSpeakingString: *str] };
-        }
-    }*/
 }
 
 impl Backend for NSSpeechSynthesizerBackend {
     fn supported_features(&self) -> Features {
         Features {
-            stop: false,
-            rate: false,
+            stop: true,
+            rate: true,
             pitch: false,
-            volume: false,
-            is_speaking: false,
+            volume: true,
+            is_speaking: true,
         }
     }
 
@@ -125,35 +123,40 @@ impl Backend for NSSpeechSynthesizerBackend {
     }
 
     fn min_rate(&self) -> f32 {
-        -100.
+        10.
     }
 
     fn max_rate(&self) -> f32 {
-        100.
+        500.
     }
 
     fn normal_rate(&self) -> f32 {
-        0.
+        175.
     }
 
     fn get_rate(&self) -> Result<f32, Error> {
-        unimplemented!()
+        let rate: f32 = unsafe { msg_send![self.0, rate] };
+        Ok(rate)
     }
 
     fn set_rate(&mut self, rate: f32) -> Result<(), Error> {
-        unimplemented!()
+        trace!("set_rate({})", rate);
+        unsafe {
+            let _: () = msg_send![self.0, setRate: rate];
+        }
+        Ok(())
     }
 
     fn min_pitch(&self) -> f32 {
-        -100.
+        unimplemented!()
     }
 
     fn max_pitch(&self) -> f32 {
-        100.
+        unimplemented!()
     }
 
     fn normal_pitch(&self) -> f32 {
-        0.
+        unimplemented!()
     }
 
     fn get_pitch(&self) -> Result<f32, Error> {
@@ -165,23 +168,27 @@ impl Backend for NSSpeechSynthesizerBackend {
     }
 
     fn min_volume(&self) -> f32 {
-        -100.
-    }
-
-    fn max_volume(&self) -> f32 {
-        100.
-    }
-
-    fn normal_volume(&self) -> f32 {
         0.
     }
 
+    fn max_volume(&self) -> f32 {
+        1.
+    }
+
+    fn normal_volume(&self) -> f32 {
+        1.
+    }
+
     fn get_volume(&self) -> Result<f32, Error> {
-        unimplemented!()
+        let volume: f32 = unsafe { msg_send![self.0, volume] };
+        Ok(volume)
     }
 
     fn set_volume(&mut self, volume: f32) -> Result<(), Error> {
-        unimplemented!()
+        unsafe {
+            let _: () = msg_send![self.0, setVolume: volume];
+        }
+        Ok(())
     }
 
     fn is_speaking(&self) -> Result<bool, Error> {
