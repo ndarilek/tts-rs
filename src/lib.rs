@@ -1,12 +1,15 @@
 /*!
  * a Text-To-Speech (TTS) library providing high-level interfaces to a variety of backends.
  * Currently supported backends are:
- * * [Speech Dispatcher](https://freebsoft.org/speechd) (Linux)
- * * Windows screen readers and SAPI via [Tolk](https://github.com/dkager/tolk/)
- * * Windows WinRT
- * * MacOS `NSSpeechSynthesizer`
+ * * Windows
+ *   * Screen readers/SAPI via Tolk
+ *   * WinRT
+ * * Linux via [Speech Dispatcher](https://freebsoft.org/speechd)
+ * * MacOS
+ *   * AppKit on MacOS 10.13 and below
+ *   * AVFoundation on MacOS 10.14 and, eventually, iDevices
  * * WebAssembly
-*/
+ */
 
 #[cfg(target_os = "macos")]
 use std::{boxed::Box, ffi::CStr};

@@ -10,4 +10,3 @@ This library provides a high-level Text-To-Speech (TTS) interface supporting var
   * AppKit on MacOS 10.13 and below
   * AVFoundation on MacOS 10.14 and, eventually, iDevices
 * WebAssembly
-
