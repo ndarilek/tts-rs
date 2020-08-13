@@ -8,6 +8,7 @@
  * * WebAssembly
 */
 
+#[cfg(target_os = "macos")]
 use std::{boxed::Box, ffi::CStr};
 
 #[cfg(target_os = "macos")]
