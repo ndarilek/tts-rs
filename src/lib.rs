@@ -24,7 +24,7 @@ pub enum Backends {
     #[cfg(windows)]
     WinRT,
     #[cfg(target_os = "macos")]
-    NSSpeechSynthesizer,
+    AppKit,
 }
 
 pub struct Features {
@@ -109,9 +109,7 @@ impl TTS {
                 Ok(TTS(Box::new(tts)))
             }
             #[cfg(target_os = "macos")]
-            Backends::NSSpeechSynthesizer => {
-                Ok(TTS(Box::new(backends::NSSpeechSynthesizerBackend::new())))
-            }
+            Backends::AppKit => Ok(TTS(Box::new(backends::AppKit::new()))),
         }
     }
 
@@ -127,7 +125,7 @@ impl TTS {
         #[cfg(target_arch = "wasm32")]
         let tts = TTS::new(Backends::Web);
         #[cfg(target_os = "macos")]
-        let tts = TTS::new(Backends::NSSpeechSynthesizer);
+        let tts = TTS::new(Backends::AppKit);
         tts
     }
 

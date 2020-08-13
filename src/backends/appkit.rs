@@ -9,9 +9,9 @@ use objc::*;
 
 use crate::{Backend, Error, Features};
 
-pub struct NSSpeechSynthesizerBackend(*mut Object, *mut Object);
+pub struct AppKit(*mut Object, *mut Object);
 
-impl NSSpeechSynthesizerBackend {
+impl AppKit {
     pub fn new() -> Self {
         info!("Initializing NSSpeechSynthesizer backend");
         unsafe {
@@ -85,12 +85,12 @@ impl NSSpeechSynthesizerBackend {
             let strings: id = msg_send![class!(NSMutableArray), new];
             delegate_obj.as_mut().unwrap().set_ivar("strings", strings);
             let _: Object = msg_send![obj, setDelegate: delegate_obj];
-            NSSpeechSynthesizerBackend(obj, delegate_obj)
+            AppKit(obj, delegate_obj)
         }
     }
 }
 
-impl Backend for NSSpeechSynthesizerBackend {
+impl Backend for AppKit {
     fn supported_features(&self) -> Features {
         Features {
             stop: true,
@@ -197,7 +197,7 @@ impl Backend for NSSpeechSynthesizerBackend {
     }
 }
 
-impl Drop for NSSpeechSynthesizerBackend {
+impl Drop for AppKit {
     fn drop(&mut self) {
         unsafe {
             let _: Object = msg_send![self.0, release];
