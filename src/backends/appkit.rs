@@ -13,7 +13,7 @@ pub struct AppKit(*mut Object, *mut Object);
 
 impl AppKit {
     pub fn new() -> Self {
-        info!("Initializing NSSpeechSynthesizer backend");
+        info!("Initializing AppKit backend");
         unsafe {
             let obj: *mut Object = msg_send![class!(NSSpeechSynthesizer), new];
             let mut decl =

@@ -25,6 +25,7 @@ speech-dispatcher = "0.4"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 cocoa-foundation = "0.1"
+libc = "0.2"
 objc = "0.2"
 
 [target.wasm32-unknown-unknown.dependencies]

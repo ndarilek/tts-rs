@@ -8,8 +8,14 @@
  * * WebAssembly
 */
 
-use std::boxed::Box;
+use std::{boxed::Box, ffi::CStr};
 
+#[cfg(target_os = "macos")]
+use cocoa_foundation::base::id;
+#[cfg(target_os = "macos")]
+use libc::c_char;
+#[cfg(target_os = "macos")]
+use objc::{class, msg_send, sel, sel_impl};
 use thiserror::Error;
 
 mod backends;
@@ -25,6 +31,8 @@ pub enum Backends {
     WinRT,
     #[cfg(target_os = "macos")]
     AppKit,
+    #[cfg(target_os = "macos")]
+    AvFoundation,
 }
 
 pub struct Features {
@@ -110,6 +118,8 @@ impl TTS {
             }
             #[cfg(target_os = "macos")]
             Backends::AppKit => Ok(TTS(Box::new(backends::AppKit::new()))),
+            #[cfg(target_os = "macos")]
+            Backends::AvFoundation => Ok(TTS(Box::new(backends::AvFoundation::new()))),
         }
     }
 
@@ -125,7 +135,23 @@ impl TTS {
         #[cfg(target_arch = "wasm32")]
         let tts = TTS::new(Backends::Web);
         #[cfg(target_os = "macos")]
-        let tts = TTS::new(Backends::AppKit);
+        let tts = unsafe {
+            // Needed because the Rust NSProcessInfo structs report bogus values, and I don't want to pull in a full bindgen stack.
+            let pi: id = msg_send![class!(NSProcessInfo), new];
+            let version: id = msg_send![pi, operatingSystemVersionString];
+            let str: *const c_char = msg_send![version, UTF8String];
+            let str = CStr::from_ptr(str);
+            let str = str.to_string_lossy();
+            let version: Vec<&str> = str.split(" ").collect();
+            let version = version[1];
+            let version_parts: Vec<&str> = version.split(".").collect();
+            let minor_version: i8 = version_parts[1].parse().unwrap();
+            if minor_version >= 14 {
+                TTS::new(Backends::AvFoundation)
+            } else {
+                TTS::new(Backends::AppKit)
+            }
+        };
         tts
     }
 
