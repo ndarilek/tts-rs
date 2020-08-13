@@ -163,7 +163,7 @@ impl Backend for AppKit {
         unimplemented!()
     }
 
-    fn set_pitch(&mut self, pitch: f32) -> Result<(), Error> {
+    fn set_pitch(&mut self, _pitch: f32) -> Result<(), Error> {
         unimplemented!()
     }
 
