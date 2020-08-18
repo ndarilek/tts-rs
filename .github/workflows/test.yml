@@ -34,6 +34,6 @@ jobs:
       - uses: actions/checkout@v2
       - run: |
           cargo build --release
-          cargo install cargo-lipo
           rustup target add aarch64-apple-ios x86_64-apple-ios
+          cargo install cargo-lipo
           cargo lipo --release
