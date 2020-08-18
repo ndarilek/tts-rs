@@ -52,7 +52,7 @@ jobs:
           cargo login $CARGO_TOKEN
           cd winrt_bindings
           cargo package
-          cargo publish
+          cargo publish || true
 
   publish:
     name: Publish
