@@ -98,7 +98,7 @@ impl Backend for SpeechDispatcher {
     }
 
     fn normal_volume(&self) -> f32 {
-        0.
+        100.
     }
 
     fn get_volume(&self) -> Result<f32, Error> {
