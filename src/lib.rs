@@ -11,8 +11,9 @@
  * * WebAssembly
  */
 
+use std::boxed::Box;
 #[cfg(target_os = "macos")]
-use std::{boxed::Box, ffi::CStr};
+use std::ffi::CStr;
 
 #[cfg(target_os = "macos")]
 use cocoa_foundation::base::id;
@@ -35,7 +36,7 @@ pub enum Backends {
     WinRT,
     #[cfg(target_os = "macos")]
     AppKit,
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
     AvFoundation,
 }
 
@@ -122,7 +123,7 @@ impl TTS {
             }
             #[cfg(target_os = "macos")]
             Backends::AppKit => Ok(TTS(Box::new(backends::AppKit::new()))),
-            #[cfg(target_os = "macos")]
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
             Backends::AvFoundation => Ok(TTS(Box::new(backends::AvFoundation::new()))),
         }
     }
@@ -156,6 +157,8 @@ impl TTS {
                 TTS::new(Backends::AppKit)
             }
         };
+        #[cfg(target_os = "ios")]
+        let tts = TTS::new(Backends::AvFoundation);
         tts
     }
 
