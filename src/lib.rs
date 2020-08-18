@@ -7,7 +7,7 @@
  * * Linux via [Speech Dispatcher](https://freebsoft.org/speechd)
  * * MacOS
  *   * AppKit on MacOS 10.13 and below
- *   * AVFoundation on MacOS 10.14 and, eventually, iDevices
+ *   * AVFoundation on MacOS 10.14 and above, and iOS
  * * WebAssembly
  */
 
