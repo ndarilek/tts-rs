@@ -1,6 +1,6 @@
 [package]
 name = "tts"
-version = "0.6.0"
+version = "0.6.1"
 authors = ["Nolan Darilek <nolan@thewordnerd.info>"]
 repository = "https://github.com/ndarilek/tts-rs"
 description = "High-level Text-To-Speech (TTS) interface"
@@ -12,6 +12,7 @@ edition = "2018"
 crate-type = ["lib", "staticlib"]
 
 [dependencies]
+lazy_static = "1"
 log = "0.4"
 thiserror = "1"
 
@@ -24,7 +25,7 @@ winrt = "0.7"
 tts_winrt_bindings = { version = "0.1", path="winrt_bindings" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-speech-dispatcher = "0.4"
+speech-dispatcher = "0.6"
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 cocoa-foundation = "0.1"
