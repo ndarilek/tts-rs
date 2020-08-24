@@ -22,10 +22,7 @@ impl Backend for Tolk {
     fn supported_features(&self) -> Features {
         Features {
             stop: true,
-            rate: false,
-            pitch: false,
-            volume: false,
-            is_speaking: false,
+            ..Default::default(),
         }
     }
 

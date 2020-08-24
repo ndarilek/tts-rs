@@ -48,6 +48,18 @@ pub struct Features {
     pub is_speaking: bool,
 }
 
+impl Default for Features {
+    fn default() -> Self {
+        Self {
+            stop: false,
+            rate: false,
+            pitch: false,
+            volume: false,
+            is_speaking: false,
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("IO error: {0}")]
