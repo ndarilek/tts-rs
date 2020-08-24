@@ -97,7 +97,7 @@ impl Backend for AppKit {
             rate: true,
             volume: true,
             is_speaking: true,
-            ..Default::default(),
+            ..Default::default()
         }
     }
 

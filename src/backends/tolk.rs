@@ -22,7 +22,7 @@ impl Backend for Tolk {
     fn supported_features(&self) -> Features {
         Features {
             stop: true,
-            ..Default::default(),
+            ..Default::default()
         }
     }
 
