@@ -20,7 +20,7 @@ lazy_static! {
 impl SpeechDispatcher {
     pub fn new() -> Self {
         info!("Initializing SpeechDispatcher backend");
-        let connection = speech_dispatcher::Connection::open("tts", "tts", "tts", Mode::Single);
+        let connection = speech_dispatcher::Connection::open("tts", "tts", "tts", Mode::Threaded);
         let sd = SpeechDispatcher(connection);
         let mut speaking = SPEAKING.lock().unwrap();
         speaking.insert(sd.0.client_id(), false);
