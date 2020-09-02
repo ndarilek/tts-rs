@@ -13,7 +13,7 @@ mod web;
 #[cfg(target_os = "macos")]
 mod appkit;
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 mod av_foundation;
 
 #[cfg(target_os = "linux")]
@@ -28,5 +28,5 @@ pub use self::web::*;
 #[cfg(target_os = "macos")]
 pub use self::appkit::*;
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 pub use self::av_foundation::*;

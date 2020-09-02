@@ -9,8 +9,7 @@ exclude = ["*.cfg", "*.yml"]
 edition = "2018"
 
 [lib]
-name = "tts"
-crate-type = ["staticlib", "cdylib"]
+crate-type = ["lib", "staticlib"]
 
 [dependencies]
 log = "0.4"
@@ -27,7 +26,7 @@ tts_winrt_bindings = { version = "0.1", path="winrt_bindings" }
 [target.'cfg(target_os = "linux")'.dependencies]
 speech-dispatcher = "0.4"
 
-[target.'cfg(target_os = "macos")'.dependencies]
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 cocoa-foundation = "0.1"
 libc = "0.2"
 objc = "0.2"

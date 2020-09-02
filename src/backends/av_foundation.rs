@@ -1,4 +1,4 @@
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 #[link(name = "AVFoundation", kind = "framework")]
 use cocoa_foundation::base::{id, nil};
 use cocoa_foundation::foundation::NSString;
@@ -132,7 +132,7 @@ impl Backend for AvFoundation {
 
     fn is_speaking(&self) -> Result<bool, Error> {
         let is_speaking: i8 = unsafe { msg_send![self.synth, isSpeaking] };
-        Ok(is_speaking == YES)
+        Ok(is_speaking == 1)
     }
 }
 
