@@ -7,7 +7,7 @@
  * * Linux via [Speech Dispatcher](https://freebsoft.org/speechd)
  * * MacOS
  *   * AppKit on MacOS 10.13 and below
- *   * AVFoundation on MacOS 10.14 and, eventually, iDevices
+ *   * AVFoundation on MacOS 10.14 and above, and iOS
  * * WebAssembly
  */
 
@@ -46,6 +46,18 @@ pub struct Features {
     pub pitch: bool,
     pub volume: bool,
     pub is_speaking: bool,
+}
+
+impl Default for Features {
+    fn default() -> Self {
+        Self {
+            stop: false,
+            rate: false,
+            pitch: false,
+            volume: false,
+            is_speaking: false,
+        }
+    }
 }
 
 #[derive(Debug, Error)]

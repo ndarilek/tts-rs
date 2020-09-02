@@ -22,16 +22,31 @@ impl Backend for Tolk {
     fn supported_features(&self) -> Features {
         Features {
             stop: true,
-            rate: false,
-            pitch: false,
-            volume: false,
-            is_speaking: false,
+            ..Default::default()
         }
     }
 
     fn speak(&mut self, text: &str, interrupt: bool) -> Result<(), Error> {
         trace!("speak({}, {})", text, interrupt);
-        self.0.speak(text, interrupt);
+        const BUFFER_LENGTH: usize = 300;
+        if text.len() <= BUFFER_LENGTH {
+            self.0.speak(text, interrupt);
+        } else {
+            if interrupt {
+                self.stop()?;
+            }
+            let tokens = text.split_whitespace();
+            let mut buffer = String::new();
+            for token in tokens {
+                if buffer.len() + token.len() > BUFFER_LENGTH {
+                    self.0.speak(buffer, false);
+                    buffer = String::new();
+                } else {
+                    buffer.push_str(token);
+                    buffer.push(' ');
+                }
+            }
+        }
         Ok(())
     }
 

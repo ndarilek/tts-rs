@@ -1,4 +1,8 @@
 #[cfg(target_os = "linux")]
+use std::collections::HashMap;
+use std::sync::Mutex;
+
+use lazy_static::*;
 use log::{info, trace};
 use speech_dispatcher::*;
 
@@ -6,11 +10,41 @@ use crate::{Backend, Error, Features};
 
 pub struct SpeechDispatcher(Connection);
 
+lazy_static! {
+    static ref SPEAKING: Mutex<HashMap<u64, bool>> = {
+        let m: HashMap<u64, bool> = HashMap::new();
+        Mutex::new(m)
+    };
+}
+
 impl SpeechDispatcher {
     pub fn new() -> Self {
         info!("Initializing SpeechDispatcher backend");
-        let connection = speech_dispatcher::Connection::open("tts", "tts", "tts", Mode::Single);
-        SpeechDispatcher(connection)
+        let connection = speech_dispatcher::Connection::open("tts", "tts", "tts", Mode::Threaded);
+        let sd = SpeechDispatcher(connection);
+        let mut speaking = SPEAKING.lock().unwrap();
+        speaking.insert(sd.0.client_id(), false);
+        sd.0.on_begin(Some(|_msg_id, client_id| {
+            let mut speaking = SPEAKING.lock().unwrap();
+            speaking.insert(client_id, true);
+        }));
+        sd.0.on_end(Some(|_msg_id, client_id| {
+            let mut speaking = SPEAKING.lock().unwrap();
+            speaking.insert(client_id, false);
+        }));
+        sd.0.on_cancel(Some(|_msg_id, client_id| {
+            let mut speaking = SPEAKING.lock().unwrap();
+            speaking.insert(client_id, false);
+        }));
+        sd.0.on_pause(Some(|_msg_id, client_id| {
+            let mut speaking = SPEAKING.lock().unwrap();
+            speaking.insert(client_id, false);
+        }));
+        sd.0.on_resume(Some(|_msg_id, client_id| {
+            let mut speaking = SPEAKING.lock().unwrap();
+            speaking.insert(client_id, true);
+        }));
+        sd
     }
 }
 
@@ -21,7 +55,7 @@ impl Backend for SpeechDispatcher {
             rate: true,
             pitch: true,
             volume: true,
-            is_speaking: false,
+            is_speaking: true,
         }
     }
 
@@ -98,7 +132,7 @@ impl Backend for SpeechDispatcher {
     }
 
     fn normal_volume(&self) -> f32 {
-        0.
+        100.
     }
 
     fn get_volume(&self) -> Result<f32, Error> {
@@ -111,6 +145,15 @@ impl Backend for SpeechDispatcher {
     }
 
     fn is_speaking(&self) -> Result<bool, Error> {
-        unimplemented!()
+        let speaking = SPEAKING.lock().unwrap();
+        let is_speaking = speaking.get(&self.0.client_id()).unwrap();
+        Ok(*is_speaking)
+    }
+}
+
+impl Drop for SpeechDispatcher {
+    fn drop(&mut self) {
+        let mut speaking = SPEAKING.lock().unwrap();
+        speaking.remove(&self.0.client_id());
     }
 }

@@ -95,9 +95,9 @@ impl Backend for AppKit {
         Features {
             stop: true,
             rate: true,
-            pitch: false,
             volume: true,
             is_speaking: true,
+            ..Default::default()
         }
     }
 
