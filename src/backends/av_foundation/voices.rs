@@ -8,8 +8,14 @@ use core_foundation::string::CFString;
 pub struct AVSpeechSynthesisVoice(*const Object);
 
 impl AVSpeechSynthesisVoice {
-    pub fn new() -> Self {
-        Self::list()[0]
+    pub fn new(identifier: String) -> Self {
+        let i: CFString = CFString::from(identifier.as_str());
+        let voice: *const Object = unsafe{msg_send![class!(AVSpeechSynthesisVoice).metaclass(), voiceWithIdentifier: i]};
+        AVSpeechSynthesisVoice{0: voice}
+    }
+
+    pub fn default() -> Self {
+        AVSpeechSynthesisVoice::list()[0]
     }
 
     pub fn list() -> Vec<Self> {

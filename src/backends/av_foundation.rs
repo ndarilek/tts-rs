@@ -29,7 +29,7 @@ impl AvFoundation {
                 rate: 0.5,
                 volume: 1.,
                 pitch: 1.,
-                voice: AVSpeechSynthesisVoice::new(),
+                voice: AVSpeechSynthesisVoice::default(),
             }
         }
     }
@@ -59,6 +59,7 @@ impl Backend for AvFoundation {
             let _: () = msg_send![utterance, setRate: self.rate];
             let _: () = msg_send![utterance, setVolume: self.volume];
             let _: () = msg_send![utterance, setPitchMultiplier: self.pitch];
+            let _: () = msg_send![utterance, setVoice: self.voice];
             let _: () = msg_send![self.synth, speakUtterance: utterance];
         }
         Ok(())
@@ -149,7 +150,8 @@ impl Backend for AvFoundation {
         AVSpeechSynthesisVoice::list().iter().map(|v| {v.identifier()}).collect()
     }
 
-    fn set_voice(&self, voice: String) -> Result<(),Error> {
+    fn set_voice(&mut self, voice: String) -> Result<(),Error> {
+        self.voice = AVSpeechSynthesisVoice::new(voice);
         Ok(())
     }
 }

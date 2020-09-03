@@ -204,7 +204,7 @@ impl Backend for AppKit {
         unimplemented!()
     }
 
-    fn set_voice(&self, voice: String) -> Result<(),Error> {
+    fn set_voice(&mut self, voice: String) -> Result<(),Error> {
         unimplemented!()
     }
 }

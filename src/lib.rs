@@ -102,7 +102,7 @@ pub trait Backend {
     fn is_speaking(&self) -> Result<bool, Error>;
     fn voice(&self) -> Result<String, Error>;
     fn list_voices(&self) -> Vec<String>;
-    fn set_voice(&self, voice: String) -> Result<(),Error>;
+    fn set_voice(&mut self, voice: String) -> Result<(),Error>;
 }
 
 pub struct TTS(Box<dyn Backend>);
@@ -399,7 +399,7 @@ impl TTS {
     /**
      * Set speaking voice.
      */
-    pub fn set_voice(&self, voice: String) -> Result<(),Error> {
+    pub fn set_voice(&mut self, voice: String) -> Result<(),Error> {
         let Features {
             voices: voices_feature,
             ..
