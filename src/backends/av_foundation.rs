@@ -8,11 +8,15 @@ use objc::*;
 
 use crate::{Backend, Error, Features};
 
+mod voices;
+use voices::AVSpeechSynthesisVoice;
+
 pub struct AvFoundation {
     synth: *mut Object,
     rate: f32,
     volume: f32,
     pitch: f32,
+    voice: AVSpeechSynthesisVoice,
 }
 
 impl AvFoundation {
@@ -25,6 +29,7 @@ impl AvFoundation {
                 rate: 0.5,
                 volume: 1.,
                 pitch: 1.,
+                voice: AVSpeechSynthesisVoice::new(),
             }
         }
     }
@@ -38,6 +43,7 @@ impl Backend for AvFoundation {
             pitch: true,
             volume: true,
             is_speaking: true,
+            voices: true,
         }
     }
 
@@ -133,6 +139,18 @@ impl Backend for AvFoundation {
     fn is_speaking(&self) -> Result<bool, Error> {
         let is_speaking: i8 = unsafe { msg_send![self.synth, isSpeaking] };
         Ok(is_speaking == 1)
+    }
+
+    fn voice(&self) -> Result<String,Error> {
+        Ok(self.voice.identifier())
+    }
+
+    fn list_voices(&self) -> Vec<String> {
+        AVSpeechSynthesisVoice::list().iter().map(|v| {v.identifier()}).collect()
+    }
+
+    fn set_voice(&self, voice: String) -> Result<(),Error> {
+        Ok(())
     }
 }
 
