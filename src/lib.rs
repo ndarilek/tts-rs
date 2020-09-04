@@ -102,7 +102,7 @@ pub trait Backend {
     fn is_speaking(&self) -> Result<bool, Error>;
     fn voice(&self) -> Result<String, Error>;
     fn list_voices(&self) -> Vec<String>;
-    fn set_voice(&mut self, voice: String) -> Result<(),Error>;
+    fn set_voice(&mut self, voice: &str) -> Result<(),Error>;
 }
 
 pub struct TTS(Box<dyn Backend>);
@@ -399,13 +399,13 @@ impl TTS {
     /**
      * Set speaking voice.
      */
-    pub fn set_voice(&mut self, voice: String) -> Result<(),Error> {
+    pub fn set_voice<S: Into<String>>(&mut self, voice: S) -> Result<(),Error> {
         let Features {
             voices: voices_feature,
             ..
         } = self.0.supported_features();
         if voices_feature {
-            self.0.set_voice(voice)
+            self.0.set_voice(voice.into().as_str())
         } else {
             Err(Error::UnsupportedFeature)
         }

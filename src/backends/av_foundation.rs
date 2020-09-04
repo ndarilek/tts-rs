@@ -150,7 +150,7 @@ impl Backend for AvFoundation {
         AVSpeechSynthesisVoice::list().iter().map(|v| {v.identifier()}).collect()
     }
 
-    fn set_voice(&mut self, voice: String) -> Result<(),Error> {
+    fn set_voice(&mut self, voice: &str) -> Result<(),Error> {
         self.voice = AVSpeechSynthesisVoice::new(voice);
         Ok(())
     }

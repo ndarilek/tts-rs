@@ -2,16 +2,19 @@
 use objc::runtime::*;
 use objc::*;
 use core_foundation::array::CFArray;
+use cocoa_foundation::foundation::NSString;
+use cocoa_foundation::base::{nil,id};
 use core_foundation::string::CFString;
 
 #[derive(Copy,Clone)]
 pub struct AVSpeechSynthesisVoice(*const Object);
 
 impl AVSpeechSynthesisVoice {
-    pub fn new(identifier: String) -> Self {
-        let i: CFString = CFString::from(identifier.as_str());
-        let voice: *const Object = unsafe{msg_send![class!(AVSpeechSynthesisVoice).metaclass(), voiceWithIdentifier: i]};
-        AVSpeechSynthesisVoice{0: voice}
+    pub fn new(identifier: &str) -> Self {
+        unsafe{
+            let i: id = NSString::alloc(nil).init_str(identifier);
+            msg_send![class!(AVSpeechSynthesisVoice), voiceWithIdentifier:i]
+        }
     }
 
     pub fn default() -> Self {
