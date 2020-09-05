@@ -6,7 +6,6 @@ on:
       - "v*"
 
 jobs:
-
   build_linux:
     name: Build Linux
     runs-on: ubuntu-latest
@@ -15,6 +14,7 @@ jobs:
       - run: |
           sudo apt-get update
           sudo apt-get install -y libspeechd-dev
+          rustup update
           cargo build --release
           rustup target add wasm32-unknown-unknown
           cargo build --release --target wasm32-unknown-unknown
@@ -26,6 +26,7 @@ jobs:
       - uses: actions/checkout@v2
       - run: |
           choco install -y llvm
+          rustup update
           cargo build --release
 
   build_macos:
@@ -34,7 +35,16 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - run: |
+          rustup update
           cargo build --release
+
+  build_ios:
+    name: Build iOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: |
+          rustup update
           rustup target add aarch64-apple-ios x86_64-apple-ios
           cargo install cargo-lipo
           cargo lipo --release
@@ -49,6 +59,7 @@ jobs:
       - uses: actions/checkout@v2
       - run: |
           choco install -y llvm
+          rustup update
           cargo login $CARGO_TOKEN
           cd winrt_bindings
           cargo package
@@ -57,7 +68,7 @@ jobs:
   publish:
     name: Publish
     runs-on: ubuntu-latest
-    needs: [build_linux, build_windows, build_macos]
+    needs: [build_linux, build_windows, build_macos, build_ios]
     env:
       CARGO_TOKEN: ${{ secrets.CARGO_TOKEN }}
     steps:
@@ -65,5 +76,6 @@ jobs:
       - run: |
           sudo apt-get update
           sudo apt-get install -y libspeechd-dev
+          rustup update
           cargo login $CARGO_TOKEN
           cargo publish
