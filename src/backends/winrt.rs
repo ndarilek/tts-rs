@@ -156,4 +156,16 @@ impl Backend for WinRT {
         let playing = state == MediaPlaybackState::Opening || state == MediaPlaybackState::Playing;
         Ok(playing)
     }
+
+    fn voice(&self) -> Result<String,Error> {
+        unimplemented!()
+    }
+
+    fn list_voices(&self) -> Vec<String> {
+        unimplemented!()
+    }
+
+    fn set_voice(&mut self, voice: &str) -> Result<(),Error> {
+        unimplemented!()
+    }
 }
