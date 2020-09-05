@@ -11,10 +11,12 @@ pub struct AVSpeechSynthesisVoice(*const Object);
 
 impl AVSpeechSynthesisVoice {
     pub fn new(identifier: &str) -> Self {
+        let voice: *const Object;
         unsafe{
             let i: id = NSString::alloc(nil).init_str(identifier);
-            msg_send![class!(AVSpeechSynthesisVoice), voiceWithIdentifier:i]
-        }
+            voice = msg_send![class!(AVSpeechSynthesisVoice), voiceWithIdentifier:i];
+        };
+        AVSpeechSynthesisVoice{0:voice}
     }
 
     pub fn default() -> Self {
@@ -24,7 +26,7 @@ impl AVSpeechSynthesisVoice {
     pub fn list() -> Vec<Self> {
         let voices: CFArray = unsafe{msg_send![class!(AVSpeechSynthesisVoice), speechVoices]};
         voices.iter().map(|v| {
-            AVSpeechSynthesisVoice{0: *v as *mut Object}
+            AVSpeechSynthesisVoice{0: *v as *const Object}
         }).collect()
     }
 
