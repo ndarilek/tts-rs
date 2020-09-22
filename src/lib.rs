@@ -23,6 +23,9 @@ use libc::c_char;
 use objc::{class, msg_send, sel, sel_impl};
 use thiserror::Error;
 
+#[cfg(windows)]
+use tts_winrt_bindings::windows::media::playback::MediaPlaybackItem;
+
 mod backends;
 
 pub enum Backends {
@@ -40,14 +43,14 @@ pub enum Backends {
     AvFoundation,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum UtteranceId {
     #[cfg(target_os = "linux")]
     SpeechDispatcher(i32),
     #[cfg(target_arch = "wasm32")]
     Web(u64),
     #[cfg(windows)]
-    WinRT(u64),
+    WinRT(MediaPlaybackItem),
 }
 
 pub struct Features {
