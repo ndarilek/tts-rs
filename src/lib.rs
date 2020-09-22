@@ -15,7 +15,7 @@ use std::boxed::Box;
 #[cfg(target_os = "macos")]
 use std::ffi::CStr;
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 use cocoa_foundation::base::id;
 #[cfg(target_os = "macos")]
 use libc::c_char;

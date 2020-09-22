@@ -1,7 +1,5 @@
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 #[link(name = "AVFoundation", kind = "framework")]
-use std::sync::Mutex;
-
 use cocoa_foundation::base::{id, nil};
 use cocoa_foundation::foundation::NSString;
 use log::{info, trace};
