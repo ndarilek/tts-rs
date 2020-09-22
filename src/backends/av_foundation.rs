@@ -1,12 +1,14 @@
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 #[link(name = "AVFoundation", kind = "framework")]
+use std::sync::Mutex;
+
 use cocoa_foundation::base::{id, nil};
 use cocoa_foundation::foundation::NSString;
 use log::{info, trace};
 use objc::runtime::*;
 use objc::*;
 
-use crate::{Backend, Error, Features};
+use crate::{Backend, Error, Features, UtteranceId};
 
 pub struct AvFoundation {
     synth: *mut Object,
@@ -41,21 +43,22 @@ impl Backend for AvFoundation {
         }
     }
 
-    fn speak(&mut self, text: &str, interrupt: bool) -> Result<(), Error> {
+    fn speak(&mut self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error> {
         trace!("speak({}, {})", text, interrupt);
         if interrupt {
             self.stop()?;
         }
+        let utterance: id;
         unsafe {
             let str = NSString::alloc(nil).init_str(text);
-            let utterance: id = msg_send![class!(AVSpeechUtterance), alloc];
+            utterance = msg_send![class!(AVSpeechUtterance), alloc];
             let _: () = msg_send![utterance, initWithString: str];
             let _: () = msg_send![utterance, setRate: self.rate];
             let _: () = msg_send![utterance, setVolume: self.volume];
             let _: () = msg_send![utterance, setPitchMultiplier: self.pitch];
             let _: () = msg_send![self.synth, speakUtterance: utterance];
         }
-        Ok(())
+        Ok(Some(UtteranceId::AvFoundation(utterance)))
     }
 
     fn stop(&mut self) -> Result<(), Error> {

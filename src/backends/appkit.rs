@@ -7,7 +7,7 @@ use objc::declare::ClassDecl;
 use objc::runtime::*;
 use objc::*;
 
-use crate::{Backend, Error, Features};
+use crate::{Backend, Error, Features, UtteranceId};
 
 pub struct AppKit(*mut Object, *mut Object);
 
@@ -101,7 +101,7 @@ impl Backend for AppKit {
         }
     }
 
-    fn speak(&mut self, text: &str, interrupt: bool) -> Result<(), Error> {
+    fn speak(&mut self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error> {
         trace!("speak({}, {})", text, interrupt);
         if interrupt {
             self.stop()?;
@@ -110,7 +110,7 @@ impl Backend for AppKit {
             let str = NSString::alloc(nil).init_str(text);
             let _: () = msg_send![self.1, enqueueAndSpeak: str];
         }
-        Ok(())
+        Ok(None)
     }
 
     fn stop(&mut self) -> Result<(), Error> {

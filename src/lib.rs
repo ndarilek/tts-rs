@@ -48,6 +48,8 @@ pub enum UtteranceId {
     Web(u64),
     #[cfg(windows)]
     WinRT(u64),
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    AvFoundation(id),
 }
 
 pub struct Features {
