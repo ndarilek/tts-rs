@@ -6,7 +6,7 @@ use lazy_static::*;
 use log::{info, trace};
 use speech_dispatcher::*;
 
-use crate::{Backend, Error, Features};
+use crate::{Backend, Error, Features, UtteranceId};
 
 pub struct SpeechDispatcher(Connection);
 
@@ -59,7 +59,7 @@ impl Backend for SpeechDispatcher {
         }
     }
 
-    fn speak(&mut self, text: &str, interrupt: bool) -> Result<(), Error> {
+    fn speak(&mut self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error> {
         trace!("speak({}, {})", text, interrupt);
         if interrupt {
             self.stop()?;
@@ -68,11 +68,15 @@ impl Backend for SpeechDispatcher {
         if single_char {
             self.0.set_punctuation(Punctuation::All);
         }
-        self.0.say(Priority::Important, text);
+        let id = self.0.say(Priority::Important, text);
         if single_char {
             self.0.set_punctuation(Punctuation::None);
         }
-        Ok(())
+        if let Some(id) = id {
+            Ok(Some(UtteranceId::SpeechDispatcher(id)))
+        } else {
+            Err(Error::NoneError)
+        }
     }
 
     fn stop(&mut self) -> Result<(), Error> {

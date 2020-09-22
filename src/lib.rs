@@ -40,6 +40,16 @@ pub enum Backends {
     AvFoundation,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum UtteranceId {
+    #[cfg(target_os = "linux")]
+    SpeechDispatcher(i32),
+    #[cfg(target_arch = "wasm32")]
+    Web(u64),
+    #[cfg(windows)]
+    WinRT(u64),
+}
+
 pub struct Features {
     pub stop: bool,
     pub rate: bool,
@@ -80,7 +90,7 @@ pub enum Error {
 
 pub trait Backend {
     fn supported_features(&self) -> Features;
-    fn speak(&mut self, text: &str, interrupt: bool) -> Result<(), Error>;
+    fn speak(&mut self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error>;
     fn stop(&mut self) -> Result<(), Error>;
     fn min_rate(&self) -> f32;
     fn max_rate(&self) -> f32;
@@ -184,9 +194,12 @@ impl TTS {
     /**
      * Speaks the specified text, optionally interrupting current speech.
      */
-    pub fn speak<S: Into<String>>(&mut self, text: S, interrupt: bool) -> Result<&Self, Error> {
-        self.0.speak(text.into().as_str(), interrupt)?;
-        Ok(self)
+    pub fn speak<S: Into<String>>(
+        &mut self,
+        text: S,
+        interrupt: bool,
+    ) -> Result<Option<UtteranceId>, Error> {
+        self.0.speak(text.into().as_str(), interrupt)
     }
 
     /**

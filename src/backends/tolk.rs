@@ -2,7 +2,7 @@
 use log::{info, trace};
 use tolk::Tolk as TolkPtr;
 
-use crate::{Backend, Error, Features};
+use crate::{Backend, Error, Features, UtteranceId};
 
 pub struct Tolk(TolkPtr);
 
@@ -26,10 +26,10 @@ impl Backend for Tolk {
         }
     }
 
-    fn speak(&mut self, text: &str, interrupt: bool) -> Result<(), Error> {
+    fn speak(&mut self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error> {
         trace!("speak({}, {})", text, interrupt);
         self.0.speak(text, interrupt);
-        Ok(())
+        Ok(None)
     }
 
     fn stop(&mut self) -> Result<(), Error> {

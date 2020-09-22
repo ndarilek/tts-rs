@@ -1,13 +1,20 @@
 #[cfg(target_arch = "wasm32")]
+use std::sync::Mutex;
+
+use lazy_static::lazy_static;
 use log::{info, trace};
 use web_sys::SpeechSynthesisUtterance;
 
-use crate::{Backend, Error, Features};
+use crate::{Backend, Error, Features, UtteranceId};
 
 pub struct Web {
     rate: f32,
     pitch: f32,
     volume: f32,
+}
+
+lazy_static! {
+    static ref NEXT_UTTERANCE_ID: Mutex<u64> = Mutex::new(0);
 }
 
 impl Web {
@@ -32,7 +39,7 @@ impl Backend for Web {
         }
     }
 
-    fn speak(&mut self, text: &str, interrupt: bool) -> Result<(), Error> {
+    fn speak(&mut self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error> {
         trace!("speak({}, {})", text, interrupt);
         let utterance = SpeechSynthesisUtterance::new_with_text(text).unwrap();
         utterance.set_rate(self.rate);
@@ -44,8 +51,12 @@ impl Backend for Web {
         if let Some(window) = web_sys::window() {
             let speech_synthesis = window.speech_synthesis().unwrap();
             speech_synthesis.speak(&utterance);
+            let mut utterance_id = NEXT_UTTERANCE_ID.lock().unwrap();
+            *utterance_id += 1;
+            Ok(Some(UtteranceId::Web(*utterance_id)))
+        } else {
+            Err(Error::NoneError)
         }
-        Ok(())
     }
 
     fn stop(&mut self) -> Result<(), Error> {

@@ -1,4 +1,7 @@
 #[cfg(windows)]
+use std::sync::Mutex;
+
+use lazy_static::lazy_static;
 use log::{info, trace};
 
 use tts_winrt_bindings::windows::media::core::MediaSource;
@@ -7,7 +10,7 @@ use tts_winrt_bindings::windows::media::playback::{
 };
 use tts_winrt_bindings::windows::media::speech_synthesis::SpeechSynthesizer;
 
-use crate::{Backend, Error, Features};
+use crate::{Backend, Error, Features, UtteranceId};
 
 impl From<winrt::Error> for Error {
     fn from(e: winrt::Error) -> Self {
@@ -19,6 +22,10 @@ pub struct WinRT {
     synth: SpeechSynthesizer,
     player: MediaPlayer,
     playback_list: MediaPlaybackList,
+}
+
+lazy_static! {
+    static ref NEXT_UTTERANCE_ID: Mutex<u64> = Mutex::new(0);
 }
 
 impl WinRT {
@@ -55,7 +62,11 @@ impl Backend for WinRT {
         }
     }
 
-    fn speak(&mut self, text: &str, interrupt: bool) -> std::result::Result<(), Error> {
+    fn speak(
+        &mut self,
+        text: &str,
+        interrupt: bool,
+    ) -> std::result::Result<Option<UtteranceId>, Error> {
         trace!("speak({}, {})", text, interrupt);
         if interrupt {
             self.stop()?;
@@ -76,7 +87,9 @@ impl Backend for WinRT {
         if !self.is_speaking()? {
             self.player.play()?;
         }
-        Ok(())
+        let mut utterance_id = NEXT_UTTERANCE_ID.lock().unwrap();
+        *utterance_id += 1;
+        Ok(Some(UtteranceId::WinRT(*utterance_id)))
     }
 
     fn stop(&mut self) -> std::result::Result<(), Error> {
