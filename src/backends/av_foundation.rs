@@ -1,36 +1,52 @@
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 #[link(name = "AVFoundation", kind = "framework")]
+use std::sync::Mutex;
+
 use cocoa_foundation::base::{id, nil};
 use cocoa_foundation::foundation::NSString;
+use lazy_static::lazy_static;
 use log::{info, trace};
 use objc::runtime::*;
 use objc::*;
 
-use crate::{Backend, Error, Features, UtteranceId};
+use crate::{Backend, BackendId, Error, Features, UtteranceId};
 
-pub struct AvFoundation {
+pub(crate) struct AvFoundation {
+    id: BackendId,
     synth: *mut Object,
     rate: f32,
     volume: f32,
     pitch: f32,
 }
 
+lazy_static! {
+    static ref NEXT_BACKEND_ID: Mutex<u64> = Mutex::new(0);
+}
+
 impl AvFoundation {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         info!("Initializing AVFoundation backend");
-        unsafe {
+        let mut backend_id = NEXT_BACKEND_ID.lock().unwrap();
+        let rv = unsafe {
             let synth: *mut Object = msg_send![class!(AVSpeechSynthesizer), new];
             AvFoundation {
+                id: BackendId::AvFoundation(*backend_id),
                 synth: synth,
                 rate: 0.5,
                 volume: 1.,
                 pitch: 1.,
             }
-        }
+        };
+        *backend_id += 1;
+        rv
     }
 }
 
 impl Backend for AvFoundation {
+    fn id(&self) -> Option<BackendId> {
+        Some(self.id)
+    }
+
     fn supported_features(&self) -> Features {
         Features {
             stop: true,
@@ -38,6 +54,7 @@ impl Backend for AvFoundation {
             pitch: true,
             volume: true,
             is_speaking: true,
+            utterance_callbacks: true,
         }
     }
 

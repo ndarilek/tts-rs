@@ -7,12 +7,12 @@ use objc::declare::ClassDecl;
 use objc::runtime::*;
 use objc::*;
 
-use crate::{Backend, Error, Features, UtteranceId};
+use crate::{Backend, BackendId, Error, Features, UtteranceId};
 
-pub struct AppKit(*mut Object, *mut Object);
+pub(crate) struct AppKit(*mut Object, *mut Object);
 
 impl AppKit {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         info!("Initializing AppKit backend");
         unsafe {
             let obj: *mut Object = msg_send![class!(NSSpeechSynthesizer), new];
@@ -91,6 +91,10 @@ impl AppKit {
 }
 
 impl Backend for AppKit {
+    fn id(&self) -> Option<BackendId> {
+        None
+    }
+
     fn supported_features(&self) -> Features {
         Features {
             stop: true,

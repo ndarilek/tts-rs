@@ -26,7 +26,7 @@ pub use self::tolk::*;
 pub use self::web::*;
 
 #[cfg(target_os = "macos")]
-pub use self::appkit::*;
+pub(crate) use self::appkit::*;
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
-pub use self::av_foundation::*;
+pub(crate) use self::av_foundation::*;
