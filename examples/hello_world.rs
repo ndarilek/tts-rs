@@ -12,6 +12,18 @@ use tts::*;
 fn main() -> Result<(), Error> {
     env_logger::init();
     let mut tts = TTS::default()?;
+    let Features {
+        utterance_callbacks,
+        ..
+    } = tts.supported_features();
+    if utterance_callbacks {
+        tts.on_utterance_begin(Some(|utterance| {
+            println!("Started speaking {:?}", utterance)
+        }))?;
+        tts.on_utterance_end(Some(|utterance| {
+            println!("Finished speaking {:?}", utterance)
+        }))?;
+    }
     tts.speak("Hello, world.", false)?;
     let Features { rate, .. } = tts.supported_features();
     if rate {
