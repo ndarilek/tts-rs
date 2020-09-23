@@ -2,7 +2,7 @@
 use log::{info, trace};
 use tolk::Tolk as TolkPtr;
 
-use crate::{Backend, Error, Features, UtteranceId};
+use crate::{Backend, BackendId, Error, Features, UtteranceId};
 
 pub struct Tolk(TolkPtr);
 
@@ -19,6 +19,10 @@ impl Tolk {
 }
 
 impl Backend for Tolk {
+    fn id(&self) -> Option<BackendId> {
+        None
+    }
+
     fn supported_features(&self) -> Features {
         Features {
             stop: true,

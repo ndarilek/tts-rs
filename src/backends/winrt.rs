@@ -10,7 +10,7 @@ use tts_winrt_bindings::windows::media::playback::{
 };
 use tts_winrt_bindings::windows::media::speech_synthesis::SpeechSynthesizer;
 
-use crate::{Backend, Error, Features, UtteranceId};
+use crate::{Backend, BackendId, Error, Features, UtteranceId};
 
 impl From<winrt::Error> for Error {
     fn from(e: winrt::Error) -> Self {
@@ -19,13 +19,14 @@ impl From<winrt::Error> for Error {
 }
 
 pub struct WinRT {
+    id: BackendId,
     synth: SpeechSynthesizer,
     player: MediaPlayer,
     playback_list: MediaPlaybackList,
 }
 
 lazy_static! {
-    static ref NEXT_UTTERANCE_ID: Mutex<u64> = Mutex::new(0);
+    static ref NEXT_BACKEND_ID: Mutex<u64> = Mutex::new(0);
 }
 
 impl WinRT {
@@ -35,11 +36,15 @@ impl WinRT {
         let player = MediaPlayer::new()?;
         player.set_auto_play(true)?;
         player.set_source(&playback_list)?;
-        Ok(Self {
+        let mut backend_id = NEXT_BACKEND_ID.lock().unwrap();
+        let rv = Ok(Self {
+            id: BackendId::WinRT(*backend_id),
             synth: SpeechSynthesizer::new()?,
             player: player,
             playback_list: playback_list,
-        })
+        });
+        *backend_id += 1;
+        rv
     }
 
     fn reinit_player(&mut self) -> std::result::Result<(), Error> {
@@ -52,6 +57,10 @@ impl WinRT {
 }
 
 impl Backend for WinRT {
+    fn id(&self) -> Option<BackendId> {
+        Some(self.id)
+    }
+
     fn supported_features(&self) -> Features {
         Features {
             stop: true,
@@ -59,6 +68,7 @@ impl Backend for WinRT {
             pitch: true,
             volume: true,
             is_speaking: true,
+            ..Default::default()
         }
     }
 
@@ -83,13 +93,11 @@ impl Backend for WinRT {
                 self.reinit_player()?;
             }
         }
-        self.playback_list.items()?.append(item)?;
+        self.playback_list.items()?.append(&item)?;
         if !self.is_speaking()? {
             self.player.play()?;
         }
-        let mut utterance_id = NEXT_UTTERANCE_ID.lock().unwrap();
-        *utterance_id += 1;
-        Ok(Some(UtteranceId::WinRT(*utterance_id)))
+        Ok(Some(UtteranceId::WinRT(item)))
     }
 
     fn stop(&mut self) -> std::result::Result<(), Error> {

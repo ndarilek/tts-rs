@@ -1,14 +1,15 @@
 #[cfg(target_os = "linux")]
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::sync::Mutex;
 
 use lazy_static::*;
 use log::{info, trace};
 use speech_dispatcher::*;
 
-use crate::{Backend, Error, Features, UtteranceId};
+use crate::{Backend, BackendId, Error, Features, UtteranceId, CALLBACKS};
 
-pub struct SpeechDispatcher(Connection);
+pub(crate) struct SpeechDispatcher(Connection);
 
 lazy_static! {
     static ref SPEAKING: Mutex<HashMap<u64, bool>> = {
@@ -18,19 +19,33 @@ lazy_static! {
 }
 
 impl SpeechDispatcher {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         info!("Initializing SpeechDispatcher backend");
         let connection = speech_dispatcher::Connection::open("tts", "tts", "tts", Mode::Threaded);
         let sd = SpeechDispatcher(connection);
         let mut speaking = SPEAKING.lock().unwrap();
         speaking.insert(sd.0.client_id(), false);
-        sd.0.on_begin(Some(|_msg_id, client_id| {
+        sd.0.on_begin(Some(|msg_id, client_id| {
             let mut speaking = SPEAKING.lock().unwrap();
             speaking.insert(client_id, true);
+            let callbacks = CALLBACKS.lock().unwrap();
+            let backend_id = BackendId::SpeechDispatcher(client_id);
+            let cb = callbacks.get(&backend_id).unwrap();
+            let utterance_id = UtteranceId::SpeechDispatcher(msg_id);
+            if let Some(f) = cb.utterance_begin {
+                f(utterance_id);
+            }
         }));
-        sd.0.on_end(Some(|_msg_id, client_id| {
+        sd.0.on_end(Some(|msg_id, client_id| {
             let mut speaking = SPEAKING.lock().unwrap();
             speaking.insert(client_id, false);
+            let callbacks = CALLBACKS.lock().unwrap();
+            let backend_id = BackendId::SpeechDispatcher(client_id);
+            let cb = callbacks.get(&backend_id).unwrap();
+            let utterance_id = UtteranceId::SpeechDispatcher(msg_id);
+            if let Some(f) = cb.utterance_end {
+                f(utterance_id);
+            }
         }));
         sd.0.on_cancel(Some(|_msg_id, client_id| {
             let mut speaking = SPEAKING.lock().unwrap();
@@ -49,6 +64,10 @@ impl SpeechDispatcher {
 }
 
 impl Backend for SpeechDispatcher {
+    fn id(&self) -> Option<BackendId> {
+        Some(BackendId::SpeechDispatcher(self.0.client_id()))
+    }
+
     fn supported_features(&self) -> Features {
         Features {
             stop: true,
@@ -56,6 +75,7 @@ impl Backend for SpeechDispatcher {
             pitch: true,
             volume: true,
             is_speaking: true,
+            utterance_callbacks: true,
         }
     }
 
@@ -73,7 +93,7 @@ impl Backend for SpeechDispatcher {
             self.0.set_punctuation(Punctuation::None);
         }
         if let Some(id) = id {
-            Ok(Some(UtteranceId::SpeechDispatcher(id)))
+            Ok(Some(UtteranceId::SpeechDispatcher(id.try_into().unwrap())))
         } else {
             Err(Error::NoneError)
         }

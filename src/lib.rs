@@ -12,16 +12,22 @@
  */
 
 use std::boxed::Box;
+use std::collections::HashMap;
 #[cfg(target_os = "macos")]
 use std::ffi::CStr;
+use std::sync::Mutex;
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 use cocoa_foundation::base::id;
+use lazy_static::lazy_static;
 #[cfg(target_os = "macos")]
 use libc::c_char;
 #[cfg(target_os = "macos")]
 use objc::{class, msg_send, sel, sel_impl};
 use thiserror::Error;
+
+#[cfg(windows)]
+use tts_winrt_bindings::windows::media::playback::MediaPlaybackItem;
 
 mod backends;
 
@@ -40,10 +46,10 @@ pub enum Backends {
     AvFoundation,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum UtteranceId {
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum BackendId {
     #[cfg(target_os = "linux")]
-    SpeechDispatcher(i32),
+    SpeechDispatcher(u64),
     #[cfg(target_arch = "wasm32")]
     Web(u64),
     #[cfg(windows)]
@@ -52,12 +58,23 @@ pub enum UtteranceId {
     AvFoundation(id),
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum UtteranceId {
+    #[cfg(target_os = "linux")]
+    SpeechDispatcher(u64),
+    #[cfg(target_arch = "wasm32")]
+    Web(u64),
+    #[cfg(windows)]
+    WinRT(MediaPlaybackItem),
+}
+
 pub struct Features {
     pub stop: bool,
     pub rate: bool,
     pub pitch: bool,
     pub volume: bool,
     pub is_speaking: bool,
+    pub utterance_callbacks: bool,
 }
 
 impl Default for Features {
@@ -68,6 +85,7 @@ impl Default for Features {
             pitch: false,
             volume: false,
             is_speaking: false,
+            utterance_callbacks: false,
         }
     }
 }
@@ -91,6 +109,7 @@ pub enum Error {
 }
 
 pub trait Backend {
+    fn id(&self) -> Option<BackendId>;
     fn supported_features(&self) -> Features;
     fn speak(&mut self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error>;
     fn stop(&mut self) -> Result<(), Error>;
@@ -112,6 +131,19 @@ pub trait Backend {
     fn is_speaking(&self) -> Result<bool, Error>;
 }
 
+#[derive(Default)]
+struct Callbacks {
+    utterance_begin: Option<fn(UtteranceId)>,
+    utterance_end: Option<fn(UtteranceId)>,
+}
+
+lazy_static! {
+    static ref CALLBACKS: Mutex<HashMap<BackendId, Callbacks>> = {
+        let m: HashMap<BackendId, Callbacks> = HashMap::new();
+        Mutex::new(m)
+    };
+}
+
 pub struct TTS(Box<dyn Backend>);
 
 unsafe impl std::marker::Send for TTS {}
@@ -123,7 +155,7 @@ impl TTS {
      * Create a new `TTS` instance with the specified backend.
      */
     pub fn new(backend: Backends) -> Result<TTS, Error> {
-        match backend {
+        let backend = match backend {
             #[cfg(target_os = "linux")]
             Backends::SpeechDispatcher => Ok(TTS(Box::new(backends::SpeechDispatcher::new()))),
             #[cfg(target_arch = "wasm32")]
@@ -149,6 +181,16 @@ impl TTS {
             Backends::AppKit => Ok(TTS(Box::new(backends::AppKit::new()))),
             #[cfg(any(target_os = "macos", target_os = "ios"))]
             Backends::AvFoundation => Ok(TTS(Box::new(backends::AvFoundation::new()))),
+        };
+        let mut callbacks = CALLBACKS.lock().unwrap();
+        if backend.is_ok() {
+            let backend = backend.unwrap();
+            if let Some(id) = backend.0.id() {
+                callbacks.insert(id, Callbacks::default());
+            }
+            Ok(backend)
+        } else {
+            backend
         }
     }
 
@@ -384,6 +426,53 @@ impl TTS {
             self.0.is_speaking()
         } else {
             Err(Error::UnsupportedFeature)
+        }
+    }
+
+    /**
+     * Called when this speech synthesizer begins speaking an utterance.
+     */
+    pub fn on_utterance_begin(&self, callback: Option<fn(UtteranceId)>) -> Result<(), Error> {
+        let Features {
+            utterance_callbacks,
+            ..
+        } = self.supported_features();
+        if utterance_callbacks {
+            let mut callbacks = CALLBACKS.lock().unwrap();
+            let id = self.0.id().unwrap();
+            let mut callbacks = callbacks.get_mut(&id).unwrap();
+            callbacks.utterance_begin = callback;
+            Ok(())
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
+    }
+
+    /**
+     * Called when this speech synthesizer finishes speaking an utterance.
+     */
+    pub fn on_utterance_end(&self, callback: Option<fn(UtteranceId)>) -> Result<(), Error> {
+        let Features {
+            utterance_callbacks,
+            ..
+        } = self.supported_features();
+        if utterance_callbacks {
+            let mut callbacks = CALLBACKS.lock().unwrap();
+            let id = self.0.id().unwrap();
+            let mut callbacks = callbacks.get_mut(&id).unwrap();
+            callbacks.utterance_end = callback;
+            Ok(())
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
+    }
+}
+
+impl Drop for TTS {
+    fn drop(&mut self) {
+        if let Some(id) = self.0.id() {
+            let mut callbacks = CALLBACKS.lock().unwrap();
+            callbacks.remove(&id);
         }
     }
 }

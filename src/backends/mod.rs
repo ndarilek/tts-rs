@@ -17,7 +17,7 @@ mod appkit;
 mod av_foundation;
 
 #[cfg(target_os = "linux")]
-pub use self::speech_dispatcher::*;
+pub(crate) use self::speech_dispatcher::*;
 
 #[cfg(windows)]
 pub use self::tolk::*;
