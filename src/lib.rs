@@ -46,14 +46,14 @@ pub enum Backends {
     AvFoundation,
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum BackendId {
     #[cfg(target_os = "linux")]
     SpeechDispatcher(u64),
     #[cfg(target_arch = "wasm32")]
     Web(u64),
     #[cfg(windows)]
-    WinRT(MediaPlaybackItem),
+    WinRT(u64),
 }
 
 #[derive(Clone, Debug, PartialEq)]
