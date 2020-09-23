@@ -4,10 +4,10 @@ use tolk::Tolk as TolkPtr;
 
 use crate::{Backend, BackendId, Error, Features, UtteranceId};
 
-pub struct Tolk(TolkPtr);
+pub(crate) struct Tolk(TolkPtr);
 
 impl Tolk {
-    pub fn new() -> Option<Self> {
+    pub(crate) fn new() -> Option<Self> {
         info!("Initializing Tolk backend");
         let tolk = TolkPtr::new();
         if tolk.detect_screen_reader().is_some() {

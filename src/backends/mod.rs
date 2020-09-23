@@ -20,7 +20,7 @@ mod av_foundation;
 pub(crate) use self::speech_dispatcher::*;
 
 #[cfg(windows)]
-pub use self::tolk::*;
+pub(crate) use self::tolk::*;
 
 #[cfg(target_arch = "wasm32")]
 pub use self::web::*;
