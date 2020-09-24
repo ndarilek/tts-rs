@@ -186,10 +186,10 @@ impl TTS {
             #[cfg(any(target_os = "macos", target_os = "ios"))]
             Backends::AvFoundation => Ok(TTS(Box::new(backends::AvFoundation::new()))),
         };
-        let mut callbacks = CALLBACKS.lock().unwrap();
         if backend.is_ok() {
             let backend = backend.unwrap();
             if let Some(id) = backend.0.id() {
+                let mut callbacks = CALLBACKS.lock().unwrap();
                 callbacks.insert(id, Callbacks::default());
             }
             Ok(backend)
