@@ -3,32 +3,43 @@ use std::sync::Mutex;
 
 use lazy_static::lazy_static;
 use log::{info, trace};
-use web_sys::SpeechSynthesisUtterance;
+use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
+use web_sys::{SpeechSynthesisEvent, SpeechSynthesisUtterance};
 
-use crate::{Backend, Error, Features, UtteranceId};
+use crate::{Backend, BackendId, Error, Features, UtteranceId, CALLBACKS};
 
 pub struct Web {
+    id: BackendId,
     rate: f32,
     pitch: f32,
     volume: f32,
 }
 
 lazy_static! {
-    static ref NEXT_UTTERANCE_ID: Mutex<u64> = Mutex::new(0);
+    static ref NEXT_BACKEND_ID: Mutex<u64> = Mutex::new(0);
 }
 
 impl Web {
     pub fn new() -> Result<Self, Error> {
         info!("Initializing Web backend");
-        Ok(Web {
+        let mut backend_id = NEXT_BACKEND_ID.lock().unwrap();
+        let rv = Web {
+            id: BackendId::Web(*backend_id),
             rate: 1.,
             pitch: 1.,
             volume: 1.,
-        })
+        };
+        *backend_id += 1;
+        Ok(rv)
     }
 }
 
 impl Backend for Web {
+    fn id(&self) -> Option<BackendId> {
+        Some(self.id)
+    }
+
     fn supported_features(&self) -> Features {
         Features {
             stop: true,
@@ -36,6 +47,7 @@ impl Backend for Web {
             pitch: true,
             volume: true,
             is_speaking: true,
+            utterance_callbacks: true,
         }
     }
 
@@ -45,15 +57,33 @@ impl Backend for Web {
         utterance.set_rate(self.rate);
         utterance.set_pitch(self.pitch);
         utterance.set_volume(self.volume);
+        let id = self.id().unwrap();
+        let utterance_id = UtteranceId::Web(utterance.clone());
+        let callback = Closure::wrap(Box::new(move |evt: SpeechSynthesisEvent| {
+            let callbacks = CALLBACKS.lock().unwrap();
+            let callback = callbacks.get(&id).unwrap();
+            if let Some(f) = callback.utterance_begin {
+                let utterance_id = UtteranceId::Web(evt.utterance());
+                f(utterance_id);
+            }
+        }) as Box<dyn Fn(_)>);
+        utterance.set_onstart(Some(callback.as_ref().unchecked_ref()));
+        let callback = Closure::wrap(Box::new(move |evt: SpeechSynthesisEvent| {
+            let callbacks = CALLBACKS.lock().unwrap();
+            let callback = callbacks.get(&id).unwrap();
+            if let Some(f) = callback.utterance_end {
+                let utterance_id = UtteranceId::Web(evt.utterance());
+                f(utterance_id);
+            }
+        }) as Box<dyn Fn(_)>);
+        utterance.set_onend(Some(callback.as_ref().unchecked_ref()));
         if interrupt {
             self.stop()?;
         }
         if let Some(window) = web_sys::window() {
             let speech_synthesis = window.speech_synthesis().unwrap();
             speech_synthesis.speak(&utterance);
-            let mut utterance_id = NEXT_UTTERANCE_ID.lock().unwrap();
-            *utterance_id += 1;
-            Ok(Some(UtteranceId::Web(*utterance_id)))
+            Ok(Some(utterance_id))
         } else {
             Err(Error::NoneError)
         }

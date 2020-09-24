@@ -25,6 +25,8 @@ use libc::c_char;
 #[cfg(target_os = "macos")]
 use objc::{class, msg_send, sel, sel_impl};
 use thiserror::Error;
+#[cfg(target_arch = "wasm32")]
+use web_sys::SpeechSynthesisUtterance;
 
 #[cfg(windows)]
 use tts_winrt_bindings::windows::media::playback::MediaPlaybackItem;
@@ -63,7 +65,7 @@ pub enum UtteranceId {
     #[cfg(target_os = "linux")]
     SpeechDispatcher(u64),
     #[cfg(target_arch = "wasm32")]
-    Web(u64),
+    Web(SpeechSynthesisUtterance),
     #[cfg(windows)]
     WinRT(MediaPlaybackItem),
     #[cfg(any(target_os = "macos", target_os = "ios"))]
