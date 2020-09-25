@@ -28,22 +28,22 @@ impl SpeechDispatcher {
         sd.0.on_begin(Some(|msg_id, client_id| {
             let mut speaking = SPEAKING.lock().unwrap();
             speaking.insert(client_id, true);
-            let callbacks = CALLBACKS.lock().unwrap();
+            let mut callbacks = CALLBACKS.lock().unwrap();
             let backend_id = BackendId::SpeechDispatcher(client_id);
-            let cb = callbacks.get(&backend_id).unwrap();
+            let cb = callbacks.get_mut(&backend_id).unwrap();
             let utterance_id = UtteranceId::SpeechDispatcher(msg_id);
-            if let Some(f) = cb.utterance_begin {
+            if let Some(f) = cb.utterance_begin.as_mut() {
                 f(utterance_id);
             }
         }));
         sd.0.on_end(Some(|msg_id, client_id| {
             let mut speaking = SPEAKING.lock().unwrap();
             speaking.insert(client_id, false);
-            let callbacks = CALLBACKS.lock().unwrap();
+            let mut callbacks = CALLBACKS.lock().unwrap();
             let backend_id = BackendId::SpeechDispatcher(client_id);
-            let cb = callbacks.get(&backend_id).unwrap();
+            let cb = callbacks.get_mut(&backend_id).unwrap();
             let utterance_id = UtteranceId::SpeechDispatcher(msg_id);
-            if let Some(f) = cb.utterance_end {
+            if let Some(f) = cb.utterance_end.as_mut() {
                 f(utterance_id);
             }
         }));

@@ -60,18 +60,18 @@ impl Backend for Web {
         let id = self.id().unwrap();
         let utterance_id = UtteranceId::Web(utterance.clone());
         let callback = Closure::wrap(Box::new(move |evt: SpeechSynthesisEvent| {
-            let callbacks = CALLBACKS.lock().unwrap();
-            let callback = callbacks.get(&id).unwrap();
-            if let Some(f) = callback.utterance_begin {
+            let mut callbacks = CALLBACKS.lock().unwrap();
+            let callback = callbacks.get_mut(&id).unwrap();
+            if let Some(f) = callback.utterance_begin.as_mut() {
                 let utterance_id = UtteranceId::Web(evt.utterance());
                 f(utterance_id);
             }
         }) as Box<dyn Fn(_)>);
         utterance.set_onstart(Some(callback.as_ref().unchecked_ref()));
         let callback = Closure::wrap(Box::new(move |evt: SpeechSynthesisEvent| {
-            let callbacks = CALLBACKS.lock().unwrap();
-            let callback = callbacks.get(&id).unwrap();
-            if let Some(f) = callback.utterance_end {
+            let mut callbacks = CALLBACKS.lock().unwrap();
+            let callback = callbacks.get_mut(&id).unwrap();
+            if let Some(f) = callback.utterance_end.as_mut() {
                 let utterance_id = UtteranceId::Web(evt.utterance());
                 f(utterance_id);
             }

@@ -137,9 +137,13 @@ pub trait Backend {
 
 #[derive(Default)]
 struct Callbacks {
-    utterance_begin: Option<fn(UtteranceId)>,
-    utterance_end: Option<fn(UtteranceId)>,
+    utterance_begin: Option<Box<dyn FnMut(UtteranceId)>>,
+    utterance_end: Option<Box<dyn FnMut(UtteranceId)>>,
 }
+
+unsafe impl Send for Callbacks {}
+
+unsafe impl Sync for Callbacks {}
 
 lazy_static! {
     static ref CALLBACKS: Mutex<HashMap<BackendId, Callbacks>> = {
@@ -436,7 +440,10 @@ impl TTS {
     /**
      * Called when this speech synthesizer begins speaking an utterance.
      */
-    pub fn on_utterance_begin(&self, callback: Option<fn(UtteranceId)>) -> Result<(), Error> {
+    pub fn on_utterance_begin(
+        &self,
+        callback: Option<Box<dyn FnMut(UtteranceId)>>,
+    ) -> Result<(), Error> {
         let Features {
             utterance_callbacks,
             ..
@@ -455,7 +462,10 @@ impl TTS {
     /**
      * Called when this speech synthesizer finishes speaking an utterance.
      */
-    pub fn on_utterance_end(&self, callback: Option<fn(UtteranceId)>) -> Result<(), Error> {
+    pub fn on_utterance_end(
+        &self,
+        callback: Option<Box<dyn FnMut(UtteranceId)>>,
+    ) -> Result<(), Error> {
         let Features {
             utterance_callbacks,
             ..

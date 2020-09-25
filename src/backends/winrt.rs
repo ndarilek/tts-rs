@@ -83,9 +83,9 @@ impl WinRT {
                 let id = backend_to_media_player.iter().find(|v| v.1 == sender);
                 if let Some(id) = id {
                     let id = id.0;
-                    let callbacks = CALLBACKS.lock().unwrap();
-                    let callbacks = callbacks.get(&id).unwrap();
-                    if let Some(callback) = callbacks.utterance_end {
+                    let mut callbacks = CALLBACKS.lock().unwrap();
+                    let callbacks = callbacks.get_mut(&id).unwrap();
+                    if let Some(callback) = callbacks.utterance_end.as_mut() {
                         let last_spoken_utterance = LAST_SPOKEN_UTTERANCE.lock().unwrap();
                         if let Some(utterance_id) = last_spoken_utterance.get(&id) {
                             callback(utterance_id.clone());
@@ -103,20 +103,20 @@ impl WinRT {
                     let id = backend_to_playback_list.iter().find(|v| v.1 == sender);
                     if let Some(id) = id {
                         let id = id.0;
-                        let callbacks = CALLBACKS.lock().unwrap();
-                        let callbacks = callbacks.get(&id).unwrap();
+                        let mut callbacks = CALLBACKS.lock().unwrap();
+                        let callbacks = callbacks.get_mut(&id).unwrap();
                         let old_item = args.old_item()?;
                         if !old_item.is_null() {
-                            if let Some(callback) = callbacks.utterance_end {
+                            if let Some(callback) = callbacks.utterance_end.as_mut() {
                                 callback(UtteranceId::WinRT(old_item));
                             }
                         }
                         let new_item = args.new_item()?;
                         if !new_item.is_null() {
-                            let utterance_id = UtteranceId::WinRT(new_item);
                             let mut last_spoken_utterance = LAST_SPOKEN_UTTERANCE.lock().unwrap();
+                            let utterance_id = UtteranceId::WinRT(new_item);
                             last_spoken_utterance.insert(*id, utterance_id.clone());
-                            if let Some(callback) = callbacks.utterance_begin {
+                            if let Some(callback) = callbacks.utterance_begin.as_mut() {
                                 callback(utterance_id);
                             }
                         }
