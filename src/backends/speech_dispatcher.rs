@@ -25,7 +25,7 @@ impl SpeechDispatcher {
         let sd = SpeechDispatcher(connection);
         let mut speaking = SPEAKING.lock().unwrap();
         speaking.insert(sd.0.client_id(), false);
-        sd.0.on_begin(Some(|msg_id, client_id| {
+        sd.0.on_begin(Some(Box::new(|msg_id, client_id| {
             let mut speaking = SPEAKING.lock().unwrap();
             speaking.insert(client_id, true);
             let mut callbacks = CALLBACKS.lock().unwrap();
@@ -35,8 +35,8 @@ impl SpeechDispatcher {
             if let Some(f) = cb.utterance_begin.as_mut() {
                 f(utterance_id);
             }
-        }));
-        sd.0.on_end(Some(|msg_id, client_id| {
+        })));
+        sd.0.on_end(Some(Box::new(|msg_id, client_id| {
             let mut speaking = SPEAKING.lock().unwrap();
             speaking.insert(client_id, false);
             let mut callbacks = CALLBACKS.lock().unwrap();
@@ -46,19 +46,19 @@ impl SpeechDispatcher {
             if let Some(f) = cb.utterance_end.as_mut() {
                 f(utterance_id);
             }
-        }));
-        sd.0.on_cancel(Some(|_msg_id, client_id| {
+        })));
+        sd.0.on_cancel(Some(Box::new(|_msg_id, client_id| {
             let mut speaking = SPEAKING.lock().unwrap();
             speaking.insert(client_id, false);
-        }));
-        sd.0.on_pause(Some(|_msg_id, client_id| {
+        })));
+        sd.0.on_pause(Some(Box::new(|_msg_id, client_id| {
             let mut speaking = SPEAKING.lock().unwrap();
             speaking.insert(client_id, false);
-        }));
-        sd.0.on_resume(Some(|_msg_id, client_id| {
+        })));
+        sd.0.on_resume(Some(Box::new(|_msg_id, client_id| {
             let mut speaking = SPEAKING.lock().unwrap();
             speaking.insert(client_id, true);
-        }));
+        })));
         sd
     }
 }
