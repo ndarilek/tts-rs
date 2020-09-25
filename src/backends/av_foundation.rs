@@ -33,15 +33,15 @@ impl AvFoundation {
         extern "C" fn speech_synthesizer_did_start_speech_utterance(
             this: &Object,
             _: Sel,
-            synth: *const Object,
+            _synth: *const Object,
             utterance: id,
         ) {
             unsafe {
                 let backend_id: u64 = *this.get_ivar("backend_id");
                 let backend_id = BackendId::AvFoundation(backend_id);
-                let callbacks = CALLBACKS.lock().unwrap();
-                let callbacks = callbacks.get(&backend_id).unwrap();
-                if let Some(callback) = callbacks.utterance_begin {
+                let mut callbacks = CALLBACKS.lock().unwrap();
+                let callbacks = callbacks.get_mut(&backend_id).unwrap();
+                if let Some(callback) = callbacks.utterance_begin.as_mut() {
                     let utterance_id = UtteranceId::AvFoundation(utterance);
                     callback(utterance_id);
                 }
@@ -51,15 +51,15 @@ impl AvFoundation {
         extern "C" fn speech_synthesizer_did_finish_speech_utterance(
             this: &Object,
             _: Sel,
-            synth: *const Object,
+            _synth: *const Object,
             utterance: id,
         ) {
             unsafe {
                 let backend_id: u64 = *this.get_ivar("backend_id");
                 let backend_id = BackendId::AvFoundation(backend_id);
-                let callbacks = CALLBACKS.lock().unwrap();
-                let callbacks = callbacks.get(&backend_id).unwrap();
-                if let Some(callback) = callbacks.utterance_end {
+                let mut callbacks = CALLBACKS.lock().unwrap();
+                let callbacks = callbacks.get_mut(&backend_id).unwrap();
+                if let Some(callback) = callbacks.utterance_end.as_mut() {
                     let utterance_id = UtteranceId::AvFoundation(utterance);
                     callback(utterance_id);
                 }
