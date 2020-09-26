@@ -120,11 +120,8 @@ impl Backend for AvFoundation {
             pitch: true,
             volume: true,
             is_speaking: true,
-<<<<<<< HEAD
             voices: true,
-=======
             utterance_callbacks: true,
->>>>>>> develop
         }
     }
 
