@@ -140,6 +140,7 @@ impl Backend for WinRT {
             pitch: true,
             volume: true,
             is_speaking: true,
+            voices: true,
             utterance_callbacks: true,
         }
     }

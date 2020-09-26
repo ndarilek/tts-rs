@@ -75,6 +75,7 @@ impl Backend for SpeechDispatcher {
             pitch: true,
             volume: true,
             is_speaking: true,
+            voices: false,
             utterance_callbacks: true,
         }
     }
