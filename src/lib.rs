@@ -190,8 +190,7 @@ impl TTS {
             #[cfg(any(target_os = "macos", target_os = "ios"))]
             Backends::AvFoundation => Ok(TTS(Box::new(backends::AvFoundation::new()))),
         };
-        if backend.is_ok() {
-            let backend = backend.unwrap();
+        if let Ok(backend) = backend {
             if let Some(id) = backend.0.id() {
                 let mut callbacks = CALLBACKS.lock().unwrap();
                 callbacks.insert(id, Callbacks::default());
@@ -206,7 +205,7 @@ impl TTS {
         #[cfg(target_os = "linux")]
         let tts = TTS::new(Backends::SpeechDispatcher);
         #[cfg(windows)]
-        let tts = if let Some(tts) = TTS::new(Backends::Tolk).ok() {
+        let tts = if let Ok(tts) = TTS::new(Backends::Tolk) {
             Ok(tts)
         } else {
             TTS::new(Backends::WinRT)

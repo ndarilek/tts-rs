@@ -56,8 +56,8 @@ impl WinRT {
         let mut rv = Self {
             id: bid,
             synth: SpeechSynthesizer::new()?,
-            player: player,
-            playback_list: playback_list,
+            player,
+            playback_list,
         };
         *backend_id += 1;
         Self::init_callbacks(&mut rv)?;
