@@ -2,12 +2,12 @@
 use log::{info, trace};
 use tolk::Tolk as TolkPtr;
 
-use crate::{Backend, Error, Features};
+use crate::{Backend, BackendId, Error, Features, UtteranceId};
 
-pub struct Tolk(TolkPtr);
+pub(crate) struct Tolk(TolkPtr);
 
 impl Tolk {
-    pub fn new() -> Option<Self> {
+    pub(crate) fn new() -> Option<Self> {
         info!("Initializing Tolk backend");
         let tolk = TolkPtr::new();
         if tolk.detect_screen_reader().is_some() {
@@ -19,6 +19,10 @@ impl Tolk {
 }
 
 impl Backend for Tolk {
+    fn id(&self) -> Option<BackendId> {
+        None
+    }
+
     fn supported_features(&self) -> Features {
         Features {
             stop: true,
@@ -26,28 +30,10 @@ impl Backend for Tolk {
         }
     }
 
-    fn speak(&mut self, text: &str, interrupt: bool) -> Result<(), Error> {
+    fn speak(&mut self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error> {
         trace!("speak({}, {})", text, interrupt);
-        const BUFFER_LENGTH: usize = 300;
-        if text.len() <= BUFFER_LENGTH {
-            self.0.speak(text, interrupt);
-        } else {
-            if interrupt {
-                self.stop()?;
-            }
-            let tokens = text.split_whitespace();
-            let mut buffer = String::new();
-            for token in tokens {
-                if buffer.len() + token.len() > BUFFER_LENGTH {
-                    self.0.speak(buffer, false);
-                    buffer = String::new();
-                } else {
-                    buffer.push_str(token);
-                    buffer.push(' ');
-                }
-            }
-        }
-        Ok(())
+        self.0.speak(text, interrupt);
+        Ok(None)
     }
 
     fn stop(&mut self) -> Result<(), Error> {

@@ -1,6 +1,6 @@
 [package]
 name = "tts"
-version = "0.6.3"
+version = "0.8.0"
 authors = ["Nolan Darilek <nolan@thewordnerd.info>"]
 repository = "https://github.com/ndarilek/tts-rs"
 description = "High-level Text-To-Speech (TTS) interface"
@@ -9,7 +9,7 @@ exclude = ["*.cfg", "*.yml"]
 edition = "2018"
 
 [lib]
-crate-type = ["lib", "staticlib"]
+crate-type = ["lib", "cdylib", "staticlib"]
 
 [dependencies]
 lazy_static = "1"
@@ -20,12 +20,12 @@ thiserror = "1"
 env_logger = "0.7"
 
 [target.'cfg(windows)'.dependencies]
-tolk = "0.2"
+tolk = ">= 0.2.1"
 winrt = "0.7"
 tts_winrt_bindings = { version = "0.1", path="winrt_bindings" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-speech-dispatcher = "0.6"
+speech-dispatcher = "0.7"
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 cocoa-foundation = "0.1"
@@ -35,4 +35,4 @@ objc = "0.2"
 
 [target.wasm32-unknown-unknown.dependencies]
 wasm-bindgen = "0.2"
-web-sys = { version = "0.3", features = ["SpeechSynthesis", "SpeechSynthesisUtterance", "Window", ] }
+web-sys = { version = "0.3", features = ["EventTarget", "SpeechSynthesis", "SpeechSynthesisEvent", "SpeechSynthesisUtterance", "Window", ] }

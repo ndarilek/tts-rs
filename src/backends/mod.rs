@@ -17,16 +17,16 @@ mod appkit;
 mod av_foundation;
 
 #[cfg(target_os = "linux")]
-pub use self::speech_dispatcher::*;
+pub(crate) use self::speech_dispatcher::*;
 
 #[cfg(windows)]
-pub use self::tolk::*;
+pub(crate) use self::tolk::*;
 
 #[cfg(target_arch = "wasm32")]
 pub use self::web::*;
 
 #[cfg(target_os = "macos")]
-pub use self::appkit::*;
+pub(crate) use self::appkit::*;
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
-pub use self::av_foundation::*;
+pub(crate) use self::av_foundation::*;

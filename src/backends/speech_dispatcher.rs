@@ -1,14 +1,15 @@
 #[cfg(target_os = "linux")]
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::sync::Mutex;
 
 use lazy_static::*;
 use log::{info, trace};
 use speech_dispatcher::*;
 
-use crate::{Backend, Error, Features};
+use crate::{Backend, BackendId, Error, Features, UtteranceId, CALLBACKS};
 
-pub struct SpeechDispatcher(Connection);
+pub(crate) struct SpeechDispatcher(Connection);
 
 lazy_static! {
     static ref SPEAKING: Mutex<HashMap<u64, bool>> = {
@@ -18,37 +19,55 @@ lazy_static! {
 }
 
 impl SpeechDispatcher {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         info!("Initializing SpeechDispatcher backend");
         let connection = speech_dispatcher::Connection::open("tts", "tts", "tts", Mode::Threaded);
         let sd = SpeechDispatcher(connection);
         let mut speaking = SPEAKING.lock().unwrap();
         speaking.insert(sd.0.client_id(), false);
-        sd.0.on_begin(Some(|_msg_id, client_id| {
+        sd.0.on_begin(Some(Box::new(|msg_id, client_id| {
             let mut speaking = SPEAKING.lock().unwrap();
             speaking.insert(client_id, true);
-        }));
-        sd.0.on_end(Some(|_msg_id, client_id| {
+            let mut callbacks = CALLBACKS.lock().unwrap();
+            let backend_id = BackendId::SpeechDispatcher(client_id);
+            let cb = callbacks.get_mut(&backend_id).unwrap();
+            let utterance_id = UtteranceId::SpeechDispatcher(msg_id);
+            if let Some(f) = cb.utterance_begin.as_mut() {
+                f(utterance_id);
+            }
+        })));
+        sd.0.on_end(Some(Box::new(|msg_id, client_id| {
             let mut speaking = SPEAKING.lock().unwrap();
             speaking.insert(client_id, false);
-        }));
-        sd.0.on_cancel(Some(|_msg_id, client_id| {
+            let mut callbacks = CALLBACKS.lock().unwrap();
+            let backend_id = BackendId::SpeechDispatcher(client_id);
+            let cb = callbacks.get_mut(&backend_id).unwrap();
+            let utterance_id = UtteranceId::SpeechDispatcher(msg_id);
+            if let Some(f) = cb.utterance_end.as_mut() {
+                f(utterance_id);
+            }
+        })));
+        sd.0.on_cancel(Some(Box::new(|_msg_id, client_id| {
             let mut speaking = SPEAKING.lock().unwrap();
             speaking.insert(client_id, false);
-        }));
-        sd.0.on_pause(Some(|_msg_id, client_id| {
+        })));
+        sd.0.on_pause(Some(Box::new(|_msg_id, client_id| {
             let mut speaking = SPEAKING.lock().unwrap();
             speaking.insert(client_id, false);
-        }));
-        sd.0.on_resume(Some(|_msg_id, client_id| {
+        })));
+        sd.0.on_resume(Some(Box::new(|_msg_id, client_id| {
             let mut speaking = SPEAKING.lock().unwrap();
             speaking.insert(client_id, true);
-        }));
+        })));
         sd
     }
 }
 
 impl Backend for SpeechDispatcher {
+    fn id(&self) -> Option<BackendId> {
+        Some(BackendId::SpeechDispatcher(self.0.client_id()))
+    }
+
     fn supported_features(&self) -> Features {
         Features {
             stop: true,
@@ -56,10 +75,11 @@ impl Backend for SpeechDispatcher {
             pitch: true,
             volume: true,
             is_speaking: true,
+            utterance_callbacks: true,
         }
     }
 
-    fn speak(&mut self, text: &str, interrupt: bool) -> Result<(), Error> {
+    fn speak(&mut self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error> {
         trace!("speak({}, {})", text, interrupt);
         if interrupt {
             self.stop()?;
@@ -68,11 +88,15 @@ impl Backend for SpeechDispatcher {
         if single_char {
             self.0.set_punctuation(Punctuation::All);
         }
-        self.0.say(Priority::Important, text);
+        let id = self.0.say(Priority::Important, text);
         if single_char {
             self.0.set_punctuation(Punctuation::None);
         }
-        Ok(())
+        if let Some(id) = id {
+            Ok(Some(UtteranceId::SpeechDispatcher(id.try_into().unwrap())))
+        } else {
+            Err(Error::NoneError)
+        }
     }
 
     fn stop(&mut self) -> Result<(), Error> {

@@ -12,6 +12,18 @@ use tts::*;
 fn main() -> Result<(), Error> {
     env_logger::init();
     let mut tts = TTS::default()?;
+    let Features {
+        utterance_callbacks,
+        ..
+    } = tts.supported_features();
+    if utterance_callbacks {
+        tts.on_utterance_begin(Some(Box::new(|utterance| {
+            println!("Started speaking {:?}", utterance)
+        })))?;
+        tts.on_utterance_end(Some(Box::new(|utterance| {
+            println!("Finished speaking {:?}", utterance)
+        })))?;
+    }
     tts.speak("Hello, world.", false)?;
     let Features { rate, .. } = tts.supported_features();
     if rate {
@@ -63,6 +75,8 @@ fn main() -> Result<(), Error> {
     }*/
     tts.speak("Goodbye.", false)?;
     let mut _input = String::new();
+    // The below is only needed to make the example run on MacOS because there is no NSRunLoop in this context.
+    // It shouldn't be needed in an app or game that almost certainly has one already.
     #[cfg(target_os = "macos")]
     {
         let run_loop: id = unsafe { NSRunLoop::currentRunLoop() };
