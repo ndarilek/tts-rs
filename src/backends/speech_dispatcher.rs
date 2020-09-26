@@ -1,6 +1,5 @@
 #[cfg(target_os = "linux")]
 use std::collections::HashMap;
-use std::convert::TryInto;
 use std::sync::Mutex;
 
 use lazy_static::*;
@@ -93,7 +92,7 @@ impl Backend for SpeechDispatcher {
             self.0.set_punctuation(Punctuation::None);
         }
         if let Some(id) = id {
-            Ok(Some(UtteranceId::SpeechDispatcher(id.try_into().unwrap())))
+            Ok(Some(UtteranceId::SpeechDispatcher(id)))
         } else {
             Err(Error::NoneError)
         }
