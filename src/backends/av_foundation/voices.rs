@@ -11,7 +11,7 @@ use crate::voices;
 use crate::voices::Gender;
 
 #[derive(Copy,Clone)]
-pub struct AVSpeechSynthesisVoice(*const Object);
+pub(crate) struct AVSpeechSynthesisVoice(*const Object);
 
 impl AVSpeechSynthesisVoice {
     pub fn new(identifier: &str) -> Self {
