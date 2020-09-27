@@ -47,6 +47,7 @@ impl Backend for Web {
             pitch: true,
             volume: true,
             is_speaking: true,
+            voices: true,
             utterance_callbacks: true,
         }
     }
@@ -171,5 +172,17 @@ impl Backend for Web {
         } else {
             Err(Error::NoneError)
         }
+    }
+
+    fn voice(&self) -> Result<String,Error> {
+        unimplemented!()
+    }
+
+    fn list_voices(&self) -> Vec<String> {
+        unimplemented!()
+    }
+
+    fn set_voice(&mut self, voice: &str) -> Result<(),Error> {
+        unimplemented!()
     }
 }

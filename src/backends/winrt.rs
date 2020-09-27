@@ -140,6 +140,7 @@ impl Backend for WinRT {
             pitch: true,
             volume: true,
             is_speaking: true,
+            voices: true,
             utterance_callbacks: true,
         }
     }
@@ -249,6 +250,18 @@ impl Backend for WinRT {
         let state = self.player.playback_session()?.playback_state()?;
         let playing = state == MediaPlaybackState::Opening || state == MediaPlaybackState::Playing;
         Ok(playing)
+    }
+
+    fn voice(&self) -> Result<String,Error> {
+        unimplemented!()
+    }
+
+    fn list_voices(&self) -> Vec<String> {
+        unimplemented!()
+    }
+
+    fn set_voice(&mut self, voice: &str) -> Result<(),Error> {
+        unimplemented!()
     }
 }
 

@@ -32,6 +32,7 @@ use web_sys::SpeechSynthesisUtterance;
 use tts_winrt_bindings::windows::media::playback::MediaPlaybackItem;
 
 mod backends;
+mod voices;
 
 pub enum Backends {
     #[cfg(target_os = "linux")]
@@ -78,6 +79,7 @@ pub struct Features {
     pub pitch: bool,
     pub volume: bool,
     pub is_speaking: bool,
+    pub voices: bool,
     pub utterance_callbacks: bool,
 }
 
@@ -89,6 +91,7 @@ impl Default for Features {
             pitch: false,
             volume: false,
             is_speaking: false,
+            voices: false,
             utterance_callbacks: false,
         }
     }
@@ -133,6 +136,9 @@ pub trait Backend {
     fn get_volume(&self) -> Result<f32, Error>;
     fn set_volume(&mut self, volume: f32) -> Result<(), Error>;
     fn is_speaking(&self) -> Result<bool, Error>;
+    fn voice(&self) -> Result<String, Error>;
+    fn list_voices(&self) -> Vec<String>;
+    fn set_voice(&mut self, voice: &str) -> Result<(),Error>;
 }
 
 #[derive(Default)]
@@ -224,7 +230,8 @@ impl TTS {
             let version = version[1];
             let version_parts: Vec<&str> = version.split(".").collect();
             let minor_version: i8 = version_parts[1].parse().unwrap();
-            if minor_version >= 14 {
+            let major_version: i8 = version_parts[0].parse().unwrap();
+            if minor_version >= 14 || major_version >= 11 {
                 TTS::new(Backends::AvFoundation)
             } else {
                 TTS::new(Backends::AppKit)
@@ -431,6 +438,40 @@ impl TTS {
         let Features { is_speaking, .. } = self.supported_features();
         if is_speaking {
             self.0.is_speaking()
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
+    }
+
+    /**
+     * Returns list of available voices.
+     */
+    pub fn list_voices(&self) -> Vec<String> {
+        self.0.list_voices()
+    }
+
+    /**
+     * Return the current speaking voice. 
+     */
+    pub fn voice(&self) -> Result<String,Error> {
+        let Features { voices, .. } = self.supported_features();
+        if voices {
+            self.0.voice()
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
+    }
+
+    /**
+     * Set speaking voice.
+     */
+    pub fn set_voice<S: Into<String>>(&mut self, voice: S) -> Result<(),Error> {
+        let Features {
+            voices: voices_feature,
+            ..
+        } = self.0.supported_features();
+        if voices_feature {
+            self.0.set_voice(voice.into().as_str())
         } else {
             Err(Error::UnsupportedFeature)
         }

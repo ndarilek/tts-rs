@@ -74,6 +74,7 @@ impl Backend for SpeechDispatcher {
             pitch: true,
             volume: true,
             is_speaking: true,
+            voices: false,
             utterance_callbacks: true,
         }
     }
@@ -171,6 +172,18 @@ impl Backend for SpeechDispatcher {
         let speaking = SPEAKING.lock().unwrap();
         let is_speaking = speaking.get(&self.0.client_id()).unwrap();
         Ok(*is_speaking)
+    }
+
+    fn voice(&self) -> Result<String,Error> {
+        unimplemented!()
+    }
+
+    fn list_voices(&self) -> Vec<String> {
+        unimplemented!()
+    }
+
+    fn set_voice(&mut self, voice: &str) -> Result<(),Error> {
+        unimplemented!()
     }
 }
 
