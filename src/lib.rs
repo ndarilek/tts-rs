@@ -32,6 +32,7 @@ use web_sys::SpeechSynthesisUtterance;
 use tts_winrt_bindings::windows::media::playback::MediaPlaybackItem;
 
 mod backends;
+mod voices;
 
 pub enum Backends {
     #[cfg(target_os = "linux")]
