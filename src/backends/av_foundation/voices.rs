@@ -14,11 +14,10 @@ use crate::voices::Gender;
 pub(crate) struct AVSpeechSynthesisVoice(*const Object);
 
 impl AVSpeechSynthesisVoice {
-    pub fn new(identifier: &str) -> Self {
+    pub fn new() -> Self {
         let voice: *const Object;
         unsafe{
-            let i: id = NSString::alloc(nil).init_str(identifier);
-            voice = msg_send![class!(AVSpeechSynthesisVoice), voiceWithIdentifier:i];
+            voice = msg_send![class!(AVSpeechSynthesisVoice), new];
         };
         AVSpeechSynthesisVoice{0:voice}
     }
@@ -26,6 +25,14 @@ impl AVSpeechSynthesisVoice {
 
 impl voices::Backend for AVSpeechSynthesisVoice {
     type Backend = AvFoundation;
+
+    fn from_id(id: String) -> Self {
+        unimplemented!()
+    }
+
+    fn from_language(lang: voices::LanguageIdentifier) -> Self {
+        unimplemented!()
+    }
 
     fn list() -> Vec<Self> {
         let voices: CFArray = unsafe{msg_send![class!(AVSpeechSynthesisVoice), speechVoices]};

@@ -101,7 +101,7 @@ impl AvFoundation {
                 rate: 0.5,
                 volume: 1.,
                 pitch: 1.,
-                voice: AVSpeechSynthesisVoice::new(""),
+                voice: AVSpeechSynthesisVoice::new(),
             }
         };
         *backend_id += 1;
@@ -231,7 +231,7 @@ impl Backend for AvFoundation {
     }
 
     fn set_voice(&mut self, voice: &str) -> Result<(),Error> {
-        self.voice = AVSpeechSynthesisVoice::new(voice);
+        self.voice = AVSpeechSynthesisVoice::new();
         Ok(())
     }
 }
