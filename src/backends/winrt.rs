@@ -77,7 +77,6 @@ impl WinRT {
         let mut callbacks = CALLBACKS.lock().unwrap();
         let callbacks = callbacks.get_mut(&self.id).unwrap();
         if let Some(callback) = callbacks.utterance_stop.as_mut() {
-            let mappings = UTTERANCE_MAPPINGS.lock().unwrap();
             for mapping in &*mappings {
                 callback(mapping.2);
             }
