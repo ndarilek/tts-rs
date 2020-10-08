@@ -89,7 +89,7 @@ impl Backend for Web {
         }) as Box<dyn Fn(_)>);
         utterance.set_onend(Some(callback.as_ref().unchecked_ref()));
         let callback = Closure::wrap(Box::new(move |evt: SpeechSynthesisErrorEvent| {
-            if evt.error() == SpeechSynthesisErrorCode::Cancel {
+            if evt.error() == SpeechSynthesisErrorCode::Canceled {
                 let mut callbacks = CALLBACKS.lock().unwrap();
                 let callback = callbacks.get_mut(&id).unwrap();
                 if let Some(f) = callback.utterance_stop.as_mut() {
