@@ -23,6 +23,9 @@ fn main() -> Result<(), Error> {
         tts.on_utterance_end(Some(Box::new(|utterance| {
             println!("Finished speaking {:?}", utterance)
         })))?;
+        tts.on_utterance_stop(Some(Box::new(|utterance| {
+            println!("Stopped speaking {:?}", utterance)
+        })))?;
     }
     tts.speak("Hello, world.", false)?;
     let Features { rate, .. } = tts.supported_features();
