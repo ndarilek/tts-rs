@@ -66,6 +66,24 @@ impl AvFoundation {
             }
         }
 
+        extern "C" fn speech_synthesizer_did_cancel_speech_utterance(
+            this: &Object,
+            _: Sel,
+            _synth: *const Object,
+            utterance: id,
+        ) {
+            unsafe {
+                let backend_id: u64 = *this.get_ivar("backend_id");
+                let backend_id = BackendId::AvFoundation(backend_id);
+                let mut callbacks = CALLBACKS.lock().unwrap();
+                let callbacks = callbacks.get_mut(&backend_id).unwrap();
+                if let Some(callback) = callbacks.utterance_stop.as_mut() {
+                    let utterance_id = UtteranceId::AvFoundation(utterance);
+                    callback(utterance_id);
+                }
+            }
+        }
+
         unsafe {
             decl.add_method(
                 sel!(speechSynthesizer:didStartSpeechUtterance:),
@@ -75,6 +93,11 @@ impl AvFoundation {
             decl.add_method(
                 sel!(speechSynthesizer:didFinishSpeechUtterance:),
                 speech_synthesizer_did_finish_speech_utterance
+                    as extern "C" fn(&Object, Sel, *const Object, id) -> (),
+            );
+            decl.add_method(
+                sel!(speechSynthesizer:didCancelSpeechUtterance:),
+                speech_synthesizer_did_cancel_speech_utterance
                     as extern "C" fn(&Object, Sel, *const Object, id) -> (),
             );
         }
