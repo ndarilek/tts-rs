@@ -134,6 +134,7 @@ pub trait Backend {
 struct Callbacks {
     utterance_begin: Option<Box<dyn FnMut(UtteranceId)>>,
     utterance_end: Option<Box<dyn FnMut(UtteranceId)>>,
+    utterance_stop: Option<Box<dyn FnMut(UtteranceId)>>,
 }
 
 unsafe impl Send for Callbacks {}
@@ -469,6 +470,27 @@ impl TTS {
             let id = self.0.id().unwrap();
             let mut callbacks = callbacks.get_mut(&id).unwrap();
             callbacks.utterance_end = callback;
+            Ok(())
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
+    }
+    /**
+     * Called when this speech synthesizer is stopped and still has utterances in its queue.
+     */
+    pub fn on_utterance_stop(
+        &self,
+        callback: Option<Box<dyn FnMut(UtteranceId)>>,
+    ) -> Result<(), Error> {
+        let Features {
+            utterance_callbacks,
+            ..
+        } = self.supported_features();
+        if utterance_callbacks {
+            let mut callbacks = CALLBACKS.lock().unwrap();
+            let id = self.0.id().unwrap();
+            let mut callbacks = callbacks.get_mut(&id).unwrap();
+            callbacks.utterance_stop = callback;
             Ok(())
         } else {
             Err(Error::UnsupportedFeature)

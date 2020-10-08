@@ -5,7 +5,10 @@ use lazy_static::lazy_static;
 use log::{info, trace};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{SpeechSynthesisEvent, SpeechSynthesisUtterance};
+use web_sys::{
+    SpeechSynthesisErrorCode, SpeechSynthesisErrorEvent, SpeechSynthesisEvent,
+    SpeechSynthesisUtterance,
+};
 
 use crate::{Backend, BackendId, Error, Features, UtteranceId, CALLBACKS};
 
@@ -85,6 +88,18 @@ impl Backend for Web {
             mappings.retain(|v| v.1 != utterance_id);
         }) as Box<dyn Fn(_)>);
         utterance.set_onend(Some(callback.as_ref().unchecked_ref()));
+        let callback = Closure::wrap(Box::new(move |evt: SpeechSynthesisErrorEvent| {
+            if evt.error() == SpeechSynthesisErrorCode::Cancel {
+                let mut callbacks = CALLBACKS.lock().unwrap();
+                let callback = callbacks.get_mut(&id).unwrap();
+                if let Some(f) = callback.utterance_stop.as_mut() {
+                    f(utterance_id);
+                }
+            }
+            let mut mappings = UTTERANCE_MAPPINGS.lock().unwrap();
+            mappings.retain(|v| v.1 != utterance_id);
+        }) as Box<dyn Fn(_)>);
+        utterance.set_onerror(Some(callback.as_ref().unchecked_ref()));
         if interrupt {
             self.stop()?;
         }

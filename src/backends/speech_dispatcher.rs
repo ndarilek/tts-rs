@@ -46,9 +46,16 @@ impl SpeechDispatcher {
                 f(utterance_id);
             }
         })));
-        sd.0.on_cancel(Some(Box::new(|_msg_id, client_id| {
+        sd.0.on_cancel(Some(Box::new(|msg_id, client_id| {
             let mut speaking = SPEAKING.lock().unwrap();
             speaking.insert(client_id, false);
+            let mut callbacks = CALLBACKS.lock().unwrap();
+            let backend_id = BackendId::SpeechDispatcher(client_id);
+            let cb = callbacks.get_mut(&backend_id).unwrap();
+            let utterance_id = UtteranceId::SpeechDispatcher(msg_id);
+            if let Some(f) = cb.utterance_stop.as_mut() {
+                f(utterance_id);
+            }
         })));
         sd.0.on_pause(Some(Box::new(|_msg_id, client_id| {
             let mut speaking = SPEAKING.lock().unwrap();
