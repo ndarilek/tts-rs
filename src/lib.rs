@@ -25,11 +25,6 @@ use libc::c_char;
 #[cfg(target_os = "macos")]
 use objc::{class, msg_send, sel, sel_impl};
 use thiserror::Error;
-#[cfg(target_arch = "wasm32")]
-use web_sys::SpeechSynthesisUtterance;
-
-#[cfg(windows)]
-use tts_winrt_bindings::windows::media::playback::MediaPlaybackItem;
 
 mod backends;
 
@@ -60,14 +55,14 @@ pub enum BackendId {
     AvFoundation(u64),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum UtteranceId {
     #[cfg(target_os = "linux")]
     SpeechDispatcher(u64),
     #[cfg(target_arch = "wasm32")]
-    Web(SpeechSynthesisUtterance),
+    Web(u64),
     #[cfg(windows)]
-    WinRT(MediaPlaybackItem),
+    WinRT(u64),
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     AvFoundation(id),
 }

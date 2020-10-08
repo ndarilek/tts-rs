@@ -30,6 +30,9 @@ pub struct WinRT {
 
 lazy_static! {
     static ref NEXT_BACKEND_ID: Mutex<u64> = Mutex::new(0);
+    static ref NEXT_UTTERANCE_ID: Mutex<u64> = Mutex::new(0);
+    static ref UTTERANCE_MAPPINGS: Mutex<Vec<(BackendId, MediaPlaybackItem, UtteranceId)>> =
+        Mutex::new(Vec::new());
     static ref BACKEND_TO_MEDIA_PLAYER: Mutex<HashMap<BackendId, MediaPlayer>> = {
         let v: HashMap<BackendId, MediaPlayer> = HashMap::new();
         Mutex::new(v)
@@ -70,6 +73,16 @@ impl WinRT {
         self.player.set_auto_play(true)?;
         self.player.set_source(&self.playback_list)?;
         self.init_callbacks()?;
+        let mut mappings = UTTERANCE_MAPPINGS.lock().unwrap();
+        let mut callbacks = CALLBACKS.lock().unwrap();
+        let callbacks = callbacks.get_mut(&self.id).unwrap();
+        if let Some(callback) = callbacks.utterance_end.as_mut() {
+            let mappings = UTTERANCE_MAPPINGS.lock().unwrap();
+            for mapping in &*mappings {
+                callback(mapping.2);
+            }
+        }
+        mappings.retain(|v| v.0 != self.id);
         Ok(())
     }
 
@@ -107,17 +120,31 @@ impl WinRT {
                         let callbacks = callbacks.get_mut(&id).unwrap();
                         let old_item = args.old_item()?;
                         if !old_item.is_null() {
+                            let mut mappings = UTTERANCE_MAPPINGS.lock().unwrap();
                             if let Some(callback) = callbacks.utterance_end.as_mut() {
-                                callback(UtteranceId::WinRT(old_item));
+                                for mapping in &*mappings {
+                                    if mapping.1 == old_item {
+                                        callback(mapping.2);
+                                    }
+                                }
+                                mappings.retain(|v| v.1 != old_item);
                             }
                         }
                         let new_item = args.new_item()?;
                         if !new_item.is_null() {
                             let mut last_spoken_utterance = LAST_SPOKEN_UTTERANCE.lock().unwrap();
-                            let utterance_id = UtteranceId::WinRT(new_item);
-                            last_spoken_utterance.insert(*id, utterance_id.clone());
+                            let mappings = UTTERANCE_MAPPINGS.lock().unwrap();
+                            for mapping in &*mappings {
+                                if mapping.1 == new_item {
+                                    last_spoken_utterance.insert(*id, mapping.2);
+                                }
+                            }
                             if let Some(callback) = callbacks.utterance_begin.as_mut() {
-                                callback(utterance_id);
+                                for mapping in &*mappings {
+                                    if mapping.1 == new_item {
+                                        callback(mapping.2);
+                                    }
+                                }
                             }
                         }
                     }
@@ -169,7 +196,12 @@ impl Backend for WinRT {
         if !self.is_speaking()? {
             self.player.play()?;
         }
-        let utterance_id = UtteranceId::WinRT(item);
+        let mut uid = NEXT_UTTERANCE_ID.lock().unwrap();
+        let utterance_id = UtteranceId::WinRT(*uid);
+        *uid += 1;
+        drop(uid);
+        let mut mappings = UTTERANCE_MAPPINGS.lock().unwrap();
+        mappings.push((self.id, item, utterance_id));
         Ok(Some(utterance_id))
     }
 
@@ -254,12 +286,14 @@ impl Backend for WinRT {
 
 impl Drop for WinRT {
     fn drop(&mut self) {
-        let id = self.id().unwrap();
+        let id = self.id;
         let mut backend_to_playback_list = BACKEND_TO_PLAYBACK_LIST.lock().unwrap();
         backend_to_playback_list.remove(&id);
         let mut backend_to_media_player = BACKEND_TO_MEDIA_PLAYER.lock().unwrap();
         backend_to_media_player.remove(&id);
         let mut last_spoken_utterance = LAST_SPOKEN_UTTERANCE.lock().unwrap();
         last_spoken_utterance.remove(&id);
+        let mut mappings = UTTERANCE_MAPPINGS.lock().unwrap();
+        mappings.retain(|v| v.0 != id);
     }
 }
