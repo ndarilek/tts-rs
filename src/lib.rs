@@ -2,7 +2,7 @@
  * a Text-To-Speech (TTS) library providing high-level interfaces to a variety of backends.
  * Currently supported backends are:
  * * Windows
- *   * Screen readers/SAPI via Tolk
+ *   * Screen readers/SAPI via Tolk (requires `use_tolk` Cargo feature)
  *   * WinRT
  * * Linux via [Speech Dispatcher](https://freebsoft.org/speechd)
  * * MacOS
