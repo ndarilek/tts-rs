@@ -1,7 +1,7 @@
 #[cfg(target_os = "linux")]
 mod speech_dispatcher;
 
-#[cfg(windows)]
+#[cfg(all(windows, feature = "use_tolk"))]
 mod tolk;
 
 #[cfg(windows)]
@@ -19,7 +19,7 @@ mod av_foundation;
 #[cfg(target_os = "linux")]
 pub(crate) use self::speech_dispatcher::*;
 
-#[cfg(windows)]
+#[cfg(all(windows, feature = "use_tolk"))]
 pub(crate) use self::tolk::*;
 
 #[cfg(target_arch = "wasm32")]

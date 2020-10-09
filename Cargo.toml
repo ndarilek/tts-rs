@@ -11,6 +11,10 @@ edition = "2018"
 [lib]
 crate-type = ["lib", "cdylib", "staticlib"]
 
+[features]
+
+use_tolk = ["tolk"]
+
 [dependencies]
 lazy_static = "1"
 log = "0.4"
@@ -20,7 +24,7 @@ thiserror = "1"
 env_logger = "0.7"
 
 [target.'cfg(windows)'.dependencies]
-tolk = ">= 0.2.1"
+tolk = { version = ">= 0.2.1", optional = true }
 winrt = "0.7"
 tts_winrt_bindings = { version = "0.1", path="winrt_bindings" }
 

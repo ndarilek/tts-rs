@@ -1,4 +1,4 @@
-#[cfg(windows)]
+#[cfg(all(windows, feature = "use_tolk"))]
 use log::{info, trace};
 use tolk::Tolk as TolkPtr;
 

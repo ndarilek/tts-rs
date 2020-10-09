@@ -33,7 +33,7 @@ pub enum Backends {
     SpeechDispatcher,
     #[cfg(target_arch = "wasm32")]
     Web,
-    #[cfg(windows)]
+    #[cfg(all(windows, feature = "use_tolk"))]
     Tolk,
     #[cfg(windows)]
     WinRT,
@@ -167,7 +167,7 @@ impl TTS {
                 let tts = backends::Web::new()?;
                 Ok(TTS(Box::new(tts)))
             }
-            #[cfg(windows)]
+            #[cfg(all(windows, feature = "use_tolk"))]
             Backends::Tolk => {
                 let tts = backends::Tolk::new();
                 if let Some(tts) = tts {
@@ -200,12 +200,14 @@ impl TTS {
     pub fn default() -> Result<TTS, Error> {
         #[cfg(target_os = "linux")]
         let tts = TTS::new(Backends::SpeechDispatcher);
-        #[cfg(windows)]
+        #[cfg(all(windows, feature = "use_tolk"))]
         let tts = if let Ok(tts) = TTS::new(Backends::Tolk) {
             Ok(tts)
         } else {
             TTS::new(Backends::WinRT)
         };
+        #[cfg(all(windows, not(feature = "use_tolk")))]
+        let tts = TTS::new(Backends::WinRT);
         #[cfg(target_arch = "wasm32")]
         let tts = TTS::new(Backends::Web);
         #[cfg(target_os = "macos")]
