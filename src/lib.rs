@@ -477,6 +477,7 @@ impl TTS {
             Err(Error::UnsupportedFeature)
         }
     }
+
     /**
      * Called when this speech synthesizer is stopped and still has utterances in its queue.
      */
