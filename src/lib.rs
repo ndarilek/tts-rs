@@ -150,9 +150,9 @@ lazy_static! {
 
 pub struct TTS(Box<dyn Backend>);
 
-unsafe impl std::marker::Send for TTS {}
+unsafe impl Send for TTS {}
 
-unsafe impl std::marker::Sync for TTS {}
+unsafe impl Sync for TTS {}
 
 impl TTS {
     /**
