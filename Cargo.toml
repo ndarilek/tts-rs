@@ -1,6 +1,6 @@
 [package]
 name = "tts"
-version = "0.10.0"
+version = "0.10.1"
 authors = ["Nolan Darilek <nolan@thewordnerd.info>"]
 repository = "https://github.com/ndarilek/tts-rs"
 description = "High-level Text-To-Speech (TTS) interface"
@@ -21,7 +21,7 @@ log = "0.4"
 thiserror = "1"
 
 [dev-dependencies]
-env_logger = "0.7"
+env_logger = "0.8"
 
 [target.'cfg(windows)'.dependencies]
 tolk = { version = ">= 0.2.1", optional = true }
