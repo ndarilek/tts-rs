@@ -175,7 +175,6 @@ impl Backend for WinRT {
         text: &str,
         interrupt: bool,
     ) -> std::result::Result<Option<UtteranceId>, Error> {
-        println!("speak({}, {})", text, interrupt);
         if interrupt {
             self.stop()?;
         }
@@ -185,7 +184,6 @@ impl Backend for WinRT {
         let item = MediaPlaybackItem::create(source)?;
         self.playback_list.items()?.append(&item)?;
         if !self.is_speaking()? {
-            println!("Playing");
             self.player.play()?;
         }
         let mut uid = NEXT_UTTERANCE_ID.lock().unwrap();
