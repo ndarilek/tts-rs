@@ -269,7 +269,7 @@ impl Backend for WinRT {
 
     fn is_speaking(&self) -> std::result::Result<bool, Error> {
         let state = self.player.playback_session()?.playback_state()?;
-        let playing = state == MediaPlaybackState::Opening || state == MediaPlaybackState::Playing;
+        let playing = state == MediaPlaybackState::Playing;
         Ok(playing)
     }
 }
