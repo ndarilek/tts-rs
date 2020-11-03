@@ -15,7 +15,7 @@ fn main() -> Result<(), Error> {
     let mut tts = TTS::default()?;
     let mut bottles = 99;
     while bottles > 0 {
-        tts.speak(format!("{} bottles of beer on the wall,", bottles), false)?;
+        tts.speak(format!("{} bottles of beer on the wall,", bottles), true)?;
         tts.speak(format!("{} bottles of beer,", bottles), false)?;
         tts.speak("Take one down, pass it around", false)?;
         tts.speak("Give us a bit to drink this...", false)?;
