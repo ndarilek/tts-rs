@@ -44,7 +44,7 @@ impl AvFoundation {
                 let callbacks = callbacks.get_mut(&backend_id).unwrap();
                 if let Some(callback) = callbacks.utterance_begin.as_mut() {
                     let utterance_id = UtteranceId::AvFoundation(utterance);
-                    callback(utterance_id);
+                    callback(callbacks.tts.clone(), utterance_id);
                 }
             }
         }
@@ -62,7 +62,7 @@ impl AvFoundation {
                 let callbacks = callbacks.get_mut(&backend_id).unwrap();
                 if let Some(callback) = callbacks.utterance_end.as_mut() {
                     let utterance_id = UtteranceId::AvFoundation(utterance);
-                    callback(utterance_id);
+                    callback(callbacks.tts.clone(), utterance_id);
                 }
             }
         }
@@ -80,7 +80,7 @@ impl AvFoundation {
                 let callbacks = callbacks.get_mut(&backend_id).unwrap();
                 if let Some(callback) = callbacks.utterance_stop.as_mut() {
                     let utterance_id = UtteranceId::AvFoundation(utterance);
-                    callback(utterance_id);
+                    callback(callbacks.tts.clone(), utterance_id);
                 }
             }
         }

@@ -75,7 +75,7 @@ impl Backend for Web {
             let mut callbacks = CALLBACKS.lock().unwrap();
             let callback = callbacks.get_mut(&id).unwrap();
             if let Some(f) = callback.utterance_begin.as_mut() {
-                f(utterance_id);
+                f(callback.tts.clone(), utterance_id);
             }
         }) as Box<dyn Fn(_)>);
         utterance.set_onstart(Some(callback.as_ref().unchecked_ref()));
@@ -83,7 +83,7 @@ impl Backend for Web {
             let mut callbacks = CALLBACKS.lock().unwrap();
             let callback = callbacks.get_mut(&id).unwrap();
             if let Some(f) = callback.utterance_end.as_mut() {
-                f(utterance_id);
+                f(callback.tts.clone(), utterance_id);
             }
             let mut mappings = UTTERANCE_MAPPINGS.lock().unwrap();
             mappings.retain(|v| v.1 != utterance_id);
@@ -94,7 +94,7 @@ impl Backend for Web {
                 let mut callbacks = CALLBACKS.lock().unwrap();
                 let callback = callbacks.get_mut(&id).unwrap();
                 if let Some(f) = callback.utterance_stop.as_mut() {
-                    f(utterance_id);
+                    f(callback.tts.clone(), utterance_id);
                 }
             }
             let mut mappings = UTTERANCE_MAPPINGS.lock().unwrap();

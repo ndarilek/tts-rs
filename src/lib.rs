@@ -133,11 +133,11 @@ trait Backend: Clone + std::fmt::Debug {
     fn is_speaking(&self) -> Result<bool, Error>;
 }
 
-#[derive(Default)]
 struct Callbacks {
-    utterance_begin: Option<Box<dyn FnMut(UtteranceId)>>,
-    utterance_end: Option<Box<dyn FnMut(UtteranceId)>>,
-    utterance_stop: Option<Box<dyn FnMut(UtteranceId)>>,
+    tts: TTS,
+    utterance_begin: Option<Box<dyn FnMut(TTS, UtteranceId)>>,
+    utterance_end: Option<Box<dyn FnMut(TTS, UtteranceId)>>,
+    utterance_stop: Option<Box<dyn FnMut(TTS, UtteranceId)>>,
 }
 
 unsafe impl Send for Callbacks {}
@@ -193,7 +193,13 @@ impl TTS {
         if let Ok(backend) = backend {
             if let Some(id) = backend.0.id() {
                 let mut callbacks = CALLBACKS.lock().unwrap();
-                callbacks.insert(id, Callbacks::default());
+                let cb = Callbacks {
+                    tts: backend.clone(),
+                    utterance_begin: None,
+                    utterance_end: None,
+                    utterance_stop: None,
+                };
+                callbacks.insert(id, cb);
             }
             Ok(backend)
         } else {
@@ -443,7 +449,7 @@ impl TTS {
      */
     pub fn on_utterance_begin(
         &self,
-        callback: Option<Box<dyn FnMut(UtteranceId)>>,
+        callback: Option<Box<dyn FnMut(TTS, UtteranceId)>>,
     ) -> Result<(), Error> {
         let Features {
             utterance_callbacks,
@@ -465,7 +471,7 @@ impl TTS {
      */
     pub fn on_utterance_end(
         &self,
-        callback: Option<Box<dyn FnMut(UtteranceId)>>,
+        callback: Option<Box<dyn FnMut(TTS, UtteranceId)>>,
     ) -> Result<(), Error> {
         let Features {
             utterance_callbacks,
@@ -487,7 +493,7 @@ impl TTS {
      */
     pub fn on_utterance_stop(
         &self,
-        callback: Option<Box<dyn FnMut(UtteranceId)>>,
+        callback: Option<Box<dyn FnMut(TTS, UtteranceId)>>,
     ) -> Result<(), Error> {
         let Features {
             utterance_callbacks,
