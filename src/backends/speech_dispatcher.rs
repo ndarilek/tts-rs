@@ -33,7 +33,7 @@ impl SpeechDispatcher {
             let cb = callbacks.get_mut(&backend_id).unwrap();
             let utterance_id = UtteranceId::SpeechDispatcher(msg_id);
             if let Some(f) = cb.utterance_begin.as_mut() {
-                f(cb.tts.clone(), utterance_id);
+                f(utterance_id);
             }
         })));
         sd.0.on_end(Some(Box::new(|msg_id, client_id| {
@@ -44,7 +44,7 @@ impl SpeechDispatcher {
             let cb = callbacks.get_mut(&backend_id).unwrap();
             let utterance_id = UtteranceId::SpeechDispatcher(msg_id);
             if let Some(f) = cb.utterance_end.as_mut() {
-                f(cb.tts.clone(), utterance_id);
+                f(utterance_id);
             }
         })));
         sd.0.on_cancel(Some(Box::new(|msg_id, client_id| {
@@ -55,7 +55,7 @@ impl SpeechDispatcher {
             let cb = callbacks.get_mut(&backend_id).unwrap();
             let utterance_id = UtteranceId::SpeechDispatcher(msg_id);
             if let Some(f) = cb.utterance_stop.as_mut() {
-                f(cb.tts.clone(), utterance_id);
+                f(utterance_id);
             }
         })));
         sd.0.on_pause(Some(Box::new(|_msg_id, client_id| {

@@ -79,7 +79,7 @@ impl WinRT {
         let callbacks = callbacks.get_mut(&self.id).unwrap();
         if let Some(callback) = callbacks.utterance_stop.as_mut() {
             for mapping in &*mappings {
-                callback(callbacks.tts.clone(), mapping.2);
+                callback(mapping.2);
             }
         }
         mappings.retain(|v| v.0 != self.id);
@@ -101,7 +101,7 @@ impl WinRT {
                     if let Some(callback) = callbacks.utterance_end.as_mut() {
                         let last_spoken_utterance = LAST_SPOKEN_UTTERANCE.lock().unwrap();
                         if let Some(utterance_id) = last_spoken_utterance.get(&id) {
-                            callback(callbacks.tts.clone(), utterance_id.clone());
+                            callback(utterance_id.clone());
                         }
                     }
                 }
@@ -124,7 +124,7 @@ impl WinRT {
                             if let Some(callback) = callbacks.utterance_end.as_mut() {
                                 for mapping in &*mappings {
                                     if mapping.1 == old_item {
-                                        callback(callbacks.tts.clone(), mapping.2);
+                                        callback(mapping.2);
                                     }
                                 }
                                 mappings.retain(|v| v.1 != old_item);
@@ -142,7 +142,7 @@ impl WinRT {
                             if let Some(callback) = callbacks.utterance_begin.as_mut() {
                                 for mapping in &*mappings {
                                     if mapping.1 == new_item {
-                                        callback(callbacks.tts.clone(), mapping.2);
+                                        callback(mapping.2);
                                     }
                                 }
                             }
