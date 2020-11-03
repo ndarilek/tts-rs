@@ -149,16 +149,17 @@ impl Backend for WinRT {
         text: &str,
         interrupt: bool,
     ) -> std::result::Result<Option<UtteranceId>, Error> {
-        if interrupt {
-            self.stop()?;
-        }
         let stream = self.synth.synthesize_text_to_stream_async(text)?.get()?;
         let content_type = stream.content_type()?;
         let source = MediaSource::create_from_stream(stream, content_type)?;
         let item = MediaPlaybackItem::create(source)?;
         let item_index = self.playback_list.current_item_index()?;
+        let item_count = self.playback_list.items()?.size()?;
         let state = self.player.playback_session()?.playback_state()?;
-        if state == MediaPlaybackState::Paused && item_index != 0 {
+        if interrupt && state != MediaPlaybackState::Paused {
+            self.stop()?;
+        }
+        if state == MediaPlaybackState::Paused && item_index != 0 && item_index < item_count {
             self.playback_list.items()?.clear()?;
         }
         self.playback_list.items()?.append(&item)?;
