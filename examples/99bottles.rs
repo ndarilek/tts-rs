@@ -13,17 +13,13 @@ use tts::*;
 fn main() -> Result<(), Error> {
     env_logger::init();
     let mut tts = TTS::default()?;
-    let Features {
-        utterance_callbacks,
-        ..
-    } = tts.supported_features();
     let mut bottles = 99;
     while bottles > 0 {
         tts.speak(format!("{} bottles of beer on the wall,", bottles), false)?;
         tts.speak(format!("{} bottles of beer,", bottles), false)?;
         tts.speak("Take one down, pass it around", false)?;
         tts.speak("Give us a bit to drink this...", false)?;
-        let time = time::Duration::from_secs(5);
+        let time = time::Duration::from_secs(10);
         thread::sleep(time);
         bottles -= 1;
         tts.speak(format!("{} bottles of beer on the wall,", bottles), false)?;
