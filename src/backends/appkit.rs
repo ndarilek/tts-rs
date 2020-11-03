@@ -9,7 +9,7 @@ use objc::*;
 
 use crate::{Backend, BackendId, Error, Features, UtteranceId};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct AppKit(*mut Object, *mut Object);
 
 impl AppKit {

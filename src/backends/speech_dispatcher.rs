@@ -8,7 +8,7 @@ use speech_dispatcher::*;
 
 use crate::{Backend, BackendId, Error, Features, UtteranceId, CALLBACKS};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct SpeechDispatcher(Connection);
 
 lazy_static! {

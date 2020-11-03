@@ -11,7 +11,7 @@ use objc::{class, declare::ClassDecl, msg_send, sel, sel_impl};
 
 use crate::{Backend, BackendId, Error, Features, UtteranceId, CALLBACKS};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct AvFoundation {
     id: BackendId,
     delegate: *mut Object,
