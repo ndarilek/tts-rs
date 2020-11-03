@@ -16,6 +16,7 @@ crate-type = ["lib", "cdylib", "staticlib"]
 use_tolk = ["tolk"]
 
 [dependencies]
+dyn-clonable = "0.9"
 lazy_static = "1"
 log = "0.4"
 thiserror = "1"
@@ -24,7 +25,7 @@ thiserror = "1"
 env_logger = "0.8"
 
 [target.'cfg(windows)'.dependencies]
-tolk = { version = ">= 0.2.1", optional = true }
+tolk = { version = "0.3", optional = true }
 winrt = "0.7"
 tts_winrt_bindings = { version = "0.1", path="winrt_bindings" }
 

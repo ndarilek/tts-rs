@@ -12,6 +12,7 @@ use web_sys::{
 
 use crate::{Backend, BackendId, Error, Features, UtteranceId, CALLBACKS};
 
+#[derive(Clone)]
 pub struct Web {
     id: BackendId,
     rate: f32,

@@ -19,6 +19,7 @@ use std::sync::Mutex;
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 use cocoa_foundation::base::id;
+use dyn_clonable::*;
 use lazy_static::lazy_static;
 #[cfg(target_os = "macos")]
 use libc::c_char;
@@ -28,6 +29,7 @@ use thiserror::Error;
 
 mod backends;
 
+#[derive(Clone, Copy, Debug)]
 pub enum Backends {
     #[cfg(target_os = "linux")]
     SpeechDispatcher,
@@ -107,7 +109,8 @@ pub enum Error {
     OutOfRange,
 }
 
-pub trait Backend {
+#[clonable]
+trait Backend: Clone {
     fn id(&self) -> Option<BackendId>;
     fn supported_features(&self) -> Features;
     fn speak(&mut self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error>;
@@ -148,6 +151,7 @@ lazy_static! {
     };
 }
 
+#[derive(Clone)]
 pub struct TTS(Box<dyn Backend>);
 
 unsafe impl Send for TTS {}

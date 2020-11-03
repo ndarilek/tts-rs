@@ -4,6 +4,7 @@ use tolk::Tolk as TolkPtr;
 
 use crate::{Backend, BackendId, Error, Features, UtteranceId};
 
+#[derive(Clone)]
 pub(crate) struct Tolk(TolkPtr);
 
 impl Tolk {
