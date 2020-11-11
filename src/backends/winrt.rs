@@ -4,7 +4,7 @@ use std::sync::Mutex;
 
 use lazy_static::lazy_static;
 use log::{info, trace};
-use winrt::ComInterface;
+use winrt::*;
 
 use tts_winrt_bindings::windows::media::playback::{
     CurrentMediaPlaybackItemChangedEventArgs, MediaPlaybackItem, MediaPlaybackList,
@@ -60,7 +60,10 @@ impl WinRT {
         *backend_id += 1;
         let mut backend_to_media_player = BACKEND_TO_MEDIA_PLAYER.lock().unwrap();
         backend_to_media_player.insert(bid, player.clone());
-        player.media_ended(TypedEventHandler::new(|sender, _args| {
+        player.media_ended(TypedEventHandler::new(|sender: &MediaPlayer, _args| {
+            let source = sender.source()?;
+            let source: MediaPlaybackList = source.try_into()?;
+            source.items()?.clear()?;
             let backend_to_media_player = BACKEND_TO_MEDIA_PLAYER.lock().unwrap();
             let id = backend_to_media_player.iter().find(|v| v.1 == sender);
             if let Some(id) = id {
@@ -80,6 +83,9 @@ impl WinRT {
         backend_to_playback_list.insert(bid, playback_list.clone());
         playback_list.current_item_changed(TypedEventHandler::new(
             |sender: &MediaPlaybackList, args: &CurrentMediaPlaybackItemChangedEventArgs| {
+                println!("Changed");
+                println!("{:?}, {:?}", args.old_item()?, args.new_item()?);
+                //sender.items()?.clear()?;
                 let backend_to_playback_list = BACKEND_TO_PLAYBACK_LIST.lock().unwrap();
                 let id = backend_to_playback_list.iter().find(|v| v.1 == sender);
                 if let Some(id) = id {
