@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+      - uses: Swatinem/rust-cache@v1
       - run: |
           sudo apt-get update
           sudo apt-get install -y libspeechd-dev
@@ -21,6 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+      - uses: Swatinem/rust-cache@v1
       - run: |
           rustup update
           rustup target add wasm32-unknown-unknown
@@ -31,6 +33,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v2
+      - uses: Swatinem/rust-cache@v1
       - run: |
           rustup update
           cargo check --examples --release --all-features
@@ -40,6 +43,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v2
+      - uses: Swatinem/rust-cache@v1
       - run: |
           rustup update
           cargo check --examples --release
@@ -49,6 +53,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v2
+      - uses: Swatinem/rust-cache@v1
       - run: |
           rustup update
           rustup target add aarch64-apple-ios x86_64-apple-ios
