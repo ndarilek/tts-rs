@@ -25,6 +25,10 @@ jobs:
         with:
           command: check
           args: --all-features --examples
+      - uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: --all-features
 
   build_web:
     name: Build Web
@@ -42,3 +46,7 @@ jobs:
         with:
           command: check
           args: --all-features --examples --target wasm32-unknown-unknown
+      - uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: --all-features --target wasm32-unknown-unknown
