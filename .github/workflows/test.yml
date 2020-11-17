@@ -35,8 +35,8 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           args: --all-features
 
-  build_web:
-    name: Build Web
+  check_web:
+    name: Check Web
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
