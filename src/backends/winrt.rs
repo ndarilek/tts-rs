@@ -73,7 +73,7 @@ impl WinRT {
                 if let Some(callback) = callbacks.utterance_end.as_mut() {
                     let last_spoken_utterance = LAST_SPOKEN_UTTERANCE.lock().unwrap();
                     if let Some(utterance_id) = last_spoken_utterance.get(&id) {
-                        callback(utterance_id.clone());
+                        callback(*utterance_id);
                     }
                 }
             }
