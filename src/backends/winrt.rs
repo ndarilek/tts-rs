@@ -83,9 +83,6 @@ impl WinRT {
         backend_to_playback_list.insert(bid, playback_list.clone());
         playback_list.current_item_changed(TypedEventHandler::new(
             |sender: &MediaPlaybackList, args: &CurrentMediaPlaybackItemChangedEventArgs| {
-                println!("Changed");
-                println!("{:?}, {:?}", args.old_item()?, args.new_item()?);
-                //sender.items()?.clear()?;
                 let backend_to_playback_list = BACKEND_TO_PLAYBACK_LIST.lock().unwrap();
                 let id = backend_to_playback_list.iter().find(|v| v.1 == sender);
                 if let Some(id) = id {
