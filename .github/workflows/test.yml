@@ -32,7 +32,6 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - run: |
-          choco install -y llvm
           rustup update
           cargo check --examples --release --all-features
 
