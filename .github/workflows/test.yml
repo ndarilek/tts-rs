@@ -5,17 +5,20 @@ on:
   pull_request:
 
 jobs:
-  build_linux:
-    name: Build Linux
-    runs-on: ubuntu-latest
+  build:
+    name: Build
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v2
       - uses: Swatinem/rust-cache@v1
+      - run: sudo apt-get update; sudo apt-get install -y libspeechd-dev
+        if: ${{ runner.os == 'Linux' }}
       - run: |
-          sudo apt-get update
-          sudo apt-get install -y libspeechd-dev
           rustup update
-          cargo check --examples --release
+          cargo check --examples --release --all-features
 
   build_web:
     name: Build Web
@@ -27,26 +30,6 @@ jobs:
           rustup update
           rustup target add wasm32-unknown-unknown
           cargo check --examples --release --target wasm32-unknown-unknown
-
-  build_windows:
-    name: Build Windows
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: Swatinem/rust-cache@v1
-      - run: |
-          rustup update
-          cargo check --examples --release --all-features
-
-  build_macos:
-    name: Build MacOS
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: Swatinem/rust-cache@v1
-      - run: |
-          rustup update
-          cargo check --examples --release
 
   build_ios:
     name: Build iOS
