@@ -42,22 +42,3 @@ jobs:
         with:
           command: check
           args: --all-features --examples --target wasm32-unknown-unknown
-
-  build_ios:
-    name: Build iOS
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: Swatinem/rust-cache@v1
-      - uses: actions-rs/toolchain@v1
-        with:
-          target: aarch64-apple-ios x86_64-apple-ios
-          profile: minimal
-          toolchain: stable
-      - uses: actions-rs/install@v0.1
-        with:
-          crate: cargo-lipo
-      - uses: actions-rs/cargo@v1
-        with:
-          command: lipo
-          args: --all-features --examples
