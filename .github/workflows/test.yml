@@ -20,11 +20,16 @@ jobs:
         with:
           profile: minimal
           toolchain: stable
+          components: rustfmt, clippy
           override: true
       - uses: actions-rs/cargo@v1
         with:
           command: check
           args: --all-features --examples
+      - uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
       - uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -41,11 +46,16 @@ jobs:
           target: wasm32-unknown-unknown
           profile: minimal
           toolchain: stable
+          components: rustfmt, clippy
           override: true
       - uses: actions-rs/cargo@v1
         with:
           command: check
           args: --all-features --examples --target wasm32-unknown-unknown
+      - uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all --target wasm32-unknown-unknown -- --check
       - uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
