@@ -41,7 +41,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --all-features --examples
+          args: --all-features --examples --target wasm32-unknown-unknown
 
   build_ios:
     name: Build iOS
