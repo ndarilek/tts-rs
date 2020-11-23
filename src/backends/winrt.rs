@@ -53,7 +53,6 @@ impl WinRT {
         info!("Initializing WinRT backend");
         let playback_list = MediaPlaybackList::new()?;
         let player = MediaPlayer::new()?;
-        player.set_auto_play(true)?;
         player.set_source(&playback_list)?;
         let mut backend_id = NEXT_BACKEND_ID.lock().unwrap();
         let bid = BackendId::WinRT(*backend_id);
