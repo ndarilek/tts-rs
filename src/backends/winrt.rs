@@ -8,7 +8,7 @@ use winrt::*;
 
 use tts_winrt_bindings::windows::media::playback::{
     CurrentMediaPlaybackItemChangedEventArgs, MediaPlaybackItem, MediaPlaybackList,
-    MediaPlaybackState, MediaPlayer,
+    MediaPlaybackState, MediaPlayer, MediaPlayerAudioCategory,
 };
 use tts_winrt_bindings::windows::media::speech_synthesis::SpeechSynthesizer;
 use tts_winrt_bindings::windows::{foundation::TypedEventHandler, media::core::MediaSource};
@@ -53,12 +53,16 @@ impl WinRT {
         info!("Initializing WinRT backend");
         let playback_list = MediaPlaybackList::new()?;
         let player = MediaPlayer::new()?;
+        player.set_real_time_playback(true)?;
+        player.set_audio_category(MediaPlayerAudioCategory::Speech)?;
         player.set_source(&playback_list)?;
         let mut backend_id = NEXT_BACKEND_ID.lock().unwrap();
         let bid = BackendId::WinRT(*backend_id);
         *backend_id += 1;
+        drop(backend_id);
         let mut backend_to_media_player = BACKEND_TO_MEDIA_PLAYER.lock().unwrap();
         backend_to_media_player.insert(bid, player.clone());
+        drop(backend_to_media_player);
         player.media_ended(TypedEventHandler::new(|sender: &MediaPlayer, _args| {
             let source = sender.source()?;
             let source: MediaPlaybackList = source.try_into()?;
@@ -80,6 +84,7 @@ impl WinRT {
         }))?;
         let mut backend_to_playback_list = BACKEND_TO_PLAYBACK_LIST.lock().unwrap();
         backend_to_playback_list.insert(bid, playback_list.clone());
+        drop(backend_to_playback_list);
         playback_list.current_item_changed(TypedEventHandler::new(
             |sender: &MediaPlaybackList, args: &CurrentMediaPlaybackItemChangedEventArgs| {
                 let backend_to_playback_list = BACKEND_TO_PLAYBACK_LIST.lock().unwrap();
@@ -155,17 +160,11 @@ impl Backend for WinRT {
         let content_type = stream.content_type()?;
         let source = MediaSource::create_from_stream(stream, content_type)?;
         let item = MediaPlaybackItem::create(source)?;
-        let item_index = self.playback_list.current_item_index()?;
-        let item_count = self.playback_list.items()?.size()?;
-        let state = self.player.playback_session()?.playback_state()?;
-        if interrupt && state != MediaPlaybackState::Paused {
+        if interrupt && self.is_speaking()? {
             self.stop()?;
         }
-        if state == MediaPlaybackState::Paused && item_index != 0 && item_index < item_count {
-            self.playback_list.items()?.clear()?;
-        }
         self.playback_list.items()?.append(&item)?;
-        if !self.is_speaking()? {
+        if self.player.playback_session()?.playback_state()? != MediaPlaybackState::Playing {
             self.player.play()?;
         }
         let mut uid = NEXT_UTTERANCE_ID.lock().unwrap();
@@ -179,10 +178,13 @@ impl Backend for WinRT {
 
     fn stop(&mut self) -> std::result::Result<(), Error> {
         trace!("stop()");
+        if !self.is_speaking()? {
+            return Ok(());
+        }
         self.playback_list.items()?.clear()?;
-        let mut mappings = UTTERANCE_MAPPINGS.lock().unwrap();
         let mut callbacks = CALLBACKS.lock().unwrap();
         let callbacks = callbacks.get_mut(&self.id).unwrap();
+        let mut mappings = UTTERANCE_MAPPINGS.lock().unwrap();
         if let Some(callback) = callbacks.utterance_stop.as_mut() {
             for mapping in &*mappings {
                 callback(mapping.2);
@@ -259,9 +261,10 @@ impl Backend for WinRT {
     }
 
     fn is_speaking(&self) -> std::result::Result<bool, Error> {
+        let item_count = self.playback_list.items()?.size()?;
         let state = self.player.playback_session()?.playback_state()?;
         let playing = state == MediaPlaybackState::Playing;
-        Ok(playing)
+        Ok(item_count != 0 || playing)
     }
 }
 
