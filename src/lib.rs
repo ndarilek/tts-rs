@@ -225,8 +225,9 @@ impl TTS {
             let version: Vec<&str> = str.split(" ").collect();
             let version = version[1];
             let version_parts: Vec<&str> = version.split(".").collect();
+            let major_version: i8 = version_parts[0].parse().unwrap();
             let minor_version: i8 = version_parts[1].parse().unwrap();
-            if minor_version >= 14 {
+            if major_version >= 11 || minor_version >= 14 {
                 TTS::new(Backends::AvFoundation)
             } else {
                 TTS::new(Backends::AppKit)
