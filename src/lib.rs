@@ -69,6 +69,10 @@ pub enum UtteranceId {
     AvFoundation(id),
 }
 
+unsafe impl Send for UtteranceId {}
+
+unsafe impl Sync for UtteranceId {}
+
 pub struct Features {
     pub stop: bool,
     pub rate: bool,
