@@ -99,6 +99,8 @@ impl Default for Features {
 pub enum Error {
     #[error("IO error: {0}")]
     IO(#[from] std::io::Error),
+    #[error("Backoff error")]
+    Backoff,
     #[error("Value not received")]
     NoneError,
     #[cfg(target_arch = "wasm32")]
@@ -111,6 +113,12 @@ pub enum Error {
     UnsupportedFeature,
     #[error("Out of range")]
     OutOfRange,
+}
+
+impl<E> From<backoff::Error<E>> for Error {
+    fn from(_: backoff::Error<E>) -> Self {
+        Error::Backoff
+    }
 }
 
 #[clonable]

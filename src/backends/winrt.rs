@@ -1,7 +1,8 @@
-#[cfg(windows)]
-use std::collections::HashMap;
 use std::sync::Mutex;
+#[cfg(windows)]
+use std::{collections::HashMap, time::Duration};
 
+use backoff::{ExponentialBackoff, Operation};
 use lazy_static::lazy_static;
 use log::{info, trace};
 use winrt::*;
@@ -133,6 +134,13 @@ impl WinRT {
             playback_list,
         })
     }
+
+    fn backoff(&self) -> ExponentialBackoff {
+        ExponentialBackoff {
+            initial_interval: Duration::from_millis(3),
+            ..Default::default()
+        }
+    }
 }
 
 impl Backend for WinRT {
@@ -167,12 +175,18 @@ impl Backend for WinRT {
         if self.player.playback_session()?.playback_state()? != MediaPlaybackState::Playing {
             self.player.play()?;
         }
-        let mut uid = NEXT_UTTERANCE_ID.lock().unwrap();
-        let utterance_id = UtteranceId::WinRT(*uid);
-        *uid += 1;
-        drop(uid);
-        let mut mappings = UTTERANCE_MAPPINGS.lock().unwrap();
-        mappings.push((self.id, item, utterance_id));
+        let mut op = || {
+            let mut uid = NEXT_UTTERANCE_ID.try_lock()?;
+            let utterance_id = UtteranceId::WinRT(*uid);
+            *uid += 1;
+            Ok(utterance_id)
+        };
+        let mut backoff = self.backoff();
+        let utterance_id = op.retry(&mut backoff)?;
+        {
+            let mut mappings = UTTERANCE_MAPPINGS.lock().unwrap();
+            mappings.push((self.id, item, utterance_id));
+        }
         Ok(Some(utterance_id))
     }
 
