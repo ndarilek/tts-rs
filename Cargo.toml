@@ -1,6 +1,6 @@
 [package]
 name = "tts"
-version = "0.12.0"
+version = "0.12.1"
 authors = ["Nolan Darilek <nolan@thewordnerd.info>"]
 repository = "https://github.com/ndarilek/tts-rs"
 description = "High-level Text-To-Speech (TTS) interface"
@@ -12,7 +12,6 @@ edition = "2018"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [features]
-
 use_tolk = ["tolk"]
 
 [dependencies]
