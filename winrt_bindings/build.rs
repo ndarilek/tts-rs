@@ -3,7 +3,7 @@ winrt::build!(
         os
     types
         windows::media::core::MediaSource
-        windows::media::playback::{MediaPlaybackItem, MediaPlaybackList, MediaPlaybackState, MediaPlayer}
+        windows::media::playback::{MediaPlaybackState, MediaPlayer}
         windows::media::speech_synthesis::SpeechSynthesizer
 );
 

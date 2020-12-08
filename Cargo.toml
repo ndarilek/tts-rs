@@ -1,6 +1,6 @@
 [package]
 name = "tts"
-version = "0.12.1"
+version = "0.12.2"
 authors = ["Nolan Darilek <nolan@thewordnerd.info>"]
 repository = "https://github.com/ndarilek/tts-rs"
 description = "High-level Text-To-Speech (TTS) interface"
@@ -26,7 +26,7 @@ env_logger = "0.8"
 [target.'cfg(windows)'.dependencies]
 tolk = { version = "0.3", optional = true }
 winrt = "0.7"
-tts_winrt_bindings = { version = "0.1", path="winrt_bindings" }
+tts_winrt_bindings = { version = "0.2", path="winrt_bindings" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 speech-dispatcher = "0.7"
