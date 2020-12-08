@@ -19,7 +19,7 @@ fn main() -> Result<(), Error> {
         tts.speak(format!("{} bottles of beer,", bottles), false)?;
         tts.speak("Take one down, pass it around", false)?;
         tts.speak("Give us a bit to drink this...", false)?;
-        let time = time::Duration::from_secs(10);
+        let time = time::Duration::from_secs(15);
         thread::sleep(time);
         bottles -= 1;
         tts.speak(format!("{} bottles of beer on the wall,", bottles), false)?;

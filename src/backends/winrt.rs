@@ -1,14 +1,11 @@
-use std::sync::Mutex;
 #[cfg(windows)]
-use std::{collections::HashMap, time::Duration};
+use std::collections::{HashMap, VecDeque};
+use std::sync::Mutex;
 
-use backoff::{ExponentialBackoff, Operation};
 use lazy_static::lazy_static;
 use log::{info, trace};
-use winrt::*;
 
 use tts_winrt_bindings::windows::media::playback::{
-    CurrentMediaPlaybackItemChangedEventArgs, MediaPlaybackItem, MediaPlaybackList,
     MediaPlaybackState, MediaPlayer, MediaPlayerAudioCategory,
 };
 use tts_winrt_bindings::windows::media::speech_synthesis::SpeechSynthesizer;
@@ -27,119 +24,124 @@ pub struct WinRT {
     id: BackendId,
     synth: SpeechSynthesizer,
     player: MediaPlayer,
-    playback_list: MediaPlaybackList,
+    rate: f32,
+    pitch: f32,
+    volume: f32,
+}
+
+struct Utterance {
+    id: UtteranceId,
+    text: String,
+    rate: f32,
+    pitch: f32,
+    volume: f32,
 }
 
 lazy_static! {
     static ref NEXT_BACKEND_ID: Mutex<u64> = Mutex::new(0);
     static ref NEXT_UTTERANCE_ID: Mutex<u64> = Mutex::new(0);
-    static ref UTTERANCE_MAPPINGS: Mutex<Vec<(BackendId, MediaPlaybackItem, UtteranceId)>> =
-        Mutex::new(Vec::new());
+    static ref BACKEND_TO_SPEECH_SYNTHESIZER: Mutex<HashMap<BackendId, SpeechSynthesizer>> = {
+        let v: HashMap<BackendId, SpeechSynthesizer> = HashMap::new();
+        Mutex::new(v)
+    };
     static ref BACKEND_TO_MEDIA_PLAYER: Mutex<HashMap<BackendId, MediaPlayer>> = {
         let v: HashMap<BackendId, MediaPlayer> = HashMap::new();
         Mutex::new(v)
     };
-    static ref BACKEND_TO_PLAYBACK_LIST: Mutex<HashMap<BackendId, MediaPlaybackList>> = {
-        let v: HashMap<BackendId, MediaPlaybackList> = HashMap::new();
-        Mutex::new(v)
-    };
-    static ref LAST_SPOKEN_UTTERANCE: Mutex<HashMap<BackendId, UtteranceId>> = {
-        let v: HashMap<BackendId, UtteranceId> = HashMap::new();
-        Mutex::new(v)
+    static ref UTTERANCES: Mutex<HashMap<BackendId, VecDeque<Utterance>>> = {
+        let utterances: HashMap<BackendId, VecDeque<Utterance>> = HashMap::new();
+        Mutex::new(utterances)
     };
 }
 
 impl WinRT {
     pub fn new() -> std::result::Result<Self, Error> {
         info!("Initializing WinRT backend");
-        let playback_list = MediaPlaybackList::new()?;
+        let synth = SpeechSynthesizer::new()?;
         let player = MediaPlayer::new()?;
         player.set_real_time_playback(true)?;
         player.set_audio_category(MediaPlayerAudioCategory::Speech)?;
-        player.set_source(&playback_list)?;
         let mut backend_id = NEXT_BACKEND_ID.lock().unwrap();
         let bid = BackendId::WinRT(*backend_id);
         *backend_id += 1;
         drop(backend_id);
+        {
+            let mut utterances = UTTERANCES.lock().unwrap();
+            utterances.insert(bid, VecDeque::new());
+        }
         let mut backend_to_media_player = BACKEND_TO_MEDIA_PLAYER.lock().unwrap();
         backend_to_media_player.insert(bid, player.clone());
         drop(backend_to_media_player);
-        player.media_ended(TypedEventHandler::new(|sender: &MediaPlayer, _args| {
-            let source = sender.source()?;
-            let source: MediaPlaybackList = source.try_into()?;
-            source.items()?.clear()?;
-            let backend_to_media_player = BACKEND_TO_MEDIA_PLAYER.lock().unwrap();
-            let id = backend_to_media_player.iter().find(|v| v.1 == sender);
-            if let Some(id) = id {
-                let id = id.0;
-                let mut callbacks = CALLBACKS.lock().unwrap();
-                let callbacks = callbacks.get_mut(&id).unwrap();
-                if let Some(callback) = callbacks.utterance_end.as_mut() {
-                    let last_spoken_utterance = LAST_SPOKEN_UTTERANCE.lock().unwrap();
-                    if let Some(utterance_id) = last_spoken_utterance.get(&id) {
-                        callback(*utterance_id);
+        let mut backend_to_speech_synthesizer = BACKEND_TO_SPEECH_SYNTHESIZER.lock().unwrap();
+        backend_to_speech_synthesizer.insert(bid, synth.clone());
+        drop(backend_to_speech_synthesizer);
+        let bid_clone = bid;
+        player.media_ended(TypedEventHandler::new(
+            move |sender: &MediaPlayer, _args| {
+                let backend_to_media_player = BACKEND_TO_MEDIA_PLAYER.lock().unwrap();
+                let id = backend_to_media_player.iter().find(|v| v.1 == sender);
+                if let Some((id, _)) = id {
+                    let mut utterances = UTTERANCES.lock().unwrap();
+                    if let Some(utterances) = utterances.get_mut(id) {
+                        if let Some(utterance) = utterances.pop_front() {
+                            let mut callbacks = CALLBACKS.lock().unwrap();
+                            let callbacks = callbacks.get_mut(id).unwrap();
+                            if let Some(callback) = callbacks.utterance_end.as_mut() {
+                                callback(utterance.id);
+                            }
+                            if let Some(utterance) = utterances.front() {
+                                let backend_to_speech_synthesizer =
+                                    BACKEND_TO_SPEECH_SYNTHESIZER.lock().unwrap();
+                                let id = backend_to_speech_synthesizer
+                                    .iter()
+                                    .find(|v| *v.0 == bid_clone);
+                                if let Some((_, tts)) = id {
+                                    tts.options()?.set_speaking_rate(utterance.rate.into())?;
+                                    tts.options()?.set_audio_pitch(utterance.pitch.into())?;
+                                    tts.options()?.set_audio_volume(utterance.volume.into())?;
+                                    let stream = tts
+                                        .synthesize_text_to_stream_async(utterance.text.as_str())?
+                                        .get()?;
+                                    let content_type = stream.content_type()?;
+                                    let source =
+                                        MediaSource::create_from_stream(stream, content_type)?;
+                                    sender.set_source(source)?;
+                                    sender.play()?;
+                                    if let Some(callback) = callbacks.utterance_begin.as_mut() {
+                                        callback(utterance.id);
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
-            }
-            Ok(())
-        }))?;
-        let mut backend_to_playback_list = BACKEND_TO_PLAYBACK_LIST.lock().unwrap();
-        backend_to_playback_list.insert(bid, playback_list.clone());
-        drop(backend_to_playback_list);
-        playback_list.current_item_changed(TypedEventHandler::new(
-            |sender: &MediaPlaybackList, args: &CurrentMediaPlaybackItemChangedEventArgs| {
-                let backend_to_playback_list = BACKEND_TO_PLAYBACK_LIST.lock().unwrap();
-                let id = backend_to_playback_list.iter().find(|v| v.1 == sender);
+                /*let source = sender.source()?;
+                let source: MediaPlaybackList = source.try_into()?;
+                source.items()?.clear()?;
+                let backend_to_media_player = BACKEND_TO_MEDIA_PLAYER.lock().unwrap();
+                let id = backend_to_media_player.iter().find(|v| v.1 == sender);
                 if let Some(id) = id {
                     let id = id.0;
                     let mut callbacks = CALLBACKS.lock().unwrap();
                     let callbacks = callbacks.get_mut(&id).unwrap();
-                    let old_item = args.old_item()?;
-                    if !old_item.is_null() {
-                        let mut mappings = UTTERANCE_MAPPINGS.lock().unwrap();
-                        if let Some(callback) = callbacks.utterance_end.as_mut() {
-                            for mapping in &*mappings {
-                                if mapping.1 == old_item {
-                                    callback(mapping.2);
-                                }
-                            }
-                            mappings.retain(|v| v.1 != old_item);
+                    if let Some(callback) = callbacks.utterance_end.as_mut() {
+                        let last_spoken_utterance = LAST_SPOKEN_UTTERANCE.lock().unwrap();
+                        if let Some(utterance_id) = last_spoken_utterance.get(&id) {
+                            callback(*utterance_id);
                         }
                     }
-                    let new_item = args.new_item()?;
-                    if !new_item.is_null() {
-                        let mut last_spoken_utterance = LAST_SPOKEN_UTTERANCE.lock().unwrap();
-                        let mappings = UTTERANCE_MAPPINGS.lock().unwrap();
-                        for mapping in &*mappings {
-                            if mapping.1 == new_item {
-                                last_spoken_utterance.insert(*id, mapping.2);
-                            }
-                        }
-                        if let Some(callback) = callbacks.utterance_begin.as_mut() {
-                            for mapping in &*mappings {
-                                if mapping.1 == new_item {
-                                    callback(mapping.2);
-                                }
-                            }
-                        }
-                    }
-                }
+                }*/
                 Ok(())
             },
         ))?;
         Ok(Self {
             id: bid,
-            synth: SpeechSynthesizer::new()?,
+            synth,
             player,
-            playback_list,
+            rate: 1.,
+            pitch: 1.,
+            volume: 1.,
         })
-    }
-
-    fn backoff(&self) -> ExponentialBackoff {
-        ExponentialBackoff {
-            initial_interval: Duration::from_millis(3),
-            ..Default::default()
-        }
     }
 }
 
@@ -164,28 +166,46 @@ impl Backend for WinRT {
         text: &str,
         interrupt: bool,
     ) -> std::result::Result<Option<UtteranceId>, Error> {
-        let stream = self.synth.synthesize_text_to_stream_async(text)?.get()?;
-        let content_type = stream.content_type()?;
-        let source = MediaSource::create_from_stream(stream, content_type)?;
-        let item = MediaPlaybackItem::create(source)?;
         if interrupt && self.is_speaking()? {
             self.stop()?;
         }
-        self.playback_list.items()?.append(&item)?;
-        if self.player.playback_session()?.playback_state()? != MediaPlaybackState::Playing {
-            self.player.play()?;
-        }
-        let mut op = || {
-            let mut uid = NEXT_UTTERANCE_ID.try_lock()?;
+        let utterance_id = {
+            let mut uid = NEXT_UTTERANCE_ID.lock().unwrap();
             let utterance_id = UtteranceId::WinRT(*uid);
             *uid += 1;
-            Ok(utterance_id)
+            utterance_id
         };
-        let mut backoff = self.backoff();
-        let utterance_id = op.retry(&mut backoff)?;
+        let mut no_utterances = false;
         {
-            let mut mappings = UTTERANCE_MAPPINGS.lock().unwrap();
-            mappings.push((self.id, item, utterance_id));
+            let mut utterances = UTTERANCES.lock().unwrap();
+            if let Some(utterances) = utterances.get_mut(&self.id) {
+                no_utterances = utterances.is_empty();
+                let utterance = Utterance {
+                    id: utterance_id,
+                    text: text.into(),
+                    rate: self.rate,
+                    pitch: self.pitch,
+                    volume: self.volume,
+                };
+                utterances.push_back(utterance);
+            }
+        }
+        if no_utterances
+            && self.player.playback_session()?.playback_state()? != MediaPlaybackState::Playing
+        {
+            self.synth.options()?.set_speaking_rate(self.rate.into())?;
+            self.synth.options()?.set_audio_pitch(self.pitch.into())?;
+            self.synth.options()?.set_audio_volume(self.volume.into())?;
+            let stream = self.synth.synthesize_text_to_stream_async(text)?.get()?;
+            let content_type = stream.content_type()?;
+            let source = MediaSource::create_from_stream(stream, content_type)?;
+            self.player.set_source(source)?;
+            self.player.play()?;
+            let mut callbacks = CALLBACKS.lock().unwrap();
+            let callbacks = callbacks.get_mut(&self.id).unwrap();
+            if let Some(callback) = callbacks.utterance_begin.as_mut() {
+                callback(utterance_id);
+            }
         }
         Ok(Some(utterance_id))
     }
@@ -195,16 +215,20 @@ impl Backend for WinRT {
         if !self.is_speaking()? {
             return Ok(());
         }
-        self.playback_list.items()?.clear()?;
-        let mut callbacks = CALLBACKS.lock().unwrap();
-        let callbacks = callbacks.get_mut(&self.id).unwrap();
-        let mut mappings = UTTERANCE_MAPPINGS.lock().unwrap();
-        if let Some(callback) = callbacks.utterance_stop.as_mut() {
-            for mapping in &*mappings {
-                callback(mapping.2);
+        let mut utterances = UTTERANCES.lock().unwrap();
+        if let Some(utterances) = utterances.get(&self.id) {
+            let mut callbacks = CALLBACKS.lock().unwrap();
+            let callbacks = callbacks.get_mut(&self.id).unwrap();
+            if let Some(callback) = callbacks.utterance_stop.as_mut() {
+                for utterance in utterances {
+                    callback(utterance.id);
+                }
             }
         }
-        mappings.retain(|v| v.0 != self.id);
+        if let Some(utterances) = utterances.get_mut(&self.id) {
+            utterances.clear();
+        }
+        self.player.pause()?;
         Ok(())
     }
 
@@ -226,7 +250,7 @@ impl Backend for WinRT {
     }
 
     fn set_rate(&mut self, rate: f32) -> std::result::Result<(), Error> {
-        self.synth.options()?.set_speaking_rate(rate.into())?;
+        self.rate = rate;
         Ok(())
     }
 
@@ -248,7 +272,7 @@ impl Backend for WinRT {
     }
 
     fn set_pitch(&mut self, pitch: f32) -> std::result::Result<(), Error> {
-        self.synth.options()?.set_audio_pitch(pitch.into())?;
+        self.pitch = pitch;
         Ok(())
     }
 
@@ -270,28 +294,25 @@ impl Backend for WinRT {
     }
 
     fn set_volume(&mut self, volume: f32) -> std::result::Result<(), Error> {
-        self.synth.options()?.set_audio_volume(volume.into())?;
+        self.volume = volume;
         Ok(())
     }
 
     fn is_speaking(&self) -> std::result::Result<bool, Error> {
-        let item_count = self.playback_list.items()?.size()?;
-        let state = self.player.playback_session()?.playback_state()?;
-        let playing = state == MediaPlaybackState::Playing;
-        Ok(item_count != 0 || playing)
+        let utterances = UTTERANCES.lock().unwrap();
+        let utterances = utterances.get(&self.id).unwrap();
+        Ok(!utterances.is_empty())
     }
 }
 
 impl Drop for WinRT {
     fn drop(&mut self) {
         let id = self.id;
-        let mut backend_to_playback_list = BACKEND_TO_PLAYBACK_LIST.lock().unwrap();
-        backend_to_playback_list.remove(&id);
         let mut backend_to_media_player = BACKEND_TO_MEDIA_PLAYER.lock().unwrap();
         backend_to_media_player.remove(&id);
-        let mut last_spoken_utterance = LAST_SPOKEN_UTTERANCE.lock().unwrap();
-        last_spoken_utterance.remove(&id);
-        let mut mappings = UTTERANCE_MAPPINGS.lock().unwrap();
-        mappings.retain(|v| v.0 != id);
+        let mut backend_to_speech_synthesizer = BACKEND_TO_SPEECH_SYNTHESIZER.lock().unwrap();
+        backend_to_speech_synthesizer.remove(&id);
+        let mut utterances = UTTERANCES.lock().unwrap();
+        utterances.remove(&id);
     }
 }

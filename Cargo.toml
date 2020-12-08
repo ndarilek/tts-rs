@@ -16,7 +16,6 @@ crate-type = ["lib", "cdylib", "staticlib"]
 use_tolk = ["tolk"]
 
 [dependencies]
-backoff = "0.2"
 dyn-clonable = "0.9"
 lazy_static = "1"
 log = "0.4"
