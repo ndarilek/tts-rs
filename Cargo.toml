@@ -13,10 +13,12 @@ crate-type = ["lib", "cdylib", "staticlib"]
 
 [features]
 use_tolk = ["tolk"]
+ffi = ["libc"]
 
 [dependencies]
 dyn-clonable = "0.9"
 lazy_static = "1"
+libc = {version = "0.2", optional = true}
 log = "0.4"
 thiserror = "1"
 
