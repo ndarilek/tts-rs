@@ -1,3 +1,5 @@
+//! Bindings to this library to allow it to be called from C/C++.
+
 use libc::{c_char, c_float};
 use std::{
     cell::RefCell,
