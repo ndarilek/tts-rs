@@ -5,7 +5,7 @@ use std::{
     ptr,
 };
 
-use crate::{Backends, TTS};
+use crate::{Backends, Features, TTS};
 
 thread_local! {
     /// Stores the last reported error, so it can be retrieved at will from C
@@ -76,4 +76,11 @@ pub extern "C" fn tts_free(tts: *mut TTS) {
     unsafe {
         Box::from_raw(tts); // Goes out of scope and is dropped
     }
+}
+
+/// Returns the features supported by this TTS engine.
+/// tts must be a valid pointer to a TTS object.
+#[no_mangle]
+pub extern "C" fn tts_supported_features(tts: *mut TTS) -> Features {
+    unsafe { tts.as_ref().unwrap().supported_features() }
 }
