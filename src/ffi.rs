@@ -261,3 +261,64 @@ pub unsafe extern "C" fn tts_set_pitch(tts: *mut TTS, pitch: c_float) -> bool {
         }
     }
 }
+
+/// Returns the minimum volume for this speech synthesizer.
+/// `tts` must be a valid pointer to a TTS object.
+#[no_mangle]
+pub unsafe extern "C" fn tts_min_volume(tts: *mut TTS) -> c_float {
+    tts.as_ref().unwrap().min_volume()
+}
+
+/// Returns the maximum volume for this speech synthesizer.
+/// `tts` must be a valid pointer to a TTS object.
+#[no_mangle]
+pub unsafe extern "C" fn tts_max_volume(tts: *mut TTS) -> c_float {
+    tts.as_ref().unwrap().max_volume()
+}
+
+/// Returns the normal volume for this speech synthesizer.
+/// `tts` must be a valid pointer to a TTS object.
+#[no_mangle]
+pub unsafe extern "C" fn tts_normal_volume(tts: *mut TTS) -> c_float {
+    tts.as_ref().unwrap().normal_volume()
+}
+
+/// Gets the current speech volume.
+/// Returns true on success, false on error (likely that the backend doesn't support volume changes)
+/// or if `tts` is NULL.
+/// Does nothing if `volume` is NULL.
+#[no_mangle]
+pub unsafe extern "C" fn tts_get_volume(tts: *mut TTS, volume: *mut c_float) -> bool {
+    if tts.is_null() {
+        return false;
+    }
+    match tts.as_ref().unwrap().get_volume() {
+        Ok(r) => {
+            if !volume.is_null() {
+                *volume = r;
+            }
+            true
+        }
+        Err(e) => {
+            set_last_error(e.to_string()).unwrap();
+            false
+        }
+    }
+}
+
+/// Sets the desired speech volume.
+/// Returns true on success, false on error (likely that the backend doesn't support volume changes)
+/// or if `tts` is NULL.
+#[no_mangle]
+pub unsafe extern "C" fn tts_set_volume(tts: *mut TTS, volume: c_float) -> bool {
+    if tts.is_null() {
+        return false;
+    }
+    match tts.as_mut().unwrap().set_volume(volume) {
+        Ok(_) => true,
+        Err(e) => {
+            set_last_error(e.to_string()).unwrap();
+            false
+        }
+    }
+}
