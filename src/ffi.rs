@@ -130,3 +130,18 @@ pub extern "C" fn tts_free_utterance(utterance: *mut UtteranceId) {
         Box::from_raw(utterance);
     }
 }
+/// Stops current speech.
+/// Returns true on success, false on error or if `tts` is NULL.
+#[no_mangle]
+pub extern "C" fn tts_stop(tts: *mut TTS) -> bool {
+    if tts.is_null() {
+        return false;
+    }
+    match unsafe { tts.as_mut().unwrap().stop() } {
+        Ok(_) => true,
+        Err(e) => {
+            set_last_error(e.to_string()).unwrap();
+            false
+        }
+    }
+}
