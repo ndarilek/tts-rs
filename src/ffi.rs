@@ -5,7 +5,7 @@ use std::{
     ptr,
 };
 
-use crate::TTS;
+use crate::{Backends, TTS};
 
 thread_local! {
     /// Stores the last reported error, so it can be retrieved at will from C
@@ -36,6 +36,20 @@ pub extern "C" fn tts_clear_error() {
     LAST_ERROR.with(|err| {
         *err.borrow_mut() = None;
     });
+}
+
+/// Creates a new TTS object with the specified backend and returns a pointer to it.
+/// If an error occured, a null pointer is returned,
+/// Call `tts_get_error()` for more information about the specific error.
+#[no_mangle]
+pub extern "C" fn tts_new(backend: Backends) -> *mut TTS {
+    match TTS::new(backend) {
+        Ok(tts) => Box::into_raw(Box::new(tts)),
+        Err(e) => {
+            set_last_error(e.to_string()).unwrap();
+            ptr::null_mut()
+        }
+    }
 }
 
 /// Creates a new TTS object with the default backend and returns a pointer to it.
