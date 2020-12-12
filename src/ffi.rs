@@ -1,11 +1,11 @@
 use libc::c_char;
 use std::{
     cell::RefCell,
-    ffi::{CString, NulError},
+    ffi::{CStr, CString, NulError},
     ptr,
 };
 
-use crate::{Backends, Features, TTS};
+use crate::{Backends, Features, UtteranceId, TTS};
 
 thread_local! {
     /// Stores the last reported error, so it can be retrieved at will from C
@@ -19,7 +19,7 @@ fn set_last_error<E: Into<Vec<u8>>>(err: E) -> Result<(), NulError> {
     })
 }
 
-/// Get the last reported error as a const C string (const char*)
+/// Get the last reported error as a const C string.
 /// This string will be valid until at least the next call to `tts_get_error`.
 /// It is never called internally by the library.
 #[no_mangle]
@@ -83,4 +83,50 @@ pub extern "C" fn tts_free(tts: *mut TTS) {
 #[no_mangle]
 pub extern "C" fn tts_supported_features(tts: *mut TTS) -> Features {
     unsafe { tts.as_ref().unwrap().supported_features() }
+}
+
+/// Speaks the specified text, optionally interrupting current speech.
+/// If `utterance` is not NULL, , fills it with a pointer to the returned UtteranceId (or NULL if
+/// the backend doesn't provide one).
+/// Returns true on success, false on error or if `tts` is NULL.
+#[no_mangle]
+pub extern "C" fn tts_speak(
+    tts: *mut TTS,
+    text: *const c_char,
+    interrupt: bool,
+    utterance: *mut *mut UtteranceId,
+) -> bool {
+    if tts.is_null() {
+        return true;
+    }
+    unsafe {
+        let text = CStr::from_ptr(text).to_string_lossy().into_owned();
+        match tts.as_mut().unwrap().speak(text, interrupt) {
+            Ok(u) => {
+                if !utterance.is_null() {
+                    *utterance = match u {
+                        Some(u) => Box::into_raw(Box::new(u)),
+                        None => ptr::null_mut(),
+                    };
+                }
+                return true;
+            }
+            Err(e) => {
+                set_last_error(e.to_string()).unwrap();
+                return false;
+            }
+        }
+    }
+}
+
+/// Free the memory associated with an `UtteranceId`.
+/// Does nothing if `utterance` is NULL.
+#[no_mangle]
+pub extern "C" fn tts_free_utterance(utterance: *mut UtteranceId) {
+    if utterance.is_null() {
+        return;
+    }
+    unsafe {
+        Box::from_raw(utterance);
+    }
 }
