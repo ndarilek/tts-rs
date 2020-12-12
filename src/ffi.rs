@@ -5,6 +5,8 @@ use std::{
     ptr,
 };
 
+use crate::TTS;
+
 thread_local! {
     /// Stores the last reported error, so it can be retrieved at will from C
     static LAST_ERROR: RefCell<Option<CString>> = RefCell::new(None);
@@ -34,4 +36,30 @@ pub extern "C" fn tts_clear_error() {
     LAST_ERROR.with(|err| {
         *err.borrow_mut() = None;
     });
+}
+
+/// Creates a new TTS object with the default backend and returns a pointer to it.
+/// If an error occured, a null pointer is returned,
+/// Call `tts_get_error()` for more information about the specific error.
+#[no_mangle]
+pub extern "C" fn tts_default() -> *mut TTS {
+    match TTS::default() {
+        Ok(tts) => Box::into_raw(Box::new(tts)),
+        Err(e) => {
+            set_last_error(e.to_string()).unwrap();
+            ptr::null_mut()
+        }
+    }
+}
+
+/// Frees the memory associated with a TTS object.
+/// If `tts` is a null pointer, this function does nothing.
+#[no_mangle]
+pub extern "C" fn tts_free(tts: *mut TTS) {
+    if tts.is_null() {
+        return;
+    }
+    unsafe {
+        Box::from_raw(tts); // Goes out of scope and is dropped
+    }
 }
