@@ -69,20 +69,18 @@ pub extern "C" fn tts_default() -> *mut TTS {
 /// Free the memory associated with a TTS object.
 /// If `tts` is a null pointer, this function does nothing.
 #[no_mangle]
-pub extern "C" fn tts_free(tts: *mut TTS) {
+pub unsafe extern "C" fn tts_free(tts: *mut TTS) {
     if tts.is_null() {
         return;
     }
-    unsafe {
-        Box::from_raw(tts); // Goes out of scope and is dropped
-    }
+    Box::from_raw(tts); // Goes out of scope and is dropped
 }
 
 /// Returns the features supported by this TTS engine.
 /// `tts` must be a valid pointer to a TTS object.
 #[no_mangle]
-pub extern "C" fn tts_supported_features(tts: *mut TTS) -> Features {
-    unsafe { tts.as_ref().unwrap().supported_features() }
+pub unsafe extern "C" fn tts_supported_features(tts: *mut TTS) -> Features {
+    tts.as_ref().unwrap().supported_features()
 }
 
 /// Speaks the specified text, optionally interrupting current speech.
@@ -90,7 +88,7 @@ pub extern "C" fn tts_supported_features(tts: *mut TTS) -> Features {
 /// the backend doesn't provide one).
 /// Returns true on success, false on error or if `tts` is NULL.
 #[no_mangle]
-pub extern "C" fn tts_speak(
+pub unsafe extern "C" fn tts_speak(
     tts: *mut TTS,
     text: *const c_char,
     interrupt: bool,
@@ -99,22 +97,20 @@ pub extern "C" fn tts_speak(
     if tts.is_null() {
         return true;
     }
-    unsafe {
-        let text = CStr::from_ptr(text).to_string_lossy().into_owned();
-        match tts.as_mut().unwrap().speak(text, interrupt) {
-            Ok(u) => {
-                if !utterance.is_null() {
-                    *utterance = match u {
-                        Some(u) => Box::into_raw(Box::new(u)),
-                        None => ptr::null_mut(),
-                    };
-                }
-                return true;
+    let text = CStr::from_ptr(text).to_string_lossy().into_owned();
+    match tts.as_mut().unwrap().speak(text, interrupt) {
+        Ok(u) => {
+            if !utterance.is_null() {
+                *utterance = match u {
+                    Some(u) => Box::into_raw(Box::new(u)),
+                    None => ptr::null_mut(),
+                };
             }
-            Err(e) => {
-                set_last_error(e.to_string()).unwrap();
-                return false;
-            }
+            return true;
+        }
+        Err(e) => {
+            set_last_error(e.to_string()).unwrap();
+            return false;
         }
     }
 }
@@ -122,22 +118,20 @@ pub extern "C" fn tts_speak(
 /// Free the memory associated with an `UtteranceId`.
 /// Does nothing if `utterance` is NULL.
 #[no_mangle]
-pub extern "C" fn tts_free_utterance(utterance: *mut UtteranceId) {
+pub unsafe extern "C" fn tts_free_utterance(utterance: *mut UtteranceId) {
     if utterance.is_null() {
         return;
     }
-    unsafe {
-        Box::from_raw(utterance);
-    }
+    Box::from_raw(utterance);
 }
 /// Stops current speech.
 /// Returns true on success, false on error or if `tts` is NULL.
 #[no_mangle]
-pub extern "C" fn tts_stop(tts: *mut TTS) -> bool {
+pub unsafe extern "C" fn tts_stop(tts: *mut TTS) -> bool {
     if tts.is_null() {
         return false;
     }
-    match unsafe { tts.as_mut().unwrap().stop() } {
+    match tts.as_mut().unwrap().stop() {
         Ok(_) => true,
         Err(e) => {
             set_last_error(e.to_string()).unwrap();
