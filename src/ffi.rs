@@ -322,3 +322,28 @@ pub unsafe extern "C" fn tts_set_volume(tts: *mut TTS, volume: c_float) -> bool 
         }
     }
 }
+
+/// fills `speaking` with a bool indicating  whether this speech synthesizer is speaking.
+/// Returns true on success, false on error (likely that the backend doesn't support speaking
+/// status) or if `tts` is NULL.
+/// If `speaking` is NULL, returns this value instead, meaning you can't tell the difference
+/// between an error occuring and the synth not speaking.
+#[no_mangle]
+pub unsafe extern "C" fn tts_is_speaking(tts: *mut TTS, speaking: *mut bool) -> bool {
+    if tts.is_null() {
+        return false;
+    }
+    match tts.as_ref().unwrap().is_speaking() {
+        Ok(s) => {
+            if speaking.is_null() {
+                return s;
+            }
+            *speaking = s;
+            true
+        }
+        Err(e) => {
+            set_last_error(e.to_string()).unwrap();
+            false
+        }
+    }
+}
