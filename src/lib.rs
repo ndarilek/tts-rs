@@ -32,6 +32,7 @@ mod backends;
 #[cfg(feature = "ffi")]
 pub mod ffi;
 
+#[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub enum Backends {
     #[cfg(target_os = "linux")]
@@ -82,6 +83,7 @@ unsafe impl Send for UtteranceId {}
 
 unsafe impl Sync for UtteranceId {}
 
+#[repr(C)]
 pub struct Features {
     pub stop: bool,
     pub rate: bool,
