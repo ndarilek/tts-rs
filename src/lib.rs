@@ -29,6 +29,8 @@ use objc::{class, msg_send, sel, sel_impl};
 use thiserror::Error;
 
 mod backends;
+#[cfg(feature = "ffi")]
+pub mod ffi;
 
 #[derive(Clone, Copy, Debug)]
 pub enum Backends {
