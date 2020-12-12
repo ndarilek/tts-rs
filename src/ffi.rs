@@ -200,3 +200,64 @@ pub unsafe extern "C" fn tts_set_rate(tts: *mut TTS, rate: c_float) -> bool {
         }
     }
 }
+
+/// Returns the minimum pitch for this speech synthesizer.
+/// `tts` must be a valid pointer to a TTS object.
+#[no_mangle]
+pub unsafe extern "C" fn tts_min_pitch(tts: *mut TTS) -> c_float {
+    tts.as_ref().unwrap().min_pitch()
+}
+
+/// Returns the maximum pitch for this speech synthesizer.
+/// `tts` must be a valid pointer to a TTS object.
+#[no_mangle]
+pub unsafe extern "C" fn tts_max_pitch(tts: *mut TTS) -> c_float {
+    tts.as_ref().unwrap().max_pitch()
+}
+
+/// Returns the normal pitch for this speech synthesizer.
+/// `tts` must be a valid pointer to a TTS object.
+#[no_mangle]
+pub unsafe extern "C" fn tts_normal_pitch(tts: *mut TTS) -> c_float {
+    tts.as_ref().unwrap().normal_pitch()
+}
+
+/// Gets the current speech pitch.
+/// Returns true on success, false on error (likely that the backend doesn't support pitch changes)
+/// or if `tts` is NULL.
+/// Does nothing if `pitch` is NULL.
+#[no_mangle]
+pub unsafe extern "C" fn tts_get_pitch(tts: *mut TTS, pitch: *mut c_float) -> bool {
+    if tts.is_null() {
+        return false;
+    }
+    match tts.as_ref().unwrap().get_pitch() {
+        Ok(r) => {
+            if !pitch.is_null() {
+                *pitch = r;
+            }
+            true
+        }
+        Err(e) => {
+            set_last_error(e.to_string()).unwrap();
+            false
+        }
+    }
+}
+
+/// Sets the desired speech pitch.
+/// Returns true on success, false on error (likely that the backend doesn't support pitch changes)
+/// or if `tts` is NULL.
+#[no_mangle]
+pub unsafe extern "C" fn tts_set_pitch(tts: *mut TTS, pitch: c_float) -> bool {
+    if tts.is_null() {
+        return false;
+    }
+    match tts.as_mut().unwrap().set_pitch(pitch) {
+        Ok(_) => true,
+        Err(e) => {
+            set_last_error(e.to_string()).unwrap();
+            false
+        }
+    }
+}
