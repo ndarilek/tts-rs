@@ -38,8 +38,8 @@ pub extern "C" fn tts_clear_error() {
     });
 }
 
-/// Creates a new TTS object with the specified backend and returns a pointer to it.
-/// If an error occured, a null pointer is returned,
+/// Create a new `TTS` instance with the specified backend.
+/// If an error occures, returns a null pointer,
 /// Call `tts_get_error()` for more information about the specific error.
 #[no_mangle]
 pub extern "C" fn tts_new(backend: Backends) -> *mut TTS {
@@ -52,8 +52,8 @@ pub extern "C" fn tts_new(backend: Backends) -> *mut TTS {
     }
 }
 
-/// Creates a new TTS object with the default backend and returns a pointer to it.
-/// If an error occured, a null pointer is returned,
+/// Create a new TTS object with the default backend.
+/// If an error occures, returns a null pointer,
 /// Call `tts_get_error()` for more information about the specific error.
 #[no_mangle]
 pub extern "C" fn tts_default() -> *mut TTS {
@@ -66,7 +66,7 @@ pub extern "C" fn tts_default() -> *mut TTS {
     }
 }
 
-/// Frees the memory associated with a TTS object.
+/// Free the memory associated with a TTS object.
 /// If `tts` is a null pointer, this function does nothing.
 #[no_mangle]
 pub extern "C" fn tts_free(tts: *mut TTS) {
@@ -79,7 +79,7 @@ pub extern "C" fn tts_free(tts: *mut TTS) {
 }
 
 /// Returns the features supported by this TTS engine.
-/// tts must be a valid pointer to a TTS object.
+/// `tts` must be a valid pointer to a TTS object.
 #[no_mangle]
 pub extern "C" fn tts_supported_features(tts: *mut TTS) -> Features {
     unsafe { tts.as_ref().unwrap().supported_features() }
