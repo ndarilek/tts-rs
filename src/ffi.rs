@@ -1,4 +1,4 @@
-use libc::c_char;
+use libc::{c_char, c_float};
 use std::{
     cell::RefCell,
     ffi::{CStr, CString, NulError},
@@ -132,6 +132,67 @@ pub unsafe extern "C" fn tts_stop(tts: *mut TTS) -> bool {
         return false;
     }
     match tts.as_mut().unwrap().stop() {
+        Ok(_) => true,
+        Err(e) => {
+            set_last_error(e.to_string()).unwrap();
+            false
+        }
+    }
+}
+
+/// Returns the minimum rate for this speech synthesizer.
+/// `tts` must be a valid pointer to a TTS object.
+#[no_mangle]
+pub unsafe extern "C" fn tts_min_rate(tts: *mut TTS) -> c_float {
+    tts.as_ref().unwrap().min_rate()
+}
+
+/// Returns the maximum rate for this speech synthesizer.
+/// `tts` must be a valid pointer to a TTS object.
+#[no_mangle]
+pub unsafe extern "C" fn tts_max_rate(tts: *mut TTS) -> c_float {
+    tts.as_ref().unwrap().max_rate()
+}
+
+/// Returns the normal rate for this speech synthesizer.
+/// `tts` must be a valid pointer to a TTS object.
+#[no_mangle]
+pub unsafe extern "C" fn tts_normal_rate(tts: *mut TTS) -> c_float {
+    tts.as_ref().unwrap().normal_rate()
+}
+
+/// Gets the current speech rate.
+/// Returns true on success, false on error (likely that the backend doesn't support rate changes)
+/// or if `tts` is NULL.
+/// Does nothing if `rate` is NULL.
+#[no_mangle]
+pub unsafe extern "C" fn tts_get_rate(tts: *mut TTS, rate: *mut c_float) -> bool {
+    if tts.is_null() {
+        return false;
+    }
+    match tts.as_ref().unwrap().get_rate() {
+        Ok(r) => {
+            if !rate.is_null() {
+                *rate = r;
+            }
+            true
+        }
+        Err(e) => {
+            set_last_error(e.to_string()).unwrap();
+            false
+        }
+    }
+}
+
+/// Sets the desired speech rate.
+/// Returns true on success, false on error (likely that the backend doesn't support rate changes)
+/// or if `tts` is NULL.
+#[no_mangle]
+pub unsafe extern "C" fn tts_set_rate(tts: *mut TTS, rate: c_float) -> bool {
+    if tts.is_null() {
+        return false;
+    }
+    match tts.as_mut().unwrap().set_rate(rate) {
         Ok(_) => true,
         Err(e) => {
             set_last_error(e.to_string()).unwrap();
