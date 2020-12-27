@@ -42,3 +42,8 @@ web-sys = { version = "0.3", features = ["EventTarget", "SpeechSynthesis", "Spee
 
 [target.'cfg(target_os="android")'.dependencies]
 jni = "0.18"
+ndk-glue = "0.2"
+
+[[example]]
+name = "hello_world_android"
+crate-type = ["cdylib"]
