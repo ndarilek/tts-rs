@@ -39,3 +39,6 @@ objc = "0.2"
 [target.wasm32-unknown-unknown.dependencies]
 wasm-bindgen = "0.2"
 web-sys = { version = "0.3", features = ["EventTarget", "SpeechSynthesis", "SpeechSynthesisErrorCode", "SpeechSynthesisErrorEvent", "SpeechSynthesisEvent", "SpeechSynthesisUtterance", "Window", ] }
+
+[target.'cfg(target_os="android")'.dependencies]
+jni = "0.18"

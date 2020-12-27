@@ -43,6 +43,8 @@ pub enum Backends {
     AppKit,
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     AvFoundation,
+    #[cfg(target_os = "android")]
+    Android,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -55,6 +57,8 @@ pub enum BackendId {
     WinRT(u64),
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     AvFoundation(u64),
+    #[cfg(target_os = "android")]
+    Android(u64),
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -193,6 +197,8 @@ impl TTS {
             Backends::AppKit => Ok(TTS(Box::new(backends::AppKit::new()))),
             #[cfg(any(target_os = "macos", target_os = "ios"))]
             Backends::AvFoundation => Ok(TTS(Box::new(backends::AvFoundation::new()))),
+            #[cfg(target_os = "android")]
+            Backends::Android => Ok(TTS(Box::new(backends::Android::new()))),
         };
         if let Ok(backend) = backend {
             if let Some(id) = backend.0.id() {
@@ -239,6 +245,8 @@ impl TTS {
         };
         #[cfg(target_os = "ios")]
         let tts = TTS::new(Backends::AvFoundation);
+        #[cfg(target_os = "android")]
+        let tts = TTS::new(Backends::Android);
         tts
     }
 

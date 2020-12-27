@@ -16,6 +16,9 @@ mod appkit;
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 mod av_foundation;
 
+#[cfg(target_os = "android")]
+mod android;
+
 #[cfg(target_os = "linux")]
 pub(crate) use self::speech_dispatcher::*;
 
@@ -30,3 +33,6 @@ pub(crate) use self::appkit::*;
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 pub(crate) use self::av_foundation::*;
+
+#[cfg(target_os = "android")]
+pub(crate) use self::android::*;
