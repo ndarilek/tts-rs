@@ -44,6 +44,10 @@ web-sys = { version = "0.3", features = ["EventTarget", "SpeechSynthesis", "Spee
 jni = "0.18"
 ndk-glue = "0.2"
 
+[package.metadata.android]
+target_sdk_version = 29
+min_sdk_version = 21
+
 [[example]]
 name = "hello_world_android"
 crate-type = ["cdylib"]

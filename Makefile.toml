@@ -1,0 +1,3 @@
+[tasks.log-android]
+command = "adb"
+args = ["logcat", "RustStdoutStderr:D", "*:S"]
