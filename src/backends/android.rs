@@ -1,6 +1,7 @@
 #[cfg(target_os = "android")]
 use std::sync::Mutex;
 
+use jni::objects::JValue;
 use lazy_static::lazy_static;
 use log::info;
 
@@ -11,25 +12,35 @@ lazy_static! {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct Android(BackendId);
+pub(crate) struct Android {
+    id: BackendId,
+}
 
 impl Android {
     pub(crate) fn new() -> Result<Self, Error> {
         info!("Initializing Android backend");
         let mut backend_id = NEXT_BACKEND_ID.lock().unwrap();
-        let bid = BackendId::Android(*backend_id);
+        let id = BackendId::Android(*backend_id);
         *backend_id += 1;
         let native_activity = ndk_glue::native_activity();
         let vm_ptr = native_activity.vm();
         let vm = unsafe { jni::JavaVM::from_raw(vm_ptr) }?;
         let env = vm.attach_current_thread()?;
-        Ok(Self(bid))
+        let tts = env.new_object(
+            "android/speech/tts/TextToSpeech",
+            "(Landroid/content/Context;Landroid/speech/tts/TextToSpeech$OnInitListener;)V",
+            &[
+                native_activity.activity().into(),
+                native_activity.activity().into(),
+            ],
+        )?;
+        Ok(Self { id })
     }
 }
 
 impl Backend for Android {
     fn id(&self) -> Option<BackendId> {
-        Some(self.0)
+        Some(self.id)
     }
 
     fn supported_features(&self) -> Features {

@@ -62,5 +62,6 @@ fn run() -> Result<(), Error> {
 
 #[cfg_attr(target_os = "android", ndk_glue::main(backtrace = "on"))]
 pub fn main() {
+    println!("xxxx In library");
     run().expect("Failed to run");
 }
