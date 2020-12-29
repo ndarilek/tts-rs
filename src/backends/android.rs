@@ -1,9 +1,7 @@
 #[cfg(target_os = "android")]
-use std::collections::HashMap;
 use std::sync::Mutex;
 
 use jni::objects::GlobalRef;
-use jni::JavaVM;
 use lazy_static::lazy_static;
 use log::info;
 
@@ -11,7 +9,6 @@ use crate::{Backend, BackendId, Error, Features, UtteranceId, CALLBACKS};
 
 lazy_static! {
     static ref NEXT_BACKEND_ID: Mutex<u64> = Mutex::new(0);
-    static ref VM: Mutex<Option<JavaVM>> = Mutex::new(None);
 }
 
 #[derive(Clone)]
