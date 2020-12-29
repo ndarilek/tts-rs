@@ -1,7 +1,9 @@
 #[cfg(target_os = "android")]
 use std::sync::Mutex;
 
-use jni::objects::GlobalRef;
+use jni::objects::{GlobalRef, JObject};
+use jni::JNIEnv;
+use jni::JavaVM;
 use lazy_static::lazy_static;
 use log::info;
 
@@ -24,8 +26,7 @@ impl Android {
         let id = BackendId::Android(*backend_id);
         *backend_id += 1;
         let native_activity = ndk_glue::native_activity();
-        let vm_ptr = native_activity.vm();
-        let vm = unsafe { jni::JavaVM::from_raw(vm_ptr) }?;
+        let vm = Self::vm()?;
         let env = vm.attach_current_thread()?;
         let tts = env.new_object(
             "android/speech/tts/TextToSpeech",
@@ -35,8 +36,16 @@ impl Android {
                 native_activity.activity().into(),
             ],
         )?;
+        println!("Creating global ref");
         let tts = env.new_global_ref(tts)?;
+        println!("Returning");
         Ok(Self { id, tts })
+    }
+
+    fn vm() -> Result<JavaVM, jni::errors::Error> {
+        let native_activity = ndk_glue::native_activity();
+        let vm_ptr = native_activity.vm();
+        unsafe { jni::JavaVM::from_raw(vm_ptr) }
     }
 }
 
@@ -58,6 +67,26 @@ impl Backend for Android {
 
     fn speak(&mut self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error> {
         println!("Speaking {}, {:?}", text, interrupt);
+        let vm = Self::vm()?;
+        println!("Retrieved");
+        let env = vm.attach_current_thread()?;
+        println!("attached");
+        let tts = self.tts.as_obj();
+        let text = env.new_string(text)?;
+        let queue_mode = if interrupt { 0 } else { 1 };
+        println!("Calling");
+        env.call_method(
+            tts,
+            "speak",
+            "(Ljava/lang/CharSequence;ILandroid/os/Bundle;Ljava/lang/String;)I",
+            &[
+                text.into(),
+                queue_mode.into(),
+                JObject::null().into(),
+                JObject::null().into(),
+            ],
+        )?;
+        println!("Returning");
         Ok(None)
     }
 
