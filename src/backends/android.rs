@@ -1,7 +1,9 @@
 #[cfg(target_os = "android")]
+use std::collections::HashMap;
 use std::sync::Mutex;
 
-use jni::objects::JValue;
+use jni::objects::GlobalRef;
+use jni::JavaVM;
 use lazy_static::lazy_static;
 use log::info;
 
@@ -9,11 +11,13 @@ use crate::{Backend, BackendId, Error, Features, UtteranceId, CALLBACKS};
 
 lazy_static! {
     static ref NEXT_BACKEND_ID: Mutex<u64> = Mutex::new(0);
+    static ref VM: Mutex<Option<JavaVM>> = Mutex::new(None);
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub(crate) struct Android {
     id: BackendId,
+    tts: GlobalRef,
 }
 
 impl Android {
@@ -23,18 +27,27 @@ impl Android {
         let id = BackendId::Android(*backend_id);
         *backend_id += 1;
         let native_activity = ndk_glue::native_activity();
-        let vm_ptr = native_activity.vm();
-        let vm = unsafe { jni::JavaVM::from_raw(vm_ptr) }?;
-        let env = vm.attach_current_thread()?;
-        let tts = env.new_object(
-            "android/speech/tts/TextToSpeech",
-            "(Landroid/content/Context;Landroid/speech/tts/TextToSpeech$OnInitListener;)V",
-            &[
-                native_activity.activity().into(),
-                native_activity.activity().into(),
-            ],
-        )?;
-        Ok(Self { id })
+        let mut vm = VM.lock().unwrap();
+        if vm.is_none() {
+            let vm_ptr = native_activity.vm();
+            let new_vm = unsafe { jni::JavaVM::from_raw(vm_ptr) }?;
+            *vm = Some(new_vm);
+        }
+        if let Some(vm) = &*vm {
+            let env = vm.attach_current_thread()?;
+            let tts = env.new_object(
+                "android/speech/tts/TextToSpeech",
+                "(Landroid/content/Context;Landroid/speech/tts/TextToSpeech$OnInitListener;)V",
+                &[
+                    native_activity.activity().into(),
+                    native_activity.activity().into(),
+                ],
+            )?;
+            let tts = env.new_global_ref(tts)?;
+            Ok(Self { id, tts })
+        } else {
+            Err(Error::NoneError)
+        }
     }
 }
 

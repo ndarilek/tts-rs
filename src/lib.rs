@@ -121,7 +121,7 @@ pub enum Error {
 }
 
 #[clonable]
-trait Backend: Clone + std::fmt::Debug {
+trait Backend: Clone {
     fn id(&self) -> Option<BackendId>;
     fn supported_features(&self) -> Features;
     fn speak(&mut self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error>;
