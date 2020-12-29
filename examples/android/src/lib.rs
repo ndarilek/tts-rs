@@ -1,17 +1,6 @@
-use std::io;
-
-#[cfg(target_os = "macos")]
-use cocoa_foundation::base::id;
-#[cfg(target_os = "macos")]
-use cocoa_foundation::foundation::NSRunLoop;
-#[cfg(target_os = "macos")]
-use objc::{msg_send, sel, sel_impl};
-
 use tts::*;
 
-// Use a separate function so the same examples run everywhere.
 fn run() -> Result<(), Error> {
-    env_logger::init();
     let mut tts = TTS::default()?;
     let Features {
         utterance_callbacks,
@@ -68,22 +57,10 @@ fn run() -> Result<(), Error> {
         tts.set_volume(original_volume)?;
     }
     tts.speak("Goodbye.", false)?;
-    let mut _input = String::new();
-    // The below is only needed to make the example run on MacOS because there is no NSRunLoop in this context.
-    // It shouldn't be needed in an app or game that almost certainly has one already.
-    #[cfg(target_os = "macos")]
-    {
-        let run_loop: id = unsafe { NSRunLoop::currentRunLoop() };
-        unsafe {
-            let _: () = msg_send![run_loop, run];
-        }
-    }
-    io::stdin().read_line(&mut _input)?;
     Ok(())
 }
 
-#[cfg(target_os = "android")]
 #[cfg_attr(target_os = "android", ndk_glue::main(backtrace = "on"))]
-fn main() {
+pub fn main() {
     run().expect("Failed to run");
 }

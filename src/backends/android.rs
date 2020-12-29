@@ -14,12 +14,16 @@ lazy_static! {
 pub(crate) struct Android(BackendId);
 
 impl Android {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new() -> Result<Self, Error> {
         info!("Initializing Android backend");
         let mut backend_id = NEXT_BACKEND_ID.lock().unwrap();
         let bid = BackendId::Android(*backend_id);
         *backend_id += 1;
-        Self(bid)
+        let native_activity = ndk_glue::native_activity();
+        let vm_ptr = native_activity.vm();
+        let vm = unsafe { jni::JavaVM::from_raw(vm_ptr) }?;
+        let env = vm.attach_current_thread()?;
+        Ok(Self(bid))
     }
 }
 

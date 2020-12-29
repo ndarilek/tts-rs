@@ -115,6 +115,9 @@ pub enum Error {
     UnsupportedFeature,
     #[error("Out of range")]
     OutOfRange,
+    #[cfg(target_os = "android")]
+    #[error("JNI error: [0])]")]
+    JNI(#[from] jni::errors::Error),
 }
 
 #[clonable]
@@ -198,7 +201,10 @@ impl TTS {
             #[cfg(any(target_os = "macos", target_os = "ios"))]
             Backends::AvFoundation => Ok(TTS(Box::new(backends::AvFoundation::new()))),
             #[cfg(target_os = "android")]
-            Backends::Android => Ok(TTS(Box::new(backends::Android::new()))),
+            Backends::Android => {
+                let tts = backends::Android::new()?;
+                Ok(TTS(Box::new(tts)))
+            }
         };
         if let Ok(backend) = backend {
             if let Some(id) = backend.0.id() {
