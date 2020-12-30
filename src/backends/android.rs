@@ -6,7 +6,7 @@ use std::thread;
 use std::time::Duration;
 
 use jni::objects::{GlobalRef, JObject};
-use jni::sys::{jint, JNI_VERSION_1_6};
+use jni::sys::{jfloat, jint, JNI_VERSION_1_6};
 use jni::{JNIEnv, JavaVM};
 use lazy_static::lazy_static;
 use log::info;
@@ -51,6 +51,8 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onInit(env: JNIEnv, obj: JObject, st
 pub(crate) struct Android {
     id: BackendId,
     tts: GlobalRef,
+    rate: f32,
+    pitch: f32,
 }
 
 impl Android {
@@ -87,7 +89,12 @@ impl Android {
                 }
                 thread::sleep(Duration::from_millis(5));
             }
-            Ok(Self { id, tts })
+            Ok(Self {
+                id,
+                tts,
+                rate: 1.,
+                pitch: 1.,
+            })
         } else {
             Err(Error::NoneError)
         }
@@ -108,8 +115,8 @@ impl Backend for Android {
     fn supported_features(&self) -> Features {
         Features {
             stop: true,
-            rate: false,
-            pitch: false,
+            rate: true,
+            pitch: true,
             volume: false,
             is_speaking: false,
             utterance_callbacks: false,
@@ -139,7 +146,7 @@ impl Backend for Android {
                 uid.into(),
             ],
         )?;
-        let rv = rv.i()? as i32;
+        let rv = rv.i()?;
         if rv == 0 {
             Ok(Some(id))
         } else {
@@ -152,7 +159,7 @@ impl Backend for Android {
         let env = vm.get_env()?;
         let tts = self.tts.as_obj();
         let rv = env.call_method(tts, "stop", "()I", &[])?;
-        let rv = rv.i()? as i32;
+        let rv = rv.i()?;
         if rv == 0 {
             Ok(())
         } else {
@@ -173,11 +180,22 @@ impl Backend for Android {
     }
 
     fn get_rate(&self) -> Result<f32, Error> {
-        todo!()
+        Ok(self.rate)
     }
 
     fn set_rate(&mut self, rate: f32) -> Result<(), Error> {
-        todo!()
+        let vm = Self::vm()?;
+        let env = vm.get_env()?;
+        let tts = self.tts.as_obj();
+        let rate = rate as jfloat;
+        let rv = env.call_method(tts, "setSpeechRate", "(F)I", &[rate.into()])?;
+        let rv = rv.i()?;
+        if rv == 0 {
+            self.rate = rate;
+            Ok(())
+        } else {
+            Err(Error::OperationFailed)
+        }
     }
 
     fn min_pitch(&self) -> f32 {
@@ -193,11 +211,22 @@ impl Backend for Android {
     }
 
     fn get_pitch(&self) -> Result<f32, Error> {
-        todo!()
+        Ok(self.pitch)
     }
 
     fn set_pitch(&mut self, pitch: f32) -> Result<(), Error> {
-        todo!()
+        let vm = Self::vm()?;
+        let env = vm.get_env()?;
+        let tts = self.tts.as_obj();
+        let pitch = pitch as jfloat;
+        let rv = env.call_method(tts, "setPitch", "(F)I", &[pitch.into()])?;
+        let rv = rv.i()?;
+        if rv == 0 {
+            self.pitch = pitch;
+            Ok(())
+        } else {
+            Err(Error::OperationFailed)
+        }
     }
 
     fn min_volume(&self) -> f32 {
