@@ -17,6 +17,7 @@ lazy_static! {
     static ref BRIDGE: Mutex<Option<GlobalRef>> = Mutex::new(None);
     static ref NEXT_BACKEND_ID: Mutex<u64> = Mutex::new(0);
     static ref PENDING_INITIALIZATIONS: RwLock<HashSet<u64>> = RwLock::new(HashSet::new());
+    static ref NEXT_UTTERANCE_ID: Mutex<u64> = Mutex::new(0);
 }
 
 #[allow(non_snake_case)]
@@ -121,7 +122,13 @@ impl Backend for Android {
         let tts = self.tts.as_obj();
         let text = env.new_string(text)?;
         let queue_mode = if interrupt { 0 } else { 1 };
-        env.call_method(
+        let mut utterance_id = NEXT_UTTERANCE_ID.lock().unwrap();
+        let uid = *utterance_id;
+        *utterance_id += 1;
+        drop(utterance_id);
+        let id = UtteranceId::Android(uid);
+        let uid = env.new_string(uid.to_string())?;
+        let rv = env.call_method(
             tts,
             "speak",
             "(Ljava/lang/CharSequence;ILandroid/os/Bundle;Ljava/lang/String;)I",
@@ -129,10 +136,15 @@ impl Backend for Android {
                 text.into(),
                 queue_mode.into(),
                 JObject::null().into(),
-                JObject::null().into(),
+                uid.into(),
             ],
         )?;
-        Ok(None)
+        let rv = rv.i()? as i32;
+        if rv == 0 {
+            Ok(Some(id))
+        } else {
+            Err(Error::OperationFailed)
+        }
     }
 
     fn stop(&mut self) -> Result<(), Error> {

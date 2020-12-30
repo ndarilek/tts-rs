@@ -71,6 +71,8 @@ pub enum UtteranceId {
     WinRT(u64),
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     AvFoundation(id),
+    #[cfg(target_os = "android")]
+    Android(u64),
 }
 
 unsafe impl Send for UtteranceId {}
@@ -105,6 +107,8 @@ pub enum Error {
     IO(#[from] std::io::Error),
     #[error("Value not received")]
     NoneError,
+    #[error("Operation failed")]
+    OperationFailed,
     #[cfg(target_arch = "wasm32")]
     #[error("JavaScript error: [0])]")]
     JavaScriptError(wasm_bindgen::JsValue),
