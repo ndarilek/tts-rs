@@ -75,5 +75,9 @@ jobs:
           override: true
       - uses: actions-rs/install@v0.1
         with:
-          crate: cargo-make
+          crate: cargo-apk
           # use-tool-cache: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: apk
+          args: build
