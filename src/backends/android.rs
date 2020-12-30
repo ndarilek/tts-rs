@@ -121,7 +121,7 @@ impl Backend for Android {
             rate: true,
             pitch: true,
             volume: false,
-            is_speaking: false,
+            is_speaking: true,
             utterance_callbacks: false,
         }
     }
@@ -253,6 +253,11 @@ impl Backend for Android {
     }
 
     fn is_speaking(&self) -> Result<bool, Error> {
-        todo!()
+        let vm = Self::vm()?;
+        let env = vm.get_env()?;
+        let tts = self.tts.as_obj();
+        let rv = env.call_method(tts, "isSpeaking", "()Z", &[])?;
+        let rv = rv.z()?;
+        Ok(rv)
     }
 }
