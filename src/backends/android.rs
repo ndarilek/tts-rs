@@ -71,13 +71,10 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onStart(
     .unwrap();
     let utterance_id = utterance_id.parse::<u64>().unwrap();
     let utterance_id = UtteranceId::Android(utterance_id);
-    println!("Retrieving callbacks for {:?}", backend_id);
     let mut callbacks = CALLBACKS.lock().unwrap();
-    println!("Callback keys: {:?}", callbacks.keys());
-    if let Some(cb) = callbacks.get_mut(&backend_id) {
-        if let Some(f) = cb.utterance_begin.as_mut() {
-            f(utterance_id);
-        }
+    let cb = callbacks.get_mut(&backend_id).unwrap();
+    if let Some(f) = cb.utterance_begin.as_mut() {
+        f(utterance_id);
     }
 }
 
@@ -88,17 +85,24 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onStop(
     obj: JObject,
     utterance_id: JString,
 ) {
-    let id = env
+    let backend_id = env
         .get_field(obj, "backendId", "I")
         .expect("Failed to get backend ID")
         .i()
         .expect("Failed to cast to int") as u64;
+    let backend_id = BackendId::Android(backend_id);
     let utterance_id = CString::from(CStr::from_ptr(
         env.get_string(utterance_id).unwrap().as_ptr(),
     ))
     .into_string()
     .unwrap();
-    //println!("Call stop for {}", utterance_id);
+    let utterance_id = utterance_id.parse::<u64>().unwrap();
+    let utterance_id = UtteranceId::Android(utterance_id);
+    let mut callbacks = CALLBACKS.lock().unwrap();
+    let cb = callbacks.get_mut(&backend_id).unwrap();
+    if let Some(f) = cb.utterance_end.as_mut() {
+        f(utterance_id);
+    }
 }
 
 #[no_mangle]
@@ -108,17 +112,24 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onDone(
     obj: JObject,
     utterance_id: JString,
 ) {
-    let id = env
+    let backend_id = env
         .get_field(obj, "backendId", "I")
         .expect("Failed to get backend ID")
         .i()
         .expect("Failed to cast to int") as u64;
+    let backend_id = BackendId::Android(backend_id);
     let utterance_id = CString::from(CStr::from_ptr(
         env.get_string(utterance_id).unwrap().as_ptr(),
     ))
     .into_string()
     .unwrap();
-    //println!("Call done for {}", utterance_id);
+    let utterance_id = utterance_id.parse::<u64>().unwrap();
+    let utterance_id = UtteranceId::Android(utterance_id);
+    let mut callbacks = CALLBACKS.lock().unwrap();
+    let cb = callbacks.get_mut(&backend_id).unwrap();
+    if let Some(f) = cb.utterance_stop.as_mut() {
+        f(utterance_id);
+    }
 }
 
 #[no_mangle]
@@ -128,17 +139,24 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onError(
     obj: JObject,
     utterance_id: JString,
 ) {
-    let id = env
+    let backend_id = env
         .get_field(obj, "backendId", "I")
         .expect("Failed to get backend ID")
         .i()
         .expect("Failed to cast to int") as u64;
+    let backend_id = BackendId::Android(backend_id);
     let utterance_id = CString::from(CStr::from_ptr(
         env.get_string(utterance_id).unwrap().as_ptr(),
     ))
     .into_string()
     .unwrap();
-    //println!("Call error for {}", utterance_id);
+    let utterance_id = utterance_id.parse::<u64>().unwrap();
+    let utterance_id = UtteranceId::Android(utterance_id);
+    let mut callbacks = CALLBACKS.lock().unwrap();
+    let cb = callbacks.get_mut(&backend_id).unwrap();
+    if let Some(f) = cb.utterance_end.as_mut() {
+        f(utterance_id);
+    }
 }
 
 #[derive(Clone)]

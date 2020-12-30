@@ -7,9 +7,9 @@ fn run() -> Result<(), Error> {
         ..
     } = tts.supported_features();
     if utterance_callbacks {
-        /*tts.on_utterance_begin(Some(Box::new(|utterance| {
+        tts.on_utterance_begin(Some(Box::new(|utterance| {
             println!("Started speaking {:?}", utterance)
-        })))?;*/
+        })))?;
         tts.on_utterance_end(Some(Box::new(|utterance| {
             println!("Finished speaking {:?}", utterance)
         })))?;
@@ -57,6 +57,7 @@ fn run() -> Result<(), Error> {
         tts.set_volume(original_volume)?;
     }
     tts.speak("Goodbye.", false)?;
+    loop {}
     Ok(())
 }
 
