@@ -213,7 +213,9 @@ impl TTS {
         if let Ok(backend) = backend {
             if let Some(id) = backend.0.id() {
                 let mut callbacks = CALLBACKS.lock().unwrap();
+                println!("Initializing callbacks for {:?}", id);
                 callbacks.insert(id, Callbacks::default());
+                println!("Keys after: {:?}", callbacks.keys());
             }
             Ok(backend)
         } else {

@@ -1,11 +1,12 @@
 #[cfg(target_os = "android")]
 use std::collections::HashSet;
+use std::ffi::{CStr, CString};
 use std::os::raw::c_void;
 use std::sync::{Mutex, RwLock};
 use std::thread;
 use std::time::Duration;
 
-use jni::objects::{GlobalRef, JObject};
+use jni::objects::{GlobalRef, JObject, JString};
 use jni::sys::{jfloat, jint, JNI_VERSION_1_6};
 use jni::{JNIEnv, JavaVM};
 use lazy_static::lazy_static;
@@ -50,6 +51,96 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onInit(env: JNIEnv, obj: JObject, st
     }
 }
 
+#[no_mangle]
+#[allow(non_snake_case)]
+pub unsafe extern "C" fn Java_rs_tts_Bridge_onStart(
+    env: JNIEnv,
+    obj: JObject,
+    utterance_id: JString,
+) {
+    let backend_id = env
+        .get_field(obj, "backendId", "I")
+        .expect("Failed to get backend ID")
+        .i()
+        .expect("Failed to cast to int") as u64;
+    let backend_id = BackendId::Android(backend_id);
+    let utterance_id = CString::from(CStr::from_ptr(
+        env.get_string(utterance_id).unwrap().as_ptr(),
+    ))
+    .into_string()
+    .unwrap();
+    let utterance_id = utterance_id.parse::<u64>().unwrap();
+    let utterance_id = UtteranceId::Android(utterance_id);
+    println!("Retrieving callbacks for {:?}", backend_id);
+    let mut callbacks = CALLBACKS.lock().unwrap();
+    println!("Callback keys: {:?}", callbacks.keys());
+    if let Some(cb) = callbacks.get_mut(&backend_id) {
+        if let Some(f) = cb.utterance_begin.as_mut() {
+            f(utterance_id);
+        }
+    }
+}
+
+#[no_mangle]
+#[allow(non_snake_case)]
+pub unsafe extern "C" fn Java_rs_tts_Bridge_onStop(
+    env: JNIEnv,
+    obj: JObject,
+    utterance_id: JString,
+) {
+    let id = env
+        .get_field(obj, "backendId", "I")
+        .expect("Failed to get backend ID")
+        .i()
+        .expect("Failed to cast to int") as u64;
+    let utterance_id = CString::from(CStr::from_ptr(
+        env.get_string(utterance_id).unwrap().as_ptr(),
+    ))
+    .into_string()
+    .unwrap();
+    //println!("Call stop for {}", utterance_id);
+}
+
+#[no_mangle]
+#[allow(non_snake_case)]
+pub unsafe extern "C" fn Java_rs_tts_Bridge_onDone(
+    env: JNIEnv,
+    obj: JObject,
+    utterance_id: JString,
+) {
+    let id = env
+        .get_field(obj, "backendId", "I")
+        .expect("Failed to get backend ID")
+        .i()
+        .expect("Failed to cast to int") as u64;
+    let utterance_id = CString::from(CStr::from_ptr(
+        env.get_string(utterance_id).unwrap().as_ptr(),
+    ))
+    .into_string()
+    .unwrap();
+    //println!("Call done for {}", utterance_id);
+}
+
+#[no_mangle]
+#[allow(non_snake_case)]
+pub unsafe extern "C" fn Java_rs_tts_Bridge_onError(
+    env: JNIEnv,
+    obj: JObject,
+    utterance_id: JString,
+) {
+    let id = env
+        .get_field(obj, "backendId", "I")
+        .expect("Failed to get backend ID")
+        .i()
+        .expect("Failed to cast to int") as u64;
+    let utterance_id = CString::from(CStr::from_ptr(
+        env.get_string(utterance_id).unwrap().as_ptr(),
+    ))
+    .into_string()
+    .unwrap();
+    //println!("Call error for {}", utterance_id);
+}
+
 #[derive(Clone)]
 pub(crate) struct Android {
     id: BackendId,
@@ -76,6 +167,12 @@ impl Android {
                 "android/speech/tts/TextToSpeech",
                 "(Landroid/content/Context;Landroid/speech/tts/TextToSpeech$OnInitListener;)V",
                 &[native_activity.activity().into(), bridge.into()],
+            )?;
+            env.call_method(
+                tts,
+                "setOnUtteranceProgressListener",
+                "(Landroid/speech/tts/UtteranceProgressListener;)I",
+                &[bridge.into()],
             )?;
             {
                 let mut pending = PENDING_INITIALIZATIONS.write().unwrap();
@@ -122,7 +219,7 @@ impl Backend for Android {
             pitch: true,
             volume: false,
             is_speaking: true,
-            utterance_callbacks: false,
+            utterance_callbacks: true,
         }
     }
 
