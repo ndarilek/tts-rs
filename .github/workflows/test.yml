@@ -60,3 +60,24 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           args: --all-features --target wasm32-unknown-unknown
+
+  check_android:
+    name: Check Android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: Swatinem/rust-cache@v1
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          components: rustfmt, clippy
+          override: true
+      - uses: actions-rs/install@v0.1
+        with:
+          crate: cargo-make
+          use-tool-cache: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: make
+          args: build-android-example

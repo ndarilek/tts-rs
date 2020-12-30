@@ -1,4 +1,10 @@
-[tasks.run-android]
+[tasks.build-android-example]
+script = [
+    "cd examples/android",
+    "./gradlew assembleDebug",
+]
+
+[tasks.run-android-example]
 script = [
     "cd examples/android",
     "./gradlew runDebug",

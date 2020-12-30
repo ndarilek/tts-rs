@@ -1,5 +1,8 @@
 use tts::*;
 
+// The `loop {}` below only simulates an app loop.
+// Without it, the `TTS` instance gets dropped before callbacks can run.
+#[allow(unreachable_code)]
 fn run() -> Result<(), Error> {
     let mut tts = TTS::default()?;
     let Features {
