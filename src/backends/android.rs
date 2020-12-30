@@ -107,7 +107,7 @@ impl Backend for Android {
 
     fn supported_features(&self) -> Features {
         Features {
-            stop: false,
+            stop: true,
             rate: false,
             pitch: false,
             volume: false,
@@ -148,7 +148,16 @@ impl Backend for Android {
     }
 
     fn stop(&mut self) -> Result<(), Error> {
-        todo!()
+        let vm = Self::vm()?;
+        let env = vm.get_env()?;
+        let tts = self.tts.as_obj();
+        let rv = env.call_method(tts, "stop", "()I", &[])?;
+        let rv = rv.i()? as i32;
+        if rv == 0 {
+            Ok(())
+        } else {
+            Err(Error::OperationFailed)
+        }
     }
 
     fn min_rate(&self) -> f32 {
