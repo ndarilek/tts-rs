@@ -37,7 +37,7 @@ pub extern "system" fn JNI_OnLoad(vm: JavaVM, _: *mut c_void) -> jint {
 
 #[no_mangle]
 #[allow(non_snake_case)]
-pub unsafe extern "C" fn Java_rs_tts_Bridge_onInit(env: JNIEnv, obj: JObject, status: jint) {
+pub unsafe extern "C" fn Java_rs_tts_Bridge_onInit(env: JNIEnv, obj: JObject, _status: jint) {
     let id = env
         .get_field(obj, "backendId", "I")
         .expect("Failed to get backend ID")
@@ -245,7 +245,7 @@ impl Backend for Android {
         todo!()
     }
 
-    fn set_volume(&mut self, volume: f32) -> Result<(), Error> {
+    fn set_volume(&mut self, _volume: f32) -> Result<(), Error> {
         todo!()
     }
 
