@@ -9,7 +9,7 @@ use jni::objects::{GlobalRef, JObject};
 use jni::sys::{jfloat, jint, JNI_VERSION_1_6};
 use jni::{JNIEnv, JavaVM};
 use lazy_static::lazy_static;
-use log::info;
+use log::{error, info};
 
 use crate::{Backend, BackendId, Error, Features, UtteranceId, CALLBACKS};
 
@@ -37,7 +37,7 @@ pub extern "system" fn JNI_OnLoad(vm: JavaVM, _: *mut c_void) -> jint {
 
 #[no_mangle]
 #[allow(non_snake_case)]
-pub unsafe extern "C" fn Java_rs_tts_Bridge_onInit(env: JNIEnv, obj: JObject, _status: jint) {
+pub unsafe extern "C" fn Java_rs_tts_Bridge_onInit(env: JNIEnv, obj: JObject, status: jint) {
     let id = env
         .get_field(obj, "backendId", "I")
         .expect("Failed to get backend ID")
@@ -45,6 +45,9 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onInit(env: JNIEnv, obj: JObject, _s
         .expect("Failed to cast to int") as u64;
     let mut pending = PENDING_INITIALIZATIONS.write().unwrap();
     (*pending).remove(&id);
+    if status != 0 {
+        error!("Failed to initialize TTS engine");
+    }
 }
 
 #[derive(Clone)]
