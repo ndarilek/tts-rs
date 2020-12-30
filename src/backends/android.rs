@@ -2,7 +2,6 @@
 use std::sync::Mutex;
 
 use jni::objects::{GlobalRef, JObject};
-use jni::JNIEnv;
 use jni::JavaVM;
 use lazy_static::lazy_static;
 use log::info;
@@ -27,7 +26,7 @@ impl Android {
         *backend_id += 1;
         let native_activity = ndk_glue::native_activity();
         let vm = Self::vm()?;
-        let env = vm.attach_current_thread()?;
+        let env = vm.attach_current_thread_permanently()?;
         let tts = env.new_object(
             "android/speech/tts/TextToSpeech",
             "(Landroid/content/Context;Landroid/speech/tts/TextToSpeech$OnInitListener;)V",
@@ -69,7 +68,7 @@ impl Backend for Android {
         println!("Speaking {}, {:?}", text, interrupt);
         let vm = Self::vm()?;
         println!("Retrieved");
-        let env = vm.attach_current_thread()?;
+        let env = vm.get_env()?;
         println!("attached");
         let tts = self.tts.as_obj();
         let text = env.new_string(text)?;

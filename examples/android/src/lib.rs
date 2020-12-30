@@ -1,7 +1,10 @@
+use std::thread;
+use std::time::Duration;
 use tts::*;
 
 fn run() -> Result<(), Error> {
     let mut tts = TTS::default()?;
+    thread::sleep(Duration::from_secs(5));
     let Features {
         utterance_callbacks,
         ..
