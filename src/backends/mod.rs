@@ -5,7 +5,7 @@ mod speech_dispatcher;
 mod tolk;
 
 #[cfg(windows)]
-pub(crate) mod winrt;
+mod winrt;
 
 #[cfg(target_arch = "wasm32")]
 mod web;
@@ -25,8 +25,11 @@ pub(crate) use self::speech_dispatcher::*;
 #[cfg(all(windows, feature = "use_tolk"))]
 pub(crate) use self::tolk::*;
 
+#[cfg(windows)]
+pub(crate) use self::winrt::*;
+
 #[cfg(target_arch = "wasm32")]
-pub use self::web::*;
+pub(crate) use self::web::*;
 
 #[cfg(target_os = "macos")]
 pub(crate) use self::appkit::*;

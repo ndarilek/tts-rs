@@ -198,7 +198,7 @@ impl TTS {
             }
             #[cfg(windows)]
             Backends::WinRT => {
-                let tts = backends::winrt::WinRT::new()?;
+                let tts = backends::WinRT::new()?;
                 Ok(TTS(Box::new(tts)))
             }
             #[cfg(target_os = "macos")]
