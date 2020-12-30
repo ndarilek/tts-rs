@@ -5,9 +5,10 @@
  *   * Screen readers/SAPI via Tolk (requires `use_tolk` Cargo feature)
  *   * WinRT
  * * Linux via [Speech Dispatcher](https://freebsoft.org/speechd)
- * * MacOS
+ * * MacOS/iOS
  *   * AppKit on MacOS 10.13 and below
  *   * AVFoundation on MacOS 10.14 and above, and iOS
+ * * Android
  * * WebAssembly
  */
 
