@@ -1,10 +1,7 @@
-use std::thread;
-use std::time::Duration;
 use tts::*;
 
 fn run() -> Result<(), Error> {
     let mut tts = TTS::default()?;
-    thread::sleep(Duration::from_secs(5));
     let Features {
         utterance_callbacks,
         ..
@@ -65,6 +62,5 @@ fn run() -> Result<(), Error> {
 
 #[cfg_attr(target_os = "android", ndk_glue::main(backtrace = "on"))]
 pub fn main() {
-    println!("xxxx In library");
     run().expect("Failed to run");
 }

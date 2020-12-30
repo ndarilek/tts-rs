@@ -9,7 +9,7 @@ exclude = ["*.cfg", "*.yml"]
 edition = "2018"
 
 [lib]
-crate-type = ["lib", "cdylib", "staticlib"]
+crate-type = ["lib", "dylib", "staticlib"]
 
 [features]
 use_tolk = ["tolk"]

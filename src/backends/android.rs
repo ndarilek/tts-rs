@@ -1,15 +1,49 @@
 #[cfg(target_os = "android")]
-use std::sync::Mutex;
+use std::collections::HashSet;
+use std::os::raw::c_void;
+use std::sync::{Mutex, RwLock};
+use std::thread;
+use std::time::Duration;
 
 use jni::objects::{GlobalRef, JObject};
-use jni::JavaVM;
+use jni::sys::{jint, JNI_VERSION_1_6};
+use jni::{JNIEnv, JavaVM};
 use lazy_static::lazy_static;
 use log::info;
 
 use crate::{Backend, BackendId, Error, Features, UtteranceId, CALLBACKS};
 
 lazy_static! {
+    static ref BRIDGE: Mutex<Option<GlobalRef>> = Mutex::new(None);
     static ref NEXT_BACKEND_ID: Mutex<u64> = Mutex::new(0);
+    static ref PENDING_INITIALIZATIONS: RwLock<HashSet<u64>> = RwLock::new(HashSet::new());
+}
+
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "system" fn JNI_OnLoad(vm: JavaVM, _: *mut c_void) -> jint {
+    let env = vm.get_env().expect("Cannot get reference to the JNIEnv");
+    let b = env
+        .find_class("rs/tts/Bridge")
+        .expect("Failed to find `Bridge`");
+    let b = env
+        .new_global_ref(b)
+        .expect("Failed to create `Bridge` `GlobalRef`");
+    let mut bridge = BRIDGE.lock().unwrap();
+    *bridge = Some(b);
+    JNI_VERSION_1_6
+}
+
+#[no_mangle]
+#[allow(non_snake_case)]
+pub unsafe extern "C" fn Java_rs_tts_Bridge_onInit(env: JNIEnv, obj: JObject, status: jint) {
+    let id = env
+        .get_field(obj, "backendId", "I")
+        .expect("Failed to get backend ID")
+        .i()
+        .expect("Failed to cast to int") as u64;
+    let mut pending = PENDING_INITIALIZATIONS.write().unwrap();
+    (*pending).remove(&id);
 }
 
 #[derive(Clone)]
@@ -22,23 +56,40 @@ impl Android {
     pub(crate) fn new() -> Result<Self, Error> {
         info!("Initializing Android backend");
         let mut backend_id = NEXT_BACKEND_ID.lock().unwrap();
-        let id = BackendId::Android(*backend_id);
+        let bid = *backend_id;
+        let id = BackendId::Android(bid);
         *backend_id += 1;
+        drop(backend_id);
         let native_activity = ndk_glue::native_activity();
         let vm = Self::vm()?;
         let env = vm.attach_current_thread_permanently()?;
-        let tts = env.new_object(
-            "android/speech/tts/TextToSpeech",
-            "(Landroid/content/Context;Landroid/speech/tts/TextToSpeech$OnInitListener;)V",
-            &[
-                native_activity.activity().into(),
-                native_activity.activity().into(),
-            ],
-        )?;
-        println!("Creating global ref");
-        let tts = env.new_global_ref(tts)?;
-        println!("Returning");
-        Ok(Self { id, tts })
+        let bridge = BRIDGE.lock().unwrap();
+        if let Some(bridge) = &*bridge {
+            let bridge = env.new_object(bridge, "(I)V", &[(bid as jint).into()])?;
+            let tts = env.new_object(
+                "android/speech/tts/TextToSpeech",
+                "(Landroid/content/Context;Landroid/speech/tts/TextToSpeech$OnInitListener;)V",
+                &[native_activity.activity().into(), bridge.into()],
+            )?;
+            {
+                let mut pending = PENDING_INITIALIZATIONS.write().unwrap();
+                (*pending).insert(bid);
+            }
+            let tts = env.new_global_ref(tts)?;
+            // This hack makes my brain bleed.
+            loop {
+                {
+                    let pending = PENDING_INITIALIZATIONS.read().unwrap();
+                    if !(*pending).contains(&bid) {
+                        break;
+                    }
+                }
+                thread::sleep(Duration::from_millis(5));
+            }
+            Ok(Self { id, tts })
+        } else {
+            Err(Error::NoneError)
+        }
     }
 
     fn vm() -> Result<JavaVM, jni::errors::Error> {
@@ -65,15 +116,11 @@ impl Backend for Android {
     }
 
     fn speak(&mut self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error> {
-        println!("Speaking {}, {:?}", text, interrupt);
         let vm = Self::vm()?;
-        println!("Retrieved");
         let env = vm.get_env()?;
-        println!("attached");
         let tts = self.tts.as_obj();
         let text = env.new_string(text)?;
         let queue_mode = if interrupt { 0 } else { 1 };
-        println!("Calling");
         env.call_method(
             tts,
             "speak",
@@ -85,7 +132,6 @@ impl Backend for Android {
                 JObject::null().into(),
             ],
         )?;
-        println!("Returning");
         Ok(None)
     }
 
@@ -94,15 +140,15 @@ impl Backend for Android {
     }
 
     fn min_rate(&self) -> f32 {
-        todo!()
+        0.1
     }
 
     fn max_rate(&self) -> f32 {
-        todo!()
+        10.
     }
 
     fn normal_rate(&self) -> f32 {
-        todo!()
+        1.
     }
 
     fn get_rate(&self) -> Result<f32, Error> {
@@ -114,15 +160,15 @@ impl Backend for Android {
     }
 
     fn min_pitch(&self) -> f32 {
-        todo!()
+        0.1
     }
 
     fn max_pitch(&self) -> f32 {
-        todo!()
+        2.
     }
 
     fn normal_pitch(&self) -> f32 {
-        todo!()
+        1.
     }
 
     fn get_pitch(&self) -> Result<f32, Error> {
