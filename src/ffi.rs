@@ -41,7 +41,7 @@ pub extern "C" fn tts_clear_error() {
 }
 
 /// Create a new `TTS` instance with the specified backend.
-/// If an error occures, returns a null pointer,
+/// If an error occurs, returns a null pointer,
 /// Call `tts_get_error()` for more information about the specific error.
 #[no_mangle]
 pub extern "C" fn tts_new(backend: Backends) -> *mut TTS {
@@ -55,7 +55,7 @@ pub extern "C" fn tts_new(backend: Backends) -> *mut TTS {
 }
 
 /// Create a new TTS object with the default backend.
-/// If an error occures, returns a null pointer,
+/// If an error occurs, returns a null pointer,
 /// Call `tts_get_error()` for more information about the specific error.
 #[no_mangle]
 pub extern "C" fn tts_default() -> *mut TTS {
