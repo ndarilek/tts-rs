@@ -1,13 +1,13 @@
 [package]
 name = "tts_winrt_bindings"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Nolan Darilek <nolan@thewordnerd.info>"]
 description = "Internal crate used by `tts`"
 license = "MIT"
 edition = "2018"
 
 [dependencies]
-winrt = "0.7"
+windows = "0.2"
 
 [build-dependencies]
-winrt = "0.7"
+windows = "0.2"

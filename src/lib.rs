@@ -115,7 +115,7 @@ pub enum Error {
     JavaScriptError(wasm_bindgen::JsValue),
     #[cfg(windows)]
     #[error("WinRT error")]
-    WinRT(winrt::Error),
+    WinRT(windows::Error),
     #[error("Unsupported feature")]
     UnsupportedFeature,
     #[error("Out of range")]
