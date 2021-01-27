@@ -197,15 +197,14 @@ impl Backend for AppKit {
     }
 
     fn is_speaking(&self) -> Result<bool, Error> {
-        #[cfg(not(target_arch = "aarch64"))]
-        let yes: i8 = YES;
+        let result: i8 = unsafe { msg_send![self.0, isSpeaking] };
 
         #[cfg(target_arch = "aarch64")]
-        let yes: i8 = match YES { true => 1, false => 0 };
+        let is_speaking = result == YES as i8;
+        #[cfg(not(target_arch = "aarch64"))]
+        let is_speaking = result == YES;
 
-        let is_speaking: i8 = unsafe { msg_send![self.0, isSpeaking] };
-
-        Ok(is_speaking == yes)
+        Ok(is_speaking)
     }
 }
 
