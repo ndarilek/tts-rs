@@ -2,7 +2,7 @@
  * a Text-To-Speech (TTS) library providing high-level interfaces to a variety of backends.
  * Currently supported backends are:
  * * Windows
- *   * Screen readers/SAPI via Tolk (requires `use_tolk` Cargo feature)
+ *   * Screen readers/SAPI via Tolk (requires `tolk` Cargo feature)
  *   * WinRT
  * * Linux via [Speech Dispatcher](https://freebsoft.org/speechd)
  * * MacOS/iOS
@@ -39,7 +39,7 @@ pub enum Backends {
     SpeechDispatcher,
     #[cfg(target_arch = "wasm32")]
     Web,
-    #[cfg(all(windows, feature = "use_tolk"))]
+    #[cfg(all(windows, feature = "tolk"))]
     Tolk,
     #[cfg(windows)]
     WinRT,
@@ -119,7 +119,7 @@ pub enum Error {
     JavaScriptError(wasm_bindgen::JsValue),
     #[cfg(windows)]
     #[error("WinRT error")]
-    WinRT(winrt::Error),
+    WinRT(windows::Error),
     #[error("Unsupported feature")]
     UnsupportedFeature,
     #[error("Out of range")]
@@ -191,7 +191,7 @@ impl TTS {
                 let tts = backends::Web::new()?;
                 Ok(TTS(Box::new(tts)))
             }
-            #[cfg(all(windows, feature = "use_tolk"))]
+            #[cfg(all(windows, feature = "tolk"))]
             Backends::Tolk => {
                 let tts = backends::Tolk::new();
                 if let Some(tts) = tts {
@@ -229,13 +229,13 @@ impl TTS {
     pub fn default() -> Result<TTS, Error> {
         #[cfg(target_os = "linux")]
         let tts = TTS::new(Backends::SpeechDispatcher);
-        #[cfg(all(windows, feature = "use_tolk"))]
+        #[cfg(all(windows, feature = "tolk"))]
         let tts = if let Ok(tts) = TTS::new(Backends::Tolk) {
             Ok(tts)
         } else {
             TTS::new(Backends::WinRT)
         };
-        #[cfg(all(windows, not(feature = "use_tolk")))]
+        #[cfg(all(windows, not(feature = "tolk")))]
         let tts = TTS::new(Backends::WinRT);
         #[cfg(target_arch = "wasm32")]
         let tts = TTS::new(Backends::Web);

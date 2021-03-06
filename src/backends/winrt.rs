@@ -13,8 +13,8 @@ use tts_winrt_bindings::windows::{foundation::TypedEventHandler, media::core::Me
 
 use crate::{Backend, BackendId, Error, Features, UtteranceId, CALLBACKS};
 
-impl From<winrt::Error> for Error {
-    fn from(e: winrt::Error) -> Self {
+impl From<windows::Error> for Error {
+    fn from(e: windows::Error) -> Self {
         Error::WinRT(e)
     }
 }
@@ -77,60 +77,48 @@ impl WinRT {
         drop(backend_to_speech_synthesizer);
         let bid_clone = bid;
         player.media_ended(TypedEventHandler::new(
-            move |sender: &MediaPlayer, _args| {
-                let backend_to_media_player = BACKEND_TO_MEDIA_PLAYER.lock().unwrap();
-                let id = backend_to_media_player.iter().find(|v| v.1 == sender);
-                if let Some((id, _)) = id {
-                    let mut utterances = UTTERANCES.lock().unwrap();
-                    if let Some(utterances) = utterances.get_mut(id) {
-                        if let Some(utterance) = utterances.pop_front() {
-                            let mut callbacks = CALLBACKS.lock().unwrap();
-                            let callbacks = callbacks.get_mut(id).unwrap();
-                            if let Some(callback) = callbacks.utterance_end.as_mut() {
-                                callback(utterance.id);
-                            }
-                            if let Some(utterance) = utterances.front() {
-                                let backend_to_speech_synthesizer =
-                                    BACKEND_TO_SPEECH_SYNTHESIZER.lock().unwrap();
-                                let id = backend_to_speech_synthesizer
-                                    .iter()
-                                    .find(|v| *v.0 == bid_clone);
-                                if let Some((_, tts)) = id {
-                                    tts.options()?.set_speaking_rate(utterance.rate.into())?;
-                                    tts.options()?.set_audio_pitch(utterance.pitch.into())?;
-                                    tts.options()?.set_audio_volume(utterance.volume.into())?;
-                                    let stream = tts
-                                        .synthesize_text_to_stream_async(utterance.text.as_str())?
-                                        .get()?;
-                                    let content_type = stream.content_type()?;
-                                    let source =
-                                        MediaSource::create_from_stream(stream, content_type)?;
-                                    sender.set_source(source)?;
-                                    sender.play()?;
-                                    if let Some(callback) = callbacks.utterance_begin.as_mut() {
-                                        callback(utterance.id);
+            move |sender: &Option<MediaPlayer>, _args| {
+                if let Some(sender) = sender {
+                    let backend_to_media_player = BACKEND_TO_MEDIA_PLAYER.lock().unwrap();
+                    let id = backend_to_media_player.iter().find(|v| v.1 == sender);
+                    if let Some((id, _)) = id {
+                        let mut utterances = UTTERANCES.lock().unwrap();
+                        if let Some(utterances) = utterances.get_mut(id) {
+                            if let Some(utterance) = utterances.pop_front() {
+                                let mut callbacks = CALLBACKS.lock().unwrap();
+                                let callbacks = callbacks.get_mut(id).unwrap();
+                                if let Some(callback) = callbacks.utterance_end.as_mut() {
+                                    callback(utterance.id);
+                                }
+                                if let Some(utterance) = utterances.front() {
+                                    let backend_to_speech_synthesizer =
+                                        BACKEND_TO_SPEECH_SYNTHESIZER.lock().unwrap();
+                                    let id = backend_to_speech_synthesizer
+                                        .iter()
+                                        .find(|v| *v.0 == bid_clone);
+                                    if let Some((_, tts)) = id {
+                                        tts.options()?.set_speaking_rate(utterance.rate.into())?;
+                                        tts.options()?.set_audio_pitch(utterance.pitch.into())?;
+                                        tts.options()?.set_audio_volume(utterance.volume.into())?;
+                                        let stream = tts
+                                            .synthesize_text_to_stream_async(
+                                                utterance.text.as_str(),
+                                            )?
+                                            .get()?;
+                                        let content_type = stream.content_type()?;
+                                        let source =
+                                            MediaSource::create_from_stream(stream, content_type)?;
+                                        sender.set_source(source)?;
+                                        sender.play()?;
+                                        if let Some(callback) = callbacks.utterance_begin.as_mut() {
+                                            callback(utterance.id);
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
-                /*let source = sender.source()?;
-                let source: MediaPlaybackList = source.try_into()?;
-                source.items()?.clear()?;
-                let backend_to_media_player = BACKEND_TO_MEDIA_PLAYER.lock().unwrap();
-                let id = backend_to_media_player.iter().find(|v| v.1 == sender);
-                if let Some(id) = id {
-                    let id = id.0;
-                    let mut callbacks = CALLBACKS.lock().unwrap();
-                    let callbacks = callbacks.get_mut(&id).unwrap();
-                    if let Some(callback) = callbacks.utterance_end.as_mut() {
-                        let last_spoken_utterance = LAST_SPOKEN_UTTERANCE.lock().unwrap();
-                        if let Some(utterance_id) = last_spoken_utterance.get(&id) {
-                            callback(*utterance_id);
-                        }
-                    }
-                }*/
                 Ok(())
             },
         ))?;
