@@ -3,6 +3,7 @@
 use std::{
     cell::RefCell,
     ffi::{CStr, CString, NulError},
+    os::raw::c_char,
     ptr,
 };
 
@@ -24,7 +25,7 @@ fn set_last_error<E: Into<Vec<u8>>>(err: E) -> Result<(), NulError> {
 /// This string will be valid until at least the next call to `tts_get_error`.
 /// It is never called internally by the library.
 #[no_mangle]
-pub extern "C" fn tts_get_error() -> *const i8 {
+pub extern "C" fn tts_get_error() -> *const c_char {
     LAST_ERROR.with(|err| match &*err.borrow() {
         Some(e) => e.as_ptr(),
         None => ptr::null(),
@@ -91,7 +92,7 @@ pub unsafe extern "C" fn tts_supported_features(tts: *const TTS) -> Features {
 #[no_mangle]
 pub unsafe extern "C" fn tts_speak(
     tts: *mut TTS,
-    text: *const i8,
+    text: *const c_char,
     interrupt: bool,
     utterance: *mut *mut UtteranceId,
 ) -> bool {
