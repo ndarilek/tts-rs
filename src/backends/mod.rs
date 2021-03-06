@@ -16,6 +16,7 @@ mod appkit;
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 mod av_foundation;
 
+/// cbindgen:ignore
 #[cfg(target_os = "android")]
 mod android;
 

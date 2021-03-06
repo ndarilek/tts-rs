@@ -1,3 +1,8 @@
+[tasks.gen-c-bindings]
+install_crate = "cbindgen"
+command = "cbindgen"
+args = ["-c", "cbindgen.toml", "-o", "target/release/tts-rs.h"]
+
 [tasks.build-android-example]
 script = [
     "cd examples/android",

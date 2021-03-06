@@ -11,14 +11,22 @@ edition = "2018"
 [lib]
 crate-type = ["lib", "cdylib", "staticlib"]
 
+[features]
+use_tolk = ["tolk"]
+ffi = []
+
 [dependencies]
 dyn-clonable = "0.9"
 lazy_static = "1"
+libc = {version = "0.2", optional = true}
 log = "0.4"
 thiserror = "1"
 
 [dev-dependencies]
 env_logger = "0.8"
+
+[build-dependencies]
+cbindgen = "0.18.0"
 
 [target.'cfg(windows)'.dependencies]
 tolk = { version = "0.3", optional = true }
