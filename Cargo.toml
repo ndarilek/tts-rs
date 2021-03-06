@@ -25,6 +25,9 @@ thiserror = "1"
 [dev-dependencies]
 env_logger = "0.8"
 
+[build-dependencies]
+cbindgen = "0.18.0"
+
 [target.'cfg(windows)'.dependencies]
 tolk = { version = "0.3", optional = true }
 windows = "0.2"
