@@ -13,7 +13,7 @@ crate-type = ["lib", "cdylib", "staticlib"]
 
 [features]
 use_tolk = ["tolk"]
-ffi = ["libc"]
+ffi = []
 
 [dependencies]
 dyn-clonable = "0.9"

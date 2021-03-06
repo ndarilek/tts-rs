@@ -1,6 +1,5 @@
 //! Bindings to this library to allow it to be called from C/C++.
 
-use libc::{c_char, c_float};
 use std::{
     cell::RefCell,
     ffi::{CStr, CString, NulError},
@@ -25,7 +24,7 @@ fn set_last_error<E: Into<Vec<u8>>>(err: E) -> Result<(), NulError> {
 /// This string will be valid until at least the next call to `tts_get_error`.
 /// It is never called internally by the library.
 #[no_mangle]
-pub extern "C" fn tts_get_error() -> *const c_char {
+pub extern "C" fn tts_get_error() -> *const i8 {
     LAST_ERROR.with(|err| match &*err.borrow() {
         Some(e) => e.as_ptr(),
         None => ptr::null(),
@@ -92,7 +91,7 @@ pub unsafe extern "C" fn tts_supported_features(tts: *const TTS) -> Features {
 #[no_mangle]
 pub unsafe extern "C" fn tts_speak(
     tts: *mut TTS,
-    text: *const c_char,
+    text: *const i8,
     interrupt: bool,
     utterance: *mut *mut UtteranceId,
 ) -> bool {
@@ -146,21 +145,21 @@ pub unsafe extern "C" fn tts_stop(tts: *mut TTS) -> bool {
 /// Returns the minimum rate for this speech synthesizer.
 /// `tts` must be a valid pointer to a TTS object.
 #[no_mangle]
-pub unsafe extern "C" fn tts_min_rate(tts: *const TTS) -> c_float {
+pub unsafe extern "C" fn tts_min_rate(tts: *const TTS) -> f32 {
     tts.as_ref().unwrap().min_rate()
 }
 
 /// Returns the maximum rate for this speech synthesizer.
 /// `tts` must be a valid pointer to a TTS object.
 #[no_mangle]
-pub unsafe extern "C" fn tts_max_rate(tts: *const TTS) -> c_float {
+pub unsafe extern "C" fn tts_max_rate(tts: *const TTS) -> f32 {
     tts.as_ref().unwrap().max_rate()
 }
 
 /// Returns the normal rate for this speech synthesizer.
 /// `tts` must be a valid pointer to a TTS object.
 #[no_mangle]
-pub unsafe extern "C" fn tts_normal_rate(tts: *const TTS) -> c_float {
+pub unsafe extern "C" fn tts_normal_rate(tts: *const TTS) -> f32 {
     tts.as_ref().unwrap().normal_rate()
 }
 
@@ -169,7 +168,7 @@ pub unsafe extern "C" fn tts_normal_rate(tts: *const TTS) -> c_float {
 /// or if `tts` is NULL.
 /// Does nothing if `rate` is NULL.
 #[no_mangle]
-pub unsafe extern "C" fn tts_get_rate(tts: *const TTS, rate: *mut c_float) -> bool {
+pub unsafe extern "C" fn tts_get_rate(tts: *const TTS, rate: *mut f32) -> bool {
     if tts.is_null() {
         return false;
     }
@@ -191,7 +190,7 @@ pub unsafe extern "C" fn tts_get_rate(tts: *const TTS, rate: *mut c_float) -> bo
 /// Returns true on success, false on error (likely that the backend doesn't support rate changes)
 /// or if `tts` is NULL.
 #[no_mangle]
-pub unsafe extern "C" fn tts_set_rate(tts: *mut TTS, rate: c_float) -> bool {
+pub unsafe extern "C" fn tts_set_rate(tts: *mut TTS, rate: f32) -> bool {
     if tts.is_null() {
         return false;
     }
@@ -207,21 +206,21 @@ pub unsafe extern "C" fn tts_set_rate(tts: *mut TTS, rate: c_float) -> bool {
 /// Returns the minimum pitch for this speech synthesizer.
 /// `tts` must be a valid pointer to a TTS object.
 #[no_mangle]
-pub unsafe extern "C" fn tts_min_pitch(tts: *const TTS) -> c_float {
+pub unsafe extern "C" fn tts_min_pitch(tts: *const TTS) -> f32 {
     tts.as_ref().unwrap().min_pitch()
 }
 
 /// Returns the maximum pitch for this speech synthesizer.
 /// `tts` must be a valid pointer to a TTS object.
 #[no_mangle]
-pub unsafe extern "C" fn tts_max_pitch(tts: *const TTS) -> c_float {
+pub unsafe extern "C" fn tts_max_pitch(tts: *const TTS) -> f32 {
     tts.as_ref().unwrap().max_pitch()
 }
 
 /// Returns the normal pitch for this speech synthesizer.
 /// `tts` must be a valid pointer to a TTS object.
 #[no_mangle]
-pub unsafe extern "C" fn tts_normal_pitch(tts: *const TTS) -> c_float {
+pub unsafe extern "C" fn tts_normal_pitch(tts: *const TTS) -> f32 {
     tts.as_ref().unwrap().normal_pitch()
 }
 
@@ -230,7 +229,7 @@ pub unsafe extern "C" fn tts_normal_pitch(tts: *const TTS) -> c_float {
 /// or if `tts` is NULL.
 /// Does nothing if `pitch` is NULL.
 #[no_mangle]
-pub unsafe extern "C" fn tts_get_pitch(tts: *const TTS, pitch: *mut c_float) -> bool {
+pub unsafe extern "C" fn tts_get_pitch(tts: *const TTS, pitch: *mut f32) -> bool {
     if tts.is_null() {
         return false;
     }
@@ -252,7 +251,7 @@ pub unsafe extern "C" fn tts_get_pitch(tts: *const TTS, pitch: *mut c_float) -> 
 /// Returns true on success, false on error (likely that the backend doesn't support pitch changes)
 /// or if `tts` is NULL.
 #[no_mangle]
-pub unsafe extern "C" fn tts_set_pitch(tts: *mut TTS, pitch: c_float) -> bool {
+pub unsafe extern "C" fn tts_set_pitch(tts: *mut TTS, pitch: f32) -> bool {
     if tts.is_null() {
         return false;
     }
@@ -268,21 +267,21 @@ pub unsafe extern "C" fn tts_set_pitch(tts: *mut TTS, pitch: c_float) -> bool {
 /// Returns the minimum volume for this speech synthesizer.
 /// `tts` must be a valid pointer to a TTS object.
 #[no_mangle]
-pub unsafe extern "C" fn tts_min_volume(tts: *const TTS) -> c_float {
+pub unsafe extern "C" fn tts_min_volume(tts: *const TTS) -> f32 {
     tts.as_ref().unwrap().min_volume()
 }
 
 /// Returns the maximum volume for this speech synthesizer.
 /// `tts` must be a valid pointer to a TTS object.
 #[no_mangle]
-pub unsafe extern "C" fn tts_max_volume(tts: *const TTS) -> c_float {
+pub unsafe extern "C" fn tts_max_volume(tts: *const TTS) -> f32 {
     tts.as_ref().unwrap().max_volume()
 }
 
 /// Returns the normal volume for this speech synthesizer.
 /// `tts` must be a valid pointer to a TTS object.
 #[no_mangle]
-pub unsafe extern "C" fn tts_normal_volume(tts: *const TTS) -> c_float {
+pub unsafe extern "C" fn tts_normal_volume(tts: *const TTS) -> f32 {
     tts.as_ref().unwrap().normal_volume()
 }
 
@@ -291,7 +290,7 @@ pub unsafe extern "C" fn tts_normal_volume(tts: *const TTS) -> c_float {
 /// or if `tts` is NULL.
 /// Does nothing if `volume` is NULL.
 #[no_mangle]
-pub unsafe extern "C" fn tts_get_volume(tts: *const TTS, volume: *mut c_float) -> bool {
+pub unsafe extern "C" fn tts_get_volume(tts: *const TTS, volume: *mut f32) -> bool {
     if tts.is_null() {
         return false;
     }
@@ -313,7 +312,7 @@ pub unsafe extern "C" fn tts_get_volume(tts: *const TTS, volume: *mut c_float) -
 /// Returns true on success, false on error (likely that the backend doesn't support volume changes)
 /// or if `tts` is NULL.
 #[no_mangle]
-pub unsafe extern "C" fn tts_set_volume(tts: *mut TTS, volume: c_float) -> bool {
+pub unsafe extern "C" fn tts_set_volume(tts: *mut TTS, volume: f32) -> bool {
     if tts.is_null() {
         return false;
     }
