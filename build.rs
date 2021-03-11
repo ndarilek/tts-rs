@@ -1,4 +1,5 @@
 fn main() {
+    #[cfg(windows)]
     if std::env::var("TARGET").unwrap().contains("windows") {
         windows::build!(
             windows::foundation::{EventRegistrationToken, IAsyncOperation, TypedEventHandler},
@@ -7,7 +8,8 @@ fn main() {
             windows::media::speech_synthesis::{SpeechSynthesisStream, SpeechSynthesizer, SpeechSynthesizerOptions},
             windows::storage::streams::IRandomAccessStream,
         );
-    } else if std::env::var("TARGET").unwrap().contains("-apple") {
+    }
+    if std::env::var("TARGET").unwrap().contains("-apple") {
         println!("cargo:rustc-link-lib=framework=AVFoundation");
         if !std::env::var("CARGO_CFG_TARGET_OS")
             .unwrap()
