@@ -23,7 +23,9 @@ env_logger = "0.8"
 [target.'cfg(windows)'.dependencies]
 tolk = { version = "0.3", optional = true }
 windows = "0.4"
-tts_winrt_bindings = { version = "0.3", path="winrt_bindings" }
+
+[target.'cfg(windows)'.build-dependencies]
+windows = "0.4"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 speech-dispatcher = "0.7"

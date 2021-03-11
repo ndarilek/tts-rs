@@ -5,11 +5,16 @@ use std::sync::Mutex;
 use lazy_static::lazy_static;
 use log::{info, trace};
 
-use tts_winrt_bindings::windows::media::playback::{
-    MediaPlaybackState, MediaPlayer, MediaPlayerAudioCategory,
+mod bindings;
+
+use bindings::windows::{
+    foundation::TypedEventHandler,
+    media::{
+        core::MediaSource,
+        playback::{MediaPlaybackState, MediaPlayer, MediaPlayerAudioCategory},
+        speech_synthesis::SpeechSynthesizer,
+    },
 };
-use tts_winrt_bindings::windows::media::speech_synthesis::SpeechSynthesizer;
-use tts_winrt_bindings::windows::{foundation::TypedEventHandler, media::core::MediaSource};
 
 use crate::{Backend, BackendId, Error, Features, UtteranceId, CALLBACKS};
 
