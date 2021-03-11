@@ -1,8 +1,9 @@
 fn main() {
     windows::build!(
-        windows::foundation::TypedEventHandler,
+        windows::foundation::{EventRegistrationToken, IAsyncOperation, TypedEventHandler},
         windows::media::core::MediaSource,
-        windows::media::playback::{MediaPlaybackState, MediaPlayer, MediaPlayerAudioCategory},
-        windows::media::speech_synthesis::SpeechSynthesizer,
+        windows::media::playback::{MediaPlaybackSession, MediaPlaybackState, MediaPlayer, MediaPlayerAudioCategory},
+        windows::media::speech_synthesis::{SpeechSynthesisStream, SpeechSynthesizer, SpeechSynthesizerOptions},
+        windows::storage::streams::IRandomAccessStream,
     );
 }
