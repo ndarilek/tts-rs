@@ -125,12 +125,16 @@ impl AvFoundation {
         let delegate_obj: *mut Object = unsafe { msg_send![delegate_class, new] };
         let mut backend_id = NEXT_BACKEND_ID.lock().unwrap();
         let rv = unsafe {
+            trace!("Creating synth");
             let synth: *mut Object = msg_send![class!(AVSpeechSynthesizer), new];
+            trace!("Allocated {:?}", synth);
             delegate_obj
                 .as_mut()
                 .unwrap()
                 .set_ivar("backend_id", *backend_id);
+            trace!("Set backend ID in delegate");
             let _: () = msg_send![synth, setDelegate: delegate_obj];
+            trace!("Assigned delegate: {:?}", delegate_obj);
             AvFoundation {
                 id: BackendId::AvFoundation(*backend_id),
                 delegate: delegate_obj,
