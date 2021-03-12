@@ -37,16 +37,22 @@ impl AvFoundation {
             _synth: *const Object,
             utterance: id,
         ) {
+            trace!("speech_synthesizer_did_start_speech_utterance");
             unsafe {
                 let backend_id: u64 = *this.get_ivar("backend_id");
                 let backend_id = BackendId::AvFoundation(backend_id);
+                trace!("Locking callbacks");
                 let mut callbacks = CALLBACKS.lock().unwrap();
+                trace!("Locked");
                 let callbacks = callbacks.get_mut(&backend_id).unwrap();
                 if let Some(callback) = callbacks.utterance_begin.as_mut() {
+                    trace!("Calling utterance_begin");
                     let utterance_id = UtteranceId::AvFoundation(utterance);
                     callback(utterance_id);
+                    trace!("Called");
                 }
             }
+            trace!("Done speech_synthesizer_did_start_speech_utterance");
         }
 
         extern "C" fn speech_synthesizer_did_finish_speech_utterance(
@@ -55,16 +61,22 @@ impl AvFoundation {
             _synth: *const Object,
             utterance: id,
         ) {
+            trace!("speech_synthesizer_did_finish_speech_utterance");
             unsafe {
                 let backend_id: u64 = *this.get_ivar("backend_id");
                 let backend_id = BackendId::AvFoundation(backend_id);
+                trace!("Locking callbacks");
                 let mut callbacks = CALLBACKS.lock().unwrap();
+                trace!("Locked");
                 let callbacks = callbacks.get_mut(&backend_id).unwrap();
                 if let Some(callback) = callbacks.utterance_end.as_mut() {
+                    trace!("Calling utterance_end");
                     let utterance_id = UtteranceId::AvFoundation(utterance);
                     callback(utterance_id);
+                    trace!("Called");
                 }
             }
+            trace!("Done speech_synthesizer_did_finish_speech_utterance");
         }
 
         extern "C" fn speech_synthesizer_did_cancel_speech_utterance(
@@ -73,16 +85,22 @@ impl AvFoundation {
             _synth: *const Object,
             utterance: id,
         ) {
+            trace!("speech_synthesizer_did_cancel_speech_utterance");
             unsafe {
                 let backend_id: u64 = *this.get_ivar("backend_id");
                 let backend_id = BackendId::AvFoundation(backend_id);
+                trace!("Locking callbacks");
                 let mut callbacks = CALLBACKS.lock().unwrap();
+                trace!("Locked");
                 let callbacks = callbacks.get_mut(&backend_id).unwrap();
                 if let Some(callback) = callbacks.utterance_stop.as_mut() {
+                    trace!("Calling utterance_stop");
                     let utterance_id = UtteranceId::AvFoundation(utterance);
                     callback(utterance_id);
+                    trace!("Called");
                 }
             }
+            trace!("Done speech_synthesizer_did_cancel_speech_utterance");
         }
 
         unsafe {
