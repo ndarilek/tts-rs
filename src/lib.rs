@@ -243,9 +243,9 @@ impl TTS {
             let str: *const c_char = msg_send![version, UTF8String];
             let str = CStr::from_ptr(str);
             let str = str.to_string_lossy();
-            let version: Vec<&str> = str.split(" ").collect();
+            let version: Vec<&str> = str.split(' ').collect();
             let version = version[1];
-            let version_parts: Vec<&str> = version.split(".").collect();
+            let version_parts: Vec<&str> = version.split('.').collect();
             let major_version: i8 = version_parts[0].parse().unwrap();
             let minor_version: i8 = version_parts[1].parse().unwrap();
             if major_version >= 11 || minor_version >= 14 {

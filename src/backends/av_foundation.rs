@@ -116,7 +116,7 @@ impl AvFoundation {
             AvFoundation {
                 id: BackendId::AvFoundation(*backend_id),
                 delegate: delegate_obj,
-                synth: synth,
+                synth,
                 rate: 0.5,
                 volume: 1.,
                 pitch: 1.,
