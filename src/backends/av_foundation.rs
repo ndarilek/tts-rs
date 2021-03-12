@@ -168,13 +168,21 @@ impl Backend for AvFoundation {
         }
         let utterance: id;
         unsafe {
+            trace!("Allocating utterance string");
             let str = NSString::alloc(nil).init_str(text);
+            trace!("Allocating utterance");
             utterance = msg_send![class!(AVSpeechUtterance), alloc];
+            trace!("Initializing utterance");
             let _: () = msg_send![utterance, initWithString: str];
+            trace!("Setting rate to {}", self.rate);
             let _: () = msg_send![utterance, setRate: self.rate];
+            trace!("Setting volume to {}", self.volume);
             let _: () = msg_send![utterance, setVolume: self.volume];
+            trace!("Setting pitch to {}", self.pitch);
             let _: () = msg_send![utterance, setPitchMultiplier: self.pitch];
+            trace!("Enqueuing");
             let _: () = msg_send![self.synth, speakUtterance: utterance];
+            trace!("Done queuing");
         }
         Ok(Some(UtteranceId::AvFoundation(utterance)))
     }
