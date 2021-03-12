@@ -198,7 +198,7 @@ impl Backend for AppKit {
 
     fn is_speaking(&self) -> Result<bool, Error> {
         let is_speaking: i8 = unsafe { msg_send![self.0, isSpeaking] };
-        Ok(is_speaking == YES)
+        Ok(is_speaking == YES as i8)
     }
 }
 
