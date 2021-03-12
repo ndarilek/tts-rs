@@ -145,7 +145,7 @@ impl Backend for AvFoundation {
 
     fn speak(&mut self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error> {
         trace!("speak({}, {})", text, interrupt);
-        if interrupt {
+        if interrupt && self.is_speaking()? {
             self.stop()?;
         }
         let utterance: id;
