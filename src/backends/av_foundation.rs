@@ -226,6 +226,7 @@ impl Backend for AvFoundation {
     }
 
     fn set_pitch(&mut self, pitch: f32) -> Result<(), Error> {
+        trace!("set_pitch({})", pitch);
         self.pitch = pitch;
         Ok(())
     }
@@ -247,11 +248,13 @@ impl Backend for AvFoundation {
     }
 
     fn set_volume(&mut self, volume: f32) -> Result<(), Error> {
+        trace!("set_volume({})", volume);
         self.volume = volume;
         Ok(())
     }
 
     fn is_speaking(&self) -> Result<bool, Error> {
+        trace!("is_speaking()");
         let is_speaking: i8 = unsafe { msg_send![self.synth, isSpeaking] };
         Ok(is_speaking == 1)
     }
