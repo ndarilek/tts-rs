@@ -269,7 +269,7 @@ impl Backend for AvFoundation {
     fn is_speaking(&self) -> Result<bool, Error> {
         trace!("is_speaking()");
         let is_speaking: i8 = unsafe { msg_send![self.synth, isSpeaking] };
-        Ok(is_speaking != NO)
+        Ok(is_speaking != NO as i8)
     }
 }
 
