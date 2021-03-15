@@ -177,7 +177,7 @@ impl Backend for AvFoundation {
             trace!("Allocating utterance");
             utterance = msg_send![class!(AVSpeechUtterance), alloc];
             trace!("Initializing utterance");
-            let _: () = msg_send![utterance, initWithString: str];
+            utterance = msg_send![utterance, initWithString: str];
             trace!("Setting rate to {}", self.rate);
             let _: () = msg_send![utterance, setRate: self.rate];
             trace!("Setting volume to {}", self.volume);
