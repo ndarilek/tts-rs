@@ -170,7 +170,7 @@ impl Backend for AvFoundation {
         if interrupt && self.is_speaking()? {
             self.stop()?;
         }
-        let utterance: id;
+        let mut utterance: id;
         unsafe {
             trace!("Allocating utterance string");
             let str = NSString::alloc(nil).init_str(text);
