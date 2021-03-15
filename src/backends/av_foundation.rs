@@ -2,7 +2,7 @@
 #[link(name = "AVFoundation", kind = "framework")]
 use std::sync::Mutex;
 
-use cocoa_foundation::base::{id, nil};
+use cocoa_foundation::base::{id, nil, NO};
 use cocoa_foundation::foundation::NSString;
 use lazy_static::lazy_static;
 use log::{info, trace};
@@ -269,7 +269,7 @@ impl Backend for AvFoundation {
     fn is_speaking(&self) -> Result<bool, Error> {
         trace!("is_speaking()");
         let is_speaking: i8 = unsafe { msg_send![self.synth, isSpeaking] };
-        Ok(is_speaking != 0)
+        Ok(is_speaking != NO)
     }
 }
 
