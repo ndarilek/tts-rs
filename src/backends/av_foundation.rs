@@ -173,7 +173,8 @@ impl Backend for AvFoundation {
         let mut utterance: id;
         unsafe {
             trace!("Allocating utterance string");
-            let str = NSString::alloc(nil).init_str(text);
+            let mut str = NSString::alloc(nil);
+            str = str.init_str(text);
             trace!("Allocating utterance");
             utterance = msg_send![class!(AVSpeechUtterance), alloc];
             trace!("Initializing utterance");
