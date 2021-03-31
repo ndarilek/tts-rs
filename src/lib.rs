@@ -208,7 +208,7 @@ impl Tts {
             #[cfg(target_os = "android")]
             Backends::Android => {
                 let tts = backends::Android::new()?;
-                Ok(TTS(Box::new(tts)))
+                Ok(Tts(Box::new(tts)))
             }
         };
         if let Ok(backend) = backend {
