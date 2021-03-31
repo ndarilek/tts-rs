@@ -39,7 +39,7 @@ pub enum Backends {
     #[cfg(all(windows, feature = "tolk"))]
     Tolk,
     #[cfg(windows)]
-    WinRT,
+    WinRt,
     #[cfg(target_os = "macos")]
     AppKit,
     #[cfg(any(target_os = "macos", target_os = "ios"))]
@@ -55,7 +55,7 @@ pub enum BackendId {
     #[cfg(target_arch = "wasm32")]
     Web(u64),
     #[cfg(windows)]
-    WinRT(u64),
+    WinRt(u64),
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     AvFoundation(u64),
     #[cfg(target_os = "android")]
@@ -69,7 +69,7 @@ pub enum UtteranceId {
     #[cfg(target_arch = "wasm32")]
     Web(u64),
     #[cfg(windows)]
-    WinRT(u64),
+    WinRt(u64),
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     AvFoundation(id),
     #[cfg(target_os = "android")]
@@ -105,7 +105,7 @@ impl Default for Features {
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("IO error: {0}")]
-    IO(#[from] std::io::Error),
+    Io(#[from] std::io::Error),
     #[error("Value not received")]
     NoneError,
     #[error("Operation failed")]
@@ -115,7 +115,7 @@ pub enum Error {
     JavaScriptError(wasm_bindgen::JsValue),
     #[cfg(windows)]
     #[error("WinRT error")]
-    WinRT(windows::Error),
+    WinRt(windows::Error),
     #[error("Unsupported feature")]
     UnsupportedFeature,
     #[error("Out of range")]
@@ -197,8 +197,8 @@ impl TTS {
                 }
             }
             #[cfg(windows)]
-            Backends::WinRT => {
-                let tts = backends::WinRT::new()?;
+            Backends::WinRt => {
+                let tts = backends::WinRt::new()?;
                 Ok(TTS(Box::new(tts)))
             }
             #[cfg(target_os = "macos")]
@@ -229,10 +229,10 @@ impl TTS {
         let tts = if let Ok(tts) = TTS::new(Backends::Tolk) {
             Ok(tts)
         } else {
-            TTS::new(Backends::WinRT)
+            TTS::new(Backends::WinRt)
         };
         #[cfg(all(windows, not(feature = "tolk")))]
-        let tts = TTS::new(Backends::WinRT);
+        let tts = TTS::new(Backends::WinRt);
         #[cfg(target_arch = "wasm32")]
         let tts = TTS::new(Backends::Web);
         #[cfg(target_os = "macos")]

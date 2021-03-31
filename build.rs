@@ -2,11 +2,11 @@ fn main() {
     #[cfg(windows)]
     if std::env::var("TARGET").unwrap().contains("windows") {
         windows::build!(
-            windows::foundation::{EventRegistrationToken, IAsyncOperation, TypedEventHandler},
-            windows::media::core::MediaSource,
-            windows::media::playback::{MediaPlaybackSession, MediaPlaybackState, MediaPlayer, MediaPlayerAudioCategory},
-            windows::media::speech_synthesis::{SpeechSynthesisStream, SpeechSynthesizer, SpeechSynthesizerOptions},
-            windows::storage::streams::IRandomAccessStream,
+            Windows::Foundation::{EventRegistrationToken, IAsyncOperation, TypedEventHandler},
+            Windows::Media::Core::MediaSource,
+            Windows::Media::Playback::{MediaPlaybackSession, MediaPlaybackState, MediaPlayer, MediaPlayerAudioCategory},
+            Windows::Media::SpeechSynthesis::{SpeechSynthesisStream, SpeechSynthesizer, SpeechSynthesizerOptions},
+            Windows::Storage::Streams::IRandomAccessStream,
         );
     }
     if std::env::var("TARGET").unwrap().contains("-apple") {
