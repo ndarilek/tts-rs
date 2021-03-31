@@ -202,9 +202,9 @@ impl Tts {
                 Ok(Tts(Box::new(tts)))
             }
             #[cfg(target_os = "macos")]
-            Backends::AppKit => Ok(TTS(Box::new(backends::AppKit::new()))),
+            Backends::AppKit => Ok(Tts(Box::new(backends::AppKit::new()))),
             #[cfg(any(target_os = "macos", target_os = "ios"))]
-            Backends::AvFoundation => Ok(TTS(Box::new(backends::AvFoundation::new()))),
+            Backends::AvFoundation => Ok(Tts(Box::new(backends::AvFoundation::new()))),
             #[cfg(target_os = "android")]
             Backends::Android => {
                 let tts = backends::Android::new()?;
