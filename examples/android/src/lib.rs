@@ -4,7 +4,7 @@ use tts::*;
 // Without it, the `TTS` instance gets dropped before callbacks can run.
 #[allow(unreachable_code)]
 fn run() -> Result<(), Error> {
-    let mut tts = TTS::default()?;
+    let mut tts = Tts::default()?;
     let Features {
         utterance_callbacks,
         ..
