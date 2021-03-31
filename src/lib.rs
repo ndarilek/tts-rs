@@ -181,11 +181,11 @@ impl Tts {
     pub fn new(backend: Backends) -> Result<Tts, Error> {
         let backend = match backend {
             #[cfg(target_os = "linux")]
-            Backends::SpeechDispatcher => Ok(TTS(Box::new(backends::SpeechDispatcher::new()))),
+            Backends::SpeechDispatcher => Ok(Tts(Box::new(backends::SpeechDispatcher::new()))),
             #[cfg(target_arch = "wasm32")]
             Backends::Web => {
                 let tts = backends::Web::new()?;
-                Ok(TTS(Box::new(tts)))
+                Ok(Tts(Box::new(tts)))
             }
             #[cfg(all(windows, feature = "tolk"))]
             Backends::Tolk => {
