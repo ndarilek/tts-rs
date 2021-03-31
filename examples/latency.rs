@@ -4,7 +4,7 @@ use tts::*;
 
 fn main() -> Result<(), Error> {
     env_logger::init();
-    let mut tts = TTS::default()?;
+    let mut tts = Tts::default()?;
     println!("Press Enter and wait for speech.");
     loop {
         let mut _input = String::new();

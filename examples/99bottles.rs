@@ -12,7 +12,7 @@ use tts::*;
 
 fn main() -> Result<(), Error> {
     env_logger::init();
-    let mut tts = TTS::default()?;
+    let mut tts = Tts::default()?;
     let mut bottles = 99;
     while bottles > 0 {
         tts.speak(format!("{} bottles of beer on the wall,", bottles), false)?;

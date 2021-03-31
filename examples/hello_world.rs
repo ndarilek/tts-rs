@@ -11,7 +11,7 @@ use tts::*;
 
 fn main() -> Result<(), Error> {
     env_logger::init();
-    let mut tts = TTS::default()?;
+    let mut tts = Tts::default()?;
     let Features {
         utterance_callbacks,
         ..

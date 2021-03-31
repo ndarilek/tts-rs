@@ -168,17 +168,17 @@ lazy_static! {
 }
 
 #[derive(Clone)]
-pub struct TTS(Box<dyn Backend>);
+pub struct Tts(Box<dyn Backend>);
 
-unsafe impl Send for TTS {}
+unsafe impl Send for Tts {}
 
-unsafe impl Sync for TTS {}
+unsafe impl Sync for Tts {}
 
-impl TTS {
+impl Tts {
     /**
      * Create a new `TTS` instance with the specified backend.
      */
-    pub fn new(backend: Backends) -> Result<TTS, Error> {
+    pub fn new(backend: Backends) -> Result<Tts, Error> {
         let backend = match backend {
             #[cfg(target_os = "linux")]
             Backends::SpeechDispatcher => Ok(TTS(Box::new(backends::SpeechDispatcher::new()))),
@@ -191,7 +191,7 @@ impl TTS {
             Backends::Tolk => {
                 let tts = backends::Tolk::new();
                 if let Some(tts) = tts {
-                    Ok(TTS(Box::new(tts)))
+                    Ok(Tts(Box::new(tts)))
                 } else {
                     Err(Error::NoneError)
                 }
@@ -199,7 +199,7 @@ impl TTS {
             #[cfg(windows)]
             Backends::WinRt => {
                 let tts = backends::WinRt::new()?;
-                Ok(TTS(Box::new(tts)))
+                Ok(Tts(Box::new(tts)))
             }
             #[cfg(target_os = "macos")]
             Backends::AppKit => Ok(TTS(Box::new(backends::AppKit::new()))),
@@ -222,19 +222,19 @@ impl TTS {
         }
     }
 
-    pub fn default() -> Result<TTS, Error> {
+    pub fn default() -> Result<Tts, Error> {
         #[cfg(target_os = "linux")]
-        let tts = TTS::new(Backends::SpeechDispatcher);
+        let tts = Tts::new(Backends::SpeechDispatcher);
         #[cfg(all(windows, feature = "tolk"))]
-        let tts = if let Ok(tts) = TTS::new(Backends::Tolk) {
+        let tts = if let Ok(tts) = Tts::new(Backends::Tolk) {
             Ok(tts)
         } else {
-            TTS::new(Backends::WinRt)
+            Tts::new(Backends::WinRt)
         };
         #[cfg(all(windows, not(feature = "tolk")))]
-        let tts = TTS::new(Backends::WinRt);
+        let tts = Tts::new(Backends::WinRt);
         #[cfg(target_arch = "wasm32")]
-        let tts = TTS::new(Backends::Web);
+        let tts = Tts::new(Backends::Web);
         #[cfg(target_os = "macos")]
         let tts = unsafe {
             // Needed because the Rust NSProcessInfo structs report bogus values, and I don't want to pull in a full bindgen stack.
@@ -249,15 +249,15 @@ impl TTS {
             let major_version: i8 = version_parts[0].parse().unwrap();
             let minor_version: i8 = version_parts[1].parse().unwrap();
             if major_version >= 11 || minor_version >= 14 {
-                TTS::new(Backends::AvFoundation)
+                Tts::new(Backends::AvFoundation)
             } else {
-                TTS::new(Backends::AppKit)
+                Tts::new(Backends::AppKit)
             }
         };
         #[cfg(target_os = "ios")]
-        let tts = TTS::new(Backends::AvFoundation);
+        let tts = Tts::new(Backends::AvFoundation);
         #[cfg(target_os = "android")]
-        let tts = TTS::new(Backends::Android);
+        let tts = Tts::new(Backends::Android);
         tts
     }
 
@@ -529,7 +529,7 @@ impl TTS {
     }
 }
 
-impl Drop for TTS {
+impl Drop for Tts {
     fn drop(&mut self) {
         if let Some(id) = self.0.id() {
             let mut callbacks = CALLBACKS.lock().unwrap();
