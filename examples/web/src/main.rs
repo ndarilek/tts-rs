@@ -1,12 +1,12 @@
 #![allow(clippy::wildcard_imports)]
 use seed::{prelude::*, *};
 
-use tts::TTS;
+use tts::Tts;
 
 #[derive(Clone)]
 struct Model {
     text: String,
-    tts: TTS,
+    tts: Tts,
 }
 
 #[derive(Clone)]
@@ -19,7 +19,7 @@ enum Msg {
 }
 
 fn init(_: Url, _: &mut impl Orders<Msg>) -> Model {
-    let tts = TTS::default().unwrap();
+    let tts = Tts::default().unwrap();
     Model {
         text: Default::default(),
         tts,
