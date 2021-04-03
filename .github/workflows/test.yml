@@ -91,6 +91,7 @@ jobs:
       - uses: Swatinem/rust-cache@v1
       - uses: actions-rs/toolchain@v1
         with:
+          target: wasm32-unknown-unknown
           profile: minimal
           toolchain: stable
           components: rustfmt, clippy
@@ -98,7 +99,6 @@ jobs:
       - uses: actions-rs/install@v0.1
         with:
           crate: cargo-make
-      - run: rustup target add wasm32-unknown-unknown
       - uses: actions-rs/cargo@v1
         with:
           command: make
