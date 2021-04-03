@@ -61,6 +61,13 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           args: --all-features --target wasm32-unknown-unknown
+      - uses: actions-rs/install@v0.1
+        with:
+          crate: cargo-make
+      - uses: actions-rs/cargo@v1
+        with:
+          command: make
+          args: [build-web-example]
 
   publish:
     name: Publish
