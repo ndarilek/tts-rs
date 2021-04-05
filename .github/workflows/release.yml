@@ -67,7 +67,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: make
-          args: [build-web-example]
+          args: build-web-example
 
   publish:
     name: Publish
