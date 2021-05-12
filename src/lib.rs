@@ -531,8 +531,10 @@ impl Tts {
     /*
      * Returns `true` if a screen reader is available to provide speech.
      */
+    #[allow(unreachable_code)]
     pub fn screen_reader_available() -> bool {
-        if cfg!(target_os = "windows") {
+        #[cfg(target_os = "windows")]
+        {
             #[cfg(feature = "tolk")]
             {
                 let tolk = tolk::Tolk::new();
@@ -540,9 +542,8 @@ impl Tts {
             }
             #[cfg(not(feature = "tolk"))]
             return false;
-        } else {
-            false
         }
+        false
     }
 }
 
