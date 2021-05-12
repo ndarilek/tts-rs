@@ -527,6 +527,23 @@ impl Tts {
             Err(Error::UnsupportedFeature)
         }
     }
+
+    /*
+     * Returns `true` if a screen reader is available to provide speech.
+     */
+    pub fn screen_reader_available() -> bool {
+        if cfg!(target_os = "windows") {
+            #[cfg(feature = "tolk")]
+            {
+                let tolk = tolk::Tolk::new();
+                return tolk.detect_screen_reader().is_some();
+            }
+            #[cfg(not(feature = "tolk"))]
+            return false;
+        } else {
+            false
+        }
+    }
 }
 
 impl Drop for Tts {
