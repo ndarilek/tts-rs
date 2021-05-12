@@ -11,7 +11,7 @@ impl Tolk {
     pub(crate) fn new() -> Option<Self> {
         info!("Initializing Tolk backend");
         let tolk = TolkPtr::new();
-        if tolk.detect_screen_reader().is_some() {
+        if tolk::Tolk::detect_screen_reader().is_some() {
             Some(Tolk(tolk))
         } else {
             None

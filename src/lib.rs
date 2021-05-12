@@ -537,8 +537,7 @@ impl Tts {
         {
             #[cfg(feature = "tolk")]
             {
-                let tolk = tolk::Tolk::new();
-                return tolk.detect_screen_reader().is_some();
+                return tolk::Tolk::detect_screen_reader().is_some();
             }
             #[cfg(not(feature = "tolk"))]
             return false;
