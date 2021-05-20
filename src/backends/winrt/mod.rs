@@ -11,7 +11,7 @@ use bindings::Windows::{
     Foundation::TypedEventHandler,
     Media::{
         Core::MediaSource,
-        Playback::{MediaPlaybackState, MediaPlayer, MediaPlayerAudioCategory},
+        Playback::{MediaPlayer, MediaPlayerAudioCategory},
         SpeechSynthesis::SpeechSynthesizer,
     },
 };
@@ -181,9 +181,7 @@ impl Backend for WinRt {
                 utterances.push_back(utterance);
             }
         }
-        if no_utterances
-            && self.player.PlaybackSession()?.PlaybackState()? != MediaPlaybackState::Playing
-        {
+        if no_utterances {
             self.synth.Options()?.SetSpeakingRate(self.rate.into())?;
             self.synth.Options()?.SetAudioPitch(self.pitch.into())?;
             self.synth.Options()?.SetAudioVolume(self.volume.into())?;
