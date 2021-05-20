@@ -27,6 +27,8 @@ use libc::c_char;
 #[cfg(target_os = "macos")]
 use objc::{class, msg_send, sel, sel_impl};
 use thiserror::Error;
+#[cfg(all(windows, feature = "tolk"))]
+use tolk::Tolk;
 
 mod backends;
 
@@ -537,7 +539,8 @@ impl Tts {
         {
             #[cfg(feature = "tolk")]
             {
-                return tolk::Tolk::detect_screen_reader().is_some();
+                let tolk = Tolk::new();
+                return tolk.detect_screen_reader().is_some();
             }
             #[cfg(not(feature = "tolk"))]
             return false;
