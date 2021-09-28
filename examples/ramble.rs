@@ -4,7 +4,7 @@ use tts::*;
 
 fn main() -> Result<(), Error> {
     env_logger::init();
-    let mut tts = TTS::default()?;
+    let mut tts = Tts::default()?;
     let mut phrase = 1;
     loop {
         tts.speak(format!("Phrase {}", phrase), false)?;

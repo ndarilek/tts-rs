@@ -27,6 +27,8 @@ use libc::c_char;
 #[cfg(target_os = "macos")]
 use objc::{class, msg_send, sel, sel_impl};
 use thiserror::Error;
+#[cfg(all(windows, feature = "tolk"))]
+use tolk::Tolk;
 
 mod backends;
 #[cfg(feature = "ffi")]
@@ -42,7 +44,7 @@ pub enum Backends {
     #[cfg(all(windows, feature = "tolk"))]
     Tolk,
     #[cfg(windows)]
-    WinRT,
+    WinRt,
     #[cfg(target_os = "macos")]
     AppKit,
     #[cfg(any(target_os = "macos", target_os = "ios"))]
@@ -58,7 +60,7 @@ pub enum BackendId {
     #[cfg(target_arch = "wasm32")]
     Web(u64),
     #[cfg(windows)]
-    WinRT(u64),
+    WinRt(u64),
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     AvFoundation(u64),
     #[cfg(target_os = "android")]
@@ -72,7 +74,7 @@ pub enum UtteranceId {
     #[cfg(target_arch = "wasm32")]
     Web(u64),
     #[cfg(windows)]
-    WinRT(u64),
+    WinRt(u64),
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     AvFoundation(id),
     #[cfg(target_os = "android")]
@@ -109,7 +111,7 @@ impl Default for Features {
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("IO error: {0}")]
-    IO(#[from] std::io::Error),
+    Io(#[from] std::io::Error),
     #[error("Value not received")]
     NoneError,
     #[error("Operation failed")]
@@ -119,7 +121,7 @@ pub enum Error {
     JavaScriptError(wasm_bindgen::JsValue),
     #[cfg(windows)]
     #[error("WinRT error")]
-    WinRT(windows::Error),
+    WinRt(windows::Error),
     #[error("Unsupported feature")]
     UnsupportedFeature,
     #[error("Out of range")]
@@ -172,47 +174,47 @@ lazy_static! {
 }
 
 #[derive(Clone)]
-pub struct TTS(Box<dyn Backend>);
+pub struct Tts(Box<dyn Backend>);
 
-unsafe impl Send for TTS {}
+unsafe impl Send for Tts {}
 
-unsafe impl Sync for TTS {}
+unsafe impl Sync for Tts {}
 
-impl TTS {
+impl Tts {
     /**
      * Create a new `TTS` instance with the specified backend.
      */
-    pub fn new(backend: Backends) -> Result<TTS, Error> {
+    pub fn new(backend: Backends) -> Result<Tts, Error> {
         let backend = match backend {
             #[cfg(target_os = "linux")]
-            Backends::SpeechDispatcher => Ok(TTS(Box::new(backends::SpeechDispatcher::new()))),
+            Backends::SpeechDispatcher => Ok(Tts(Box::new(backends::SpeechDispatcher::new()))),
             #[cfg(target_arch = "wasm32")]
             Backends::Web => {
                 let tts = backends::Web::new()?;
-                Ok(TTS(Box::new(tts)))
+                Ok(Tts(Box::new(tts)))
             }
             #[cfg(all(windows, feature = "tolk"))]
             Backends::Tolk => {
                 let tts = backends::Tolk::new();
                 if let Some(tts) = tts {
-                    Ok(TTS(Box::new(tts)))
+                    Ok(Tts(Box::new(tts)))
                 } else {
                     Err(Error::NoneError)
                 }
             }
             #[cfg(windows)]
-            Backends::WinRT => {
-                let tts = backends::WinRT::new()?;
-                Ok(TTS(Box::new(tts)))
+            Backends::WinRt => {
+                let tts = backends::WinRt::new()?;
+                Ok(Tts(Box::new(tts)))
             }
             #[cfg(target_os = "macos")]
-            Backends::AppKit => Ok(TTS(Box::new(backends::AppKit::new()))),
+            Backends::AppKit => Ok(Tts(Box::new(backends::AppKit::new()))),
             #[cfg(any(target_os = "macos", target_os = "ios"))]
-            Backends::AvFoundation => Ok(TTS(Box::new(backends::AvFoundation::new()))),
+            Backends::AvFoundation => Ok(Tts(Box::new(backends::AvFoundation::new()))),
             #[cfg(target_os = "android")]
             Backends::Android => {
                 let tts = backends::Android::new()?;
-                Ok(TTS(Box::new(tts)))
+                Ok(Tts(Box::new(tts)))
             }
         };
         if let Ok(backend) = backend {
@@ -226,19 +228,19 @@ impl TTS {
         }
     }
 
-    pub fn default() -> Result<TTS, Error> {
+    pub fn default() -> Result<Tts, Error> {
         #[cfg(target_os = "linux")]
-        let tts = TTS::new(Backends::SpeechDispatcher);
+        let tts = Tts::new(Backends::SpeechDispatcher);
         #[cfg(all(windows, feature = "tolk"))]
-        let tts = if let Ok(tts) = TTS::new(Backends::Tolk) {
+        let tts = if let Ok(tts) = Tts::new(Backends::Tolk) {
             Ok(tts)
         } else {
-            TTS::new(Backends::WinRT)
+            Tts::new(Backends::WinRt)
         };
         #[cfg(all(windows, not(feature = "tolk")))]
-        let tts = TTS::new(Backends::WinRT);
+        let tts = Tts::new(Backends::WinRt);
         #[cfg(target_arch = "wasm32")]
-        let tts = TTS::new(Backends::Web);
+        let tts = Tts::new(Backends::Web);
         #[cfg(target_os = "macos")]
         let tts = unsafe {
             // Needed because the Rust NSProcessInfo structs report bogus values, and I don't want to pull in a full bindgen stack.
@@ -247,21 +249,21 @@ impl TTS {
             let str: *const c_char = msg_send![version, UTF8String];
             let str = CStr::from_ptr(str);
             let str = str.to_string_lossy();
-            let version: Vec<&str> = str.split(" ").collect();
+            let version: Vec<&str> = str.split(' ').collect();
             let version = version[1];
-            let version_parts: Vec<&str> = version.split(".").collect();
+            let version_parts: Vec<&str> = version.split('.').collect();
             let major_version: i8 = version_parts[0].parse().unwrap();
             let minor_version: i8 = version_parts[1].parse().unwrap();
             if major_version >= 11 || minor_version >= 14 {
-                TTS::new(Backends::AvFoundation)
+                Tts::new(Backends::AvFoundation)
             } else {
-                TTS::new(Backends::AppKit)
+                Tts::new(Backends::AppKit)
             }
         };
         #[cfg(target_os = "ios")]
-        let tts = TTS::new(Backends::AvFoundation);
+        let tts = Tts::new(Backends::AvFoundation);
         #[cfg(target_os = "android")]
-        let tts = TTS::new(Backends::Android);
+        let tts = Tts::new(Backends::Android);
         tts
     }
 
@@ -531,9 +533,27 @@ impl TTS {
             Err(Error::UnsupportedFeature)
         }
     }
+
+    /*
+     * Returns `true` if a screen reader is available to provide speech.
+     */
+    #[allow(unreachable_code)]
+    pub fn screen_reader_available() -> bool {
+        #[cfg(target_os = "windows")]
+        {
+            #[cfg(feature = "tolk")]
+            {
+                let tolk = Tolk::new();
+                return tolk.detect_screen_reader().is_some();
+            }
+            #[cfg(not(feature = "tolk"))]
+            return false;
+        }
+        false
+    }
 }
 
-impl Drop for TTS {
+impl Drop for Tts {
     fn drop(&mut self) {
         if let Some(id) = self.0.id() {
             let mut callbacks = CALLBACKS.lock().unwrap();

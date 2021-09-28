@@ -61,27 +61,13 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           args: --all-features --target wasm32-unknown-unknown
-
-  publish_winrt_bindings:
-    name: Publish winrt_bindings
-    runs-on: windows-latest
-    needs: [check]
-    env:
-      CARGO_TOKEN: ${{ secrets.CARGO_TOKEN }}
-    steps:
-      - uses: actions/checkout@v2
-      - uses: Swatinem/rust-cache@v1
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/install@v0.1
         with:
-          target: wasm32-unknown-unknown
-          profile: minimal
-          toolchain: stable
-          components: rustfmt, clippy
-          override: true
-      - run: |
-          cargo login $CARGO_TOKEN
-          cd winrt_bindings
-          cargo publish || true
+          crate: cargo-make
+      - uses: actions-rs/cargo@v1
+        with:
+          command: make
+          args: build-web-example
 
   publish:
     name: Publish

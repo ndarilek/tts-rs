@@ -82,3 +82,24 @@ jobs:
         with:
           command: apk
           args: build
+
+  check_web_example:
+    name: Check Web Example
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: Swatinem/rust-cache@v1
+      - uses: actions-rs/toolchain@v1
+        with:
+          target: wasm32-unknown-unknown
+          profile: minimal
+          toolchain: stable
+          components: rustfmt, clippy
+          override: true
+      - uses: actions-rs/install@v0.1
+        with:
+          crate: cargo-make
+      - uses: actions-rs/cargo@v1
+        with:
+          command: make
+          args: build-web-example

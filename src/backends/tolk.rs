@@ -1,11 +1,13 @@
 #[cfg(all(windows, feature = "tolk"))]
+use std::sync::Arc;
+
 use log::{info, trace};
 use tolk::Tolk as TolkPtr;
 
 use crate::{Backend, BackendId, Error, Features, UtteranceId};
 
 #[derive(Clone, Debug)]
-pub(crate) struct Tolk(TolkPtr);
+pub(crate) struct Tolk(Arc<TolkPtr>);
 
 impl Tolk {
     pub(crate) fn new() -> Option<Self> {

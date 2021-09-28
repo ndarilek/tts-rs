@@ -18,3 +18,21 @@ script = [
 [tasks.log-android]
 command = "adb"
 args = ["logcat", "RustStdoutStderr:D", "*:S"]
+
+[tasks.install-trunk]
+install_crate = { crate_name = "trunk", binary = "trunk", test_arg = "--help" }
+
+[tasks.install-wasm-bindgen-cli]
+install_crate = { crate_name = "wasm-bindgen-cli", binary = "wasm-bindgen", test_arg = "--help" }
+
+[tasks.build-web-example]
+dependencies = ["install-trunk", "install-wasm-bindgen-cli"]
+cwd = "examples/web"
+command = "trunk"
+args = ["build"]
+
+[tasks.run-web-example]
+dependencies = ["install-trunk", "install-wasm-bindgen-cli"]
+cwd = "examples/web"
+command = "trunk"
+args = ["serve"]
