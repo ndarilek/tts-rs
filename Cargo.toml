@@ -13,7 +13,7 @@ crate-type = ["lib", "cdylib", "staticlib"]
 
 [features]
 use_tolk = ["tolk"]
-ffi = []
+ffi = ["cbindgen"]
 
 [dependencies]
 dyn-clonable = "0.9"
@@ -26,7 +26,7 @@ thiserror = "1"
 env_logger = "0.8"
 
 [build-dependencies]
-cbindgen = "0.18.0"
+cbindgen = {version = "0.18.0", optional = true}
 
 [target.'cfg(windows)'.dependencies]
 tolk = { version = "0.3", optional = true }
