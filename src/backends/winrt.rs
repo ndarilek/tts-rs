@@ -4,10 +4,7 @@ use std::sync::Mutex;
 
 use lazy_static::lazy_static;
 use log::{info, trace};
-
-mod bindings;
-
-use bindings::Windows::{
+use windows::{
     Foundation::TypedEventHandler,
     Media::{
         Core::MediaSource,
@@ -18,8 +15,8 @@ use bindings::Windows::{
 
 use crate::{Backend, BackendId, Error, Features, UtteranceId, CALLBACKS};
 
-impl From<windows::Error> for Error {
-    fn from(e: windows::Error) -> Self {
+impl From<windows::runtime::Error> for Error {
+    fn from(e: windows::runtime::Error) -> Self {
         Error::WinRt(e)
     }
 }
