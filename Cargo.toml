@@ -18,7 +18,7 @@ log = "0.4"
 thiserror = "1"
 
 [dev-dependencies]
-env_logger = "0.8"
+env_logger = "0.9"
 
 [dependencies.windows]
 version = "0.23"
@@ -47,4 +47,4 @@ web-sys = { version = "0.3", features = ["EventTarget", "SpeechSynthesis", "Spee
 
 [target.'cfg(target_os="android")'.dependencies]
 jni = "0.19"
-ndk-glue = "0.3"
+ndk-glue = "0.4"
