@@ -1,12 +1,12 @@
 [package]
 name = "tts"
-version = "0.17.3"
+version = "0.18.0"
 authors = ["Nolan Darilek <nolan@thewordnerd.info>"]
 repository = "https://github.com/ndarilek/tts-rs"
 description = "High-level Text-To-Speech (TTS) interface"
 license = "MIT"
 exclude = ["*.cfg", "*.yml"]
-edition = "2018"
+edition = "2021"
 
 [lib]
 crate-type = ["lib", "cdylib", "staticlib"]
