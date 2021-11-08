@@ -21,7 +21,7 @@ thiserror = "1"
 env_logger = "0.9"
 
 [dependencies.windows]
-version = "0.23"
+version = "0.25"
 features = [
     "Foundation",
     "Media_Core",
