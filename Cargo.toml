@@ -1,6 +1,6 @@
 [package]
 name = "tts"
-version = "0.18.1"
+version = "0.18.2"
 authors = ["Nolan Darilek <nolan@thewordnerd.info>"]
 repository = "https://github.com/ndarilek/tts-rs"
 description = "High-level Text-To-Speech (TTS) interface"
@@ -21,8 +21,9 @@ thiserror = "1"
 env_logger = "0.9"
 
 [dependencies.windows]
-version = "0.25"
+version = "0.26"
 features = [
+    "std",
     "Foundation",
     "Media_Core",
     "Media_Playback",
