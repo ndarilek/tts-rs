@@ -15,8 +15,8 @@ use windows::{
 
 use crate::{Backend, BackendId, Error, Features, UtteranceId, CALLBACKS};
 
-impl From<windows::runtime::Error> for Error {
-    fn from(e: windows::runtime::Error) -> Self {
+impl From<windows::core::Error> for Error {
+    fn from(e: windows::core::Error) -> Self {
         Error::WinRt(e)
     }
 }
