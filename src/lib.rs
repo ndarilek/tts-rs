@@ -26,6 +26,7 @@ use lazy_static::lazy_static;
 use libc::c_char;
 #[cfg(target_os = "macos")]
 use objc::{class, msg_send, sel, sel_impl};
+#[cfg(target_os = "linux")]
 use speech_dispatcher::SpeechDispatcherError;
 use thiserror::Error;
 #[cfg(all(windows, feature = "tolk"))]
