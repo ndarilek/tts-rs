@@ -26,6 +26,7 @@ use lazy_static::lazy_static;
 use libc::c_char;
 #[cfg(target_os = "macos")]
 use objc::{class, msg_send, sel, sel_impl};
+use speech_dispatcher::SpeechDispatcherError;
 use thiserror::Error;
 #[cfg(all(windows, feature = "tolk"))]
 use tolk::Tolk;
@@ -113,8 +114,11 @@ pub enum Error {
     #[error("Operation failed")]
     OperationFailed,
     #[cfg(target_arch = "wasm32")]
-    #[error("JavaScript error: [0])]")]
+    #[error("JavaScript error: [0]")]
     JavaScriptError(wasm_bindgen::JsValue),
+    #[cfg(target_os = "linux")]
+    #[error("Speech Dispatcher error: {0}")]
+    SpeechDispatcher(#[from] SpeechDispatcherError),
     #[cfg(windows)]
     #[error("WinRT error")]
     WinRt(windows::core::Error),
@@ -183,7 +187,10 @@ impl Tts {
     pub fn new(backend: Backends) -> Result<Tts, Error> {
         let backend = match backend {
             #[cfg(target_os = "linux")]
-            Backends::SpeechDispatcher => Ok(Tts(Box::new(backends::SpeechDispatcher::new()))),
+            Backends::SpeechDispatcher => {
+                let tts = backends::SpeechDispatcher::new()?;
+                Ok(Tts(Box::new(tts)))
+            }
             #[cfg(target_arch = "wasm32")]
             Backends::Web => {
                 let tts = backends::Web::new()?;

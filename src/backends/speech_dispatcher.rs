@@ -1,6 +1,5 @@
 #[cfg(target_os = "linux")]
-use std::collections::HashMap;
-use std::sync::Mutex;
+use std::{collections::HashMap, sync::Mutex};
 
 use lazy_static::*;
 use log::{info, trace};
@@ -19,9 +18,9 @@ lazy_static! {
 }
 
 impl SpeechDispatcher {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new() -> std::result::Result<Self, Error> {
         info!("Initializing SpeechDispatcher backend");
-        let connection = speech_dispatcher::Connection::open("tts", "tts", "tts", Mode::Threaded);
+        let connection = speech_dispatcher::Connection::open("tts", "tts", "tts", Mode::Threaded)?;
         let sd = SpeechDispatcher(connection);
         let mut speaking = SPEAKING.lock().unwrap();
         speaking.insert(sd.0.client_id(), false);
@@ -66,7 +65,7 @@ impl SpeechDispatcher {
             let mut speaking = SPEAKING.lock().unwrap();
             speaking.insert(client_id, true);
         })));
-        sd
+        Ok(sd)
     }
 }
 
