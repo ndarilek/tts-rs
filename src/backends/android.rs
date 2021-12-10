@@ -4,7 +4,7 @@ use std::ffi::{CStr, CString};
 use std::os::raw::c_void;
 use std::sync::{Mutex, RwLock};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use jni::objects::{GlobalRef, JObject, JString};
 use jni::sys::{jfloat, jint, JNI_VERSION_1_6};
@@ -198,11 +198,17 @@ impl Android {
             }
             let tts = env.new_global_ref(tts)?;
             // This hack makes my brain bleed.
+            const MAX_WAIT_TIME: Duration = Duration::from_millis(500);
+            let start = Instant::now();
+            // Wait a max of 500ms for initialization, then return an error to avoid hanging.
             loop {
                 {
                     let pending = PENDING_INITIALIZATIONS.read().unwrap();
                     if !(*pending).contains(&bid) {
                         break;
+                    }
+                    if start.elapsed() > MAX_WAIT_TIME {
+                        return Err(Error::OperationFailed);
                     }
                 }
                 thread::sleep(Duration::from_millis(5));
