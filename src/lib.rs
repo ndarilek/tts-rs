@@ -16,6 +16,7 @@ use std::boxed::Box;
 use std::collections::HashMap;
 #[cfg(target_os = "macos")]
 use std::ffi::CStr;
+use std::fmt;
 use std::sync::Mutex;
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
@@ -84,13 +85,15 @@ unsafe impl Send for UtteranceId {}
 
 unsafe impl Sync for UtteranceId {}
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Features {
-    pub stop: bool,
-    pub rate: bool,
-    pub pitch: bool,
-    pub volume: bool,
     pub is_speaking: bool,
+    pub pitch: bool,
+    pub rate: bool,
+    pub stop: bool,
     pub utterance_callbacks: bool,
+    pub volume: bool,
 }
 
 impl Default for Features {
@@ -103,6 +106,18 @@ impl Default for Features {
             is_speaking: false,
             utterance_callbacks: false,
         }
+    }
+}
+
+impl fmt::Display for Features {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        writeln!(f, "{:#?}", self)
+    }
+}
+
+impl Features {
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 
