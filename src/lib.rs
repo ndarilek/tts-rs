@@ -35,50 +35,108 @@ use tolk::Tolk;
 
 mod backends;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Backends {
-    #[cfg(target_os = "linux")]
-    SpeechDispatcher,
-    #[cfg(target_arch = "wasm32")]
-    Web,
-    #[cfg(all(windows, feature = "tolk"))]
-    Tolk,
-    #[cfg(windows)]
-    WinRt,
+    #[cfg(target_os = "android")]
+    Android,
     #[cfg(target_os = "macos")]
     AppKit,
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     AvFoundation,
-    #[cfg(target_os = "android")]
-    Android,
+    #[cfg(target_os = "linux")]
+    SpeechDispatcher,
+    #[cfg(all(windows, feature = "tolk"))]
+    Tolk,
+    #[cfg(target_arch = "wasm32")]
+    Web,
+    #[cfg(windows)]
+    WinRt,
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+impl fmt::Display for Backends {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        match self {
+            #[cfg(target_os = "android")]
+            Backends::Android => writeln!(f, "Android"),
+            #[cfg(target_os = "macos")]
+            Backends::AppKit => writeln!(f, "AppKit"),
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            Backends::AvFoundation => writeln!(f, "AVFoundation"),
+            #[cfg(target_os = "linux")]
+            Backends::SpeechDispatcher => writeln!(f, "Speech Dispatcher"),
+            #[cfg(all(windows, feature = "tolk"))]
+            Backends::Tolk => writeln!(f, "Tolk"),
+            #[cfg(target_arch = "wasm32")]
+            Backends::Web => writeln!(f, "Web"),
+            #[cfg(windows)]
+            Backends::WinRt => writeln!(f, "Windows Runtime"),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BackendId {
-    #[cfg(target_os = "linux")]
-    SpeechDispatcher(u64),
-    #[cfg(target_arch = "wasm32")]
-    Web(u64),
-    #[cfg(windows)]
-    WinRt(u64),
+    #[cfg(target_os = "android")]
+    Android(u64),
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     AvFoundation(u64),
-    #[cfg(target_os = "android")]
-    Android(u64),
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum UtteranceId {
     #[cfg(target_os = "linux")]
     SpeechDispatcher(u64),
     #[cfg(target_arch = "wasm32")]
     Web(u64),
     #[cfg(windows)]
     WinRt(u64),
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
-    AvFoundation(id),
+}
+
+impl fmt::Display for BackendId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        match self {
+            #[cfg(target_os = "android")]
+            BackendId::Android(id) => writeln!(f, "{}", id),
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            BackendId::AvFoundation(id) => writeln!(f, "{}", id),
+            #[cfg(target_os = "linux")]
+            BackendId::SpeechDispatcher(id) => writeln!(f, "{}", id),
+            #[cfg(target_arch = "wasm32")]
+            BackendId::Web(id) => writeln!(f, "Web({})", id),
+            #[cfg(windows)]
+            BackendId::WinRt(id) => writeln!(f, "{}", id),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum UtteranceId {
     #[cfg(target_os = "android")]
     Android(u64),
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    AvFoundation(id),
+    #[cfg(target_os = "linux")]
+    SpeechDispatcher(u64),
+    #[cfg(target_arch = "wasm32")]
+    Web(u64),
+    #[cfg(windows)]
+    WinRt(u64),
+}
+
+impl fmt::Display for UtteranceId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        match self {
+            #[cfg(target_os = "android")]
+            UtteranceId::Android(id) => writeln!(f, "{}", id),
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            UtteranceId::AvFoundation(id) => writeln!(f, "{}", id),
+            #[cfg(target_os = "linux")]
+            UtteranceId::SpeechDispatcher(id) => writeln!(f, "{}", id),
+            #[cfg(target_arch = "wasm32")]
+            UtteranceId::Web(id) => writeln!(f, "Web({})", id),
+            #[cfg(windows)]
+            UtteranceId::WinRt(id) => writeln!(f, "{}", id),
+        }
+    }
 }
 
 unsafe impl Send for UtteranceId {}
@@ -122,6 +180,7 @@ impl Features {
 }
 
 #[derive(Debug, Error)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Error {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
