@@ -180,7 +180,6 @@ impl Features {
 }
 
 #[derive(Debug, Error)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Error {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
