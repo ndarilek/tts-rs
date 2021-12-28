@@ -21,7 +21,7 @@ impl From<windows::core::Error> for Error {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct WinRt {
     id: BackendId,
     synth: SpeechSynthesizer,
