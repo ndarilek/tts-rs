@@ -107,8 +107,19 @@ impl fmt::Display for BackendId {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+// # Note
+//
+// Most trait implementations are blocked by cocoa_foundation::base::id;
+// which is a type alias for objc::runtime::Object, which only implements Debug.
+#[derive(Debug)]
+#[cfg_attr(
+    not(any(target_os = "macos", target_os = "ios")),
+    derive(Clone, Copy, Eq, Hash, PartialEq, PartialOrd, Ord)
+)]
+#[cfg_attr(
+    all(feature = "serde", not(any(target_os = "macos", target_os = "ios"))),
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub enum UtteranceId {
     #[cfg(target_os = "android")]
     Android(u64),
@@ -122,13 +133,16 @@ pub enum UtteranceId {
     WinRt(u64),
 }
 
+// # Note
+//
+// Display is not implemented by cocoa_foundation::base::id;
+// which is a type alias for objc::runtime::Object, which only implements Debug.
+#[cfg(not(any(target_os = "macos", target_os = "ios")))]
 impl fmt::Display for UtteranceId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
             #[cfg(target_os = "android")]
             UtteranceId::Android(id) => writeln!(f, "{}", id),
-            #[cfg(any(target_os = "macos", target_os = "ios"))]
-            UtteranceId::AvFoundation(id) => writeln!(f, "{}", id),
             #[cfg(target_os = "linux")]
             UtteranceId::SpeechDispatcher(id) => writeln!(f, "{}", id),
             #[cfg(target_arch = "wasm32")]
