@@ -16,6 +16,7 @@ use std::boxed::Box;
 use std::collections::HashMap;
 #[cfg(target_os = "macos")]
 use std::ffi::CStr;
+use std::fmt;
 use std::sync::Mutex;
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
@@ -34,63 +35,137 @@ use tolk::Tolk;
 
 mod backends;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Backends {
-    #[cfg(target_os = "linux")]
-    SpeechDispatcher,
-    #[cfg(target_arch = "wasm32")]
-    Web,
-    #[cfg(all(windows, feature = "tolk"))]
-    Tolk,
-    #[cfg(windows)]
-    WinRt,
+    #[cfg(target_os = "android")]
+    Android,
     #[cfg(target_os = "macos")]
     AppKit,
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     AvFoundation,
-    #[cfg(target_os = "android")]
-    Android,
+    #[cfg(target_os = "linux")]
+    SpeechDispatcher,
+    #[cfg(all(windows, feature = "tolk"))]
+    Tolk,
+    #[cfg(target_arch = "wasm32")]
+    Web,
+    #[cfg(windows)]
+    WinRt,
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+impl fmt::Display for Backends {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        match self {
+            #[cfg(target_os = "android")]
+            Backends::Android => writeln!(f, "Android"),
+            #[cfg(target_os = "macos")]
+            Backends::AppKit => writeln!(f, "AppKit"),
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            Backends::AvFoundation => writeln!(f, "AVFoundation"),
+            #[cfg(target_os = "linux")]
+            Backends::SpeechDispatcher => writeln!(f, "Speech Dispatcher"),
+            #[cfg(all(windows, feature = "tolk"))]
+            Backends::Tolk => writeln!(f, "Tolk"),
+            #[cfg(target_arch = "wasm32")]
+            Backends::Web => writeln!(f, "Web"),
+            #[cfg(windows)]
+            Backends::WinRt => writeln!(f, "Windows Runtime"),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BackendId {
-    #[cfg(target_os = "linux")]
-    SpeechDispatcher(u64),
-    #[cfg(target_arch = "wasm32")]
-    Web(u64),
-    #[cfg(windows)]
-    WinRt(u64),
+    #[cfg(target_os = "android")]
+    Android(u64),
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     AvFoundation(u64),
-    #[cfg(target_os = "android")]
-    Android(u64),
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum UtteranceId {
     #[cfg(target_os = "linux")]
     SpeechDispatcher(u64),
     #[cfg(target_arch = "wasm32")]
     Web(u64),
     #[cfg(windows)]
     WinRt(u64),
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
-    AvFoundation(id),
+}
+
+impl fmt::Display for BackendId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        match self {
+            #[cfg(target_os = "android")]
+            BackendId::Android(id) => writeln!(f, "{}", id),
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            BackendId::AvFoundation(id) => writeln!(f, "{}", id),
+            #[cfg(target_os = "linux")]
+            BackendId::SpeechDispatcher(id) => writeln!(f, "{}", id),
+            #[cfg(target_arch = "wasm32")]
+            BackendId::Web(id) => writeln!(f, "Web({})", id),
+            #[cfg(windows)]
+            BackendId::WinRt(id) => writeln!(f, "{}", id),
+        }
+    }
+}
+
+// # Note
+//
+// Most trait implementations are blocked by cocoa_foundation::base::id;
+// which is a type alias for objc::runtime::Object, which only implements Debug.
+#[derive(Debug)]
+#[cfg_attr(
+    not(any(target_os = "macos", target_os = "ios")),
+    derive(Clone, Copy, Eq, Hash, PartialEq, PartialOrd, Ord)
+)]
+#[cfg_attr(
+    all(feature = "serde", not(any(target_os = "macos", target_os = "ios"))),
+    derive(serde::Serialize, serde::Deserialize)
+)]
+pub enum UtteranceId {
     #[cfg(target_os = "android")]
     Android(u64),
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    AvFoundation(id),
+    #[cfg(target_os = "linux")]
+    SpeechDispatcher(u64),
+    #[cfg(target_arch = "wasm32")]
+    Web(u64),
+    #[cfg(windows)]
+    WinRt(u64),
+}
+
+// # Note
+//
+// Display is not implemented by cocoa_foundation::base::id;
+// which is a type alias for objc::runtime::Object, which only implements Debug.
+#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+impl fmt::Display for UtteranceId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        match self {
+            #[cfg(target_os = "android")]
+            UtteranceId::Android(id) => writeln!(f, "{}", id),
+            #[cfg(target_os = "linux")]
+            UtteranceId::SpeechDispatcher(id) => writeln!(f, "{}", id),
+            #[cfg(target_arch = "wasm32")]
+            UtteranceId::Web(id) => writeln!(f, "Web({})", id),
+            #[cfg(windows)]
+            UtteranceId::WinRt(id) => writeln!(f, "{}", id),
+        }
+    }
 }
 
 unsafe impl Send for UtteranceId {}
 
 unsafe impl Sync for UtteranceId {}
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Features {
-    pub stop: bool,
-    pub rate: bool,
-    pub pitch: bool,
-    pub volume: bool,
     pub is_speaking: bool,
+    pub pitch: bool,
+    pub rate: bool,
+    pub stop: bool,
     pub utterance_callbacks: bool,
+    pub volume: bool,
 }
 
 impl Default for Features {
@@ -103,6 +178,18 @@ impl Default for Features {
             is_speaking: false,
             utterance_callbacks: false,
         }
+    }
+}
+
+impl fmt::Display for Features {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        writeln!(f, "{:#?}", self)
+    }
+}
+
+impl Features {
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 
