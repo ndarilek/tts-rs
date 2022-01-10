@@ -1,14 +1,18 @@
 #[cfg(target_os = "android")]
-use std::collections::HashSet;
-use std::ffi::{CStr, CString};
-use std::os::raw::c_void;
-use std::sync::{Mutex, RwLock};
-use std::thread;
-use std::time::{Duration, Instant};
+use std::{
+    collections::HashSet,
+    ffi::{CStr, CString},
+    os::raw::c_void,
+    sync::{Mutex, RwLock},
+    thread,
+    time::{Duration, Instant},
+};
 
-use jni::objects::{GlobalRef, JObject, JString};
-use jni::sys::{jfloat, jint, JNI_VERSION_1_6};
-use jni::{JNIEnv, JavaVM};
+use jni::{
+    objects::{GlobalRef, JObject, JString},
+    sys::{jfloat, jint, JNI_VERSION_1_6},
+    JNIEnv, JavaVM,
+};
 use lazy_static::lazy_static;
 use log::{error, info};
 
