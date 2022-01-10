@@ -39,4 +39,4 @@ web-sys = { version = "0.3", features = ["EventTarget", "SpeechSynthesis", "Spee
 
 [target.'cfg(target_os="android")'.dependencies]
 jni = "0.19"
-ndk-glue = "0.5"
+ndk-glue = "0.6"
