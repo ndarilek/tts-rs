@@ -26,7 +26,7 @@ tolk = { version = "0.5", optional = true }
 windows = { version = "0.30", features = ["alloc", "Foundation", "Media_Core", "Media_Playback", "Media_SpeechSynthesis", "Storage_Streams"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-speech-dispatcher = "0.11"
+speech-dispatcher = { version = "0.11", optional = true } # optional, since it is using LGPL
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 cocoa-foundation = "0.1"

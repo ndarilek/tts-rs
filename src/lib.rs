@@ -27,7 +27,7 @@ use lazy_static::lazy_static;
 use libc::c_char;
 #[cfg(target_os = "macos")]
 use objc::{class, msg_send, sel, sel_impl};
-#[cfg(target_os = "linux")]
+#[cfg(feature = "speech_dispatcher")]
 use speech_dispatcher::Error as SpeechDispatcherError;
 use thiserror::Error;
 #[cfg(all(windows, feature = "tolk"))]
@@ -204,7 +204,7 @@ pub enum Error {
     #[cfg(target_arch = "wasm32")]
     #[error("JavaScript error: [0]")]
     JavaScriptError(wasm_bindgen::JsValue),
-    #[cfg(target_os = "linux")]
+    #[cfg(feature = "speech_dispatcher")]
     #[error("Speech Dispatcher error: {0}")]
     SpeechDispatcher(#[from] SpeechDispatcherError),
     #[cfg(windows)]
@@ -273,50 +273,56 @@ impl Tts {
      * Create a new `TTS` instance with the specified backend.
      */
     pub fn new(backend: Backends) -> Result<Tts, Error> {
-        let backend = match backend {
+        let backend: Self = match backend {
             #[cfg(target_os = "linux")]
             Backends::SpeechDispatcher => {
-                let tts = backends::SpeechDispatcher::new()?;
-                Ok(Tts(Box::new(tts)))
+                #[cfg(feature = "speech_dispatcher")]
+                {
+                    let tts = backends::SpeechDispatcher::new()?;
+                    Tts(Box::new(tts))
+                }
+
+                #[cfg(not(feature = "speech_dispatcher"))]
+                {
+                    log::error!("tts must be compiled with the speech_dispatcher feature on linux");
+                    return Err(Error::NoneError);
+                }
             }
+
             #[cfg(target_arch = "wasm32")]
             Backends::Web => {
                 let tts = backends::Web::new()?;
-                Ok(Tts(Box::new(tts)))
+                Tts(Box::new(tts))
             }
             #[cfg(all(windows, feature = "tolk"))]
             Backends::Tolk => {
                 let tts = backends::Tolk::new();
                 if let Some(tts) = tts {
-                    Ok(Tts(Box::new(tts)))
+                    Tts(Box::new(tts))
                 } else {
-                    Err(Error::NoneError)
+                    return Err(Error::NoneError);
                 }
             }
             #[cfg(windows)]
             Backends::WinRt => {
                 let tts = backends::WinRt::new()?;
-                Ok(Tts(Box::new(tts)))
+                Tts(Box::new(tts))
             }
             #[cfg(target_os = "macos")]
-            Backends::AppKit => Ok(Tts(Box::new(backends::AppKit::new()))),
+            Backends::AppKit => Tts(Box::new(backends::AppKit::new())),
             #[cfg(any(target_os = "macos", target_os = "ios"))]
-            Backends::AvFoundation => Ok(Tts(Box::new(backends::AvFoundation::new()))),
+            Backends::AvFoundation => Tts(Box::new(backends::AvFoundation::new())),
             #[cfg(target_os = "android")]
             Backends::Android => {
                 let tts = backends::Android::new()?;
-                Ok(Tts(Box::new(tts)))
+                Tts(Box::new(tts))
             }
         };
-        if let Ok(backend) = backend {
-            if let Some(id) = backend.0.id() {
-                let mut callbacks = CALLBACKS.lock().unwrap();
-                callbacks.insert(id, Callbacks::default());
-            }
-            Ok(backend)
-        } else {
-            backend
+        if let Some(id) = backend.0.id() {
+            let mut callbacks = CALLBACKS.lock().unwrap();
+            callbacks.insert(id, Callbacks::default());
         }
+        Ok(backend)
     }
 
     pub fn default() -> Result<Tts, Error> {

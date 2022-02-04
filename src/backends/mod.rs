@@ -1,4 +1,4 @@
-#[cfg(target_os = "linux")]
+#[cfg(feature = "speech_dispatcher")]
 mod speech_dispatcher;
 
 #[cfg(all(windows, feature = "tolk"))]
@@ -19,7 +19,7 @@ mod av_foundation;
 #[cfg(target_os = "android")]
 mod android;
 
-#[cfg(target_os = "linux")]
+#[cfg(feature = "speech_dispatcher")]
 pub(crate) use self::speech_dispatcher::*;
 
 #[cfg(all(windows, feature = "tolk"))]
