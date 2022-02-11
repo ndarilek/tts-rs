@@ -1,6 +1,6 @@
 [package]
 name = "tts"
-version = "0.20.2"
+version = "0.20.3"
 authors = ["Nolan Darilek <nolan@thewordnerd.info>"]
 repository = "https://github.com/ndarilek/tts-rs"
 description = "High-level Text-To-Speech (TTS) interface"
