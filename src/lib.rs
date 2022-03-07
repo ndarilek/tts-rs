@@ -277,7 +277,7 @@ impl Tts {
             #[cfg(target_os = "linux")]
             Backends::SpeechDispatcher => {
                 let tts = backends::SpeechDispatcher::new()?;
-                Ok(Tts(Box::new(tts)))
+                Ok(Tts(Arc::new(RwLock::new(Box::new(tts)))))
             }
             #[cfg(target_arch = "wasm32")]
             Backends::Web => {
