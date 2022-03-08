@@ -282,13 +282,13 @@ impl Tts {
             #[cfg(target_arch = "wasm32")]
             Backends::Web => {
                 let tts = backends::Web::new()?;
-                Ok(Tts(Box::new(tts)))
+                Ok(Tts(Arc::new(RwLock::new(Box::new(tts)))))
             }
             #[cfg(all(windows, feature = "tolk"))]
             Backends::Tolk => {
                 let tts = backends::Tolk::new();
                 if let Some(tts) = tts {
-                    Ok(Tts(Box::new(tts)))
+                    Ok(Tts(Arc::new(RwLock::new(Box::new(tts)))))
                 } else {
                     Err(Error::NoneError)
                 }
@@ -299,13 +299,17 @@ impl Tts {
                 Ok(Tts(Arc::new(RwLock::new(Box::new(tts)))))
             }
             #[cfg(target_os = "macos")]
-            Backends::AppKit => Ok(Tts(Box::new(backends::AppKit::new()))),
+            Backends::AppKit => Ok(Tts(Arc::new(RwLock::new(
+                Box::new(backends::AppKit::new()),
+            )))),
             #[cfg(any(target_os = "macos", target_os = "ios"))]
-            Backends::AvFoundation => Ok(Tts(Box::new(backends::AvFoundation::new()))),
+            Backends::AvFoundation => Ok(Tts(Arc::new(RwLock::new(Box::new(
+                backends::AvFoundation::new(),
+            ))))),
             #[cfg(target_os = "android")]
             Backends::Android => {
                 let tts = backends::Android::new()?;
-                Ok(Tts(Box::new(tts)))
+                Ok(Tts(Arc::new(RwLock::new(Box::new(tts)))))
             }
         };
         if let Ok(backend) = backend {
