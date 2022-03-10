@@ -12,8 +12,6 @@ use tts::*;
 fn main() -> Result<(), Error> {
     env_logger::init();
     let tts = Tts::default()?;
-    let mut tts_clone = tts.clone();
-    drop(tts);
     if Tts::screen_reader_available() {
         println!("A screen reader is available on this platform.");
     } else {
@@ -22,18 +20,20 @@ fn main() -> Result<(), Error> {
     let Features {
         utterance_callbacks,
         ..
-    } = tts_clone.supported_features();
+    } = tts.supported_features();
     if utterance_callbacks {
-        tts_clone.on_utterance_begin(Some(Box::new(|utterance| {
+        tts.on_utterance_begin(Some(Box::new(|utterance| {
             println!("Started speaking {:?}", utterance)
         })))?;
-        tts_clone.on_utterance_end(Some(Box::new(|utterance| {
+        tts.on_utterance_end(Some(Box::new(|utterance| {
             println!("Finished speaking {:?}", utterance)
         })))?;
-        tts_clone.on_utterance_stop(Some(Box::new(|utterance| {
+        tts.on_utterance_stop(Some(Box::new(|utterance| {
             println!("Stopped speaking {:?}", utterance)
         })))?;
     }
+    let mut tts_clone = tts.clone();
+    drop(tts);
     let Features { is_speaking, .. } = tts_clone.supported_features();
     if is_speaking {
         println!("Are we speaking? {}", tts_clone.is_speaking()?);
