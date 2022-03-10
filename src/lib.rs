@@ -157,7 +157,7 @@ unsafe impl Send for UtteranceId {}
 
 unsafe impl Sync for UtteranceId {}
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Features {
     pub is_speaking: bool,
@@ -166,19 +166,6 @@ pub struct Features {
     pub stop: bool,
     pub utterance_callbacks: bool,
     pub volume: bool,
-}
-
-impl Default for Features {
-    fn default() -> Self {
-        Self {
-            stop: false,
-            rate: false,
-            pitch: false,
-            volume: false,
-            is_speaking: false,
-            utterance_callbacks: false,
-        }
-    }
 }
 
 impl fmt::Display for Features {
