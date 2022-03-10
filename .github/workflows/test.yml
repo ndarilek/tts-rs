@@ -26,10 +26,16 @@ jobs:
         with:
           command: check
           args: --all-features --examples
+        if: ${{ runner.os != 'Linux' }}
+      - uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --no-default-features --examples
+        if: ${{ runner.os == 'Linux' }}
       - uses: actions-rs/cargo@v1
         with:
           command: fmt
-          args: --all -- --check
+          args: --all --check
       - uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -55,7 +61,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: fmt
-          args: --all -- --check
+          args: --all --check
       - uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
