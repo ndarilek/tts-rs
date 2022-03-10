@@ -40,6 +40,12 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           args: --all-features
+        if: ${{ runner.os != 'Linux' }}
+      - uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: --no-default-features
+        if: ${{ runner.os == 'Linux' }}
 
   check_web:
     name: Check Web
