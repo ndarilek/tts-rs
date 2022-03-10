@@ -656,9 +656,11 @@ impl Tts {
 
 impl Drop for Tts {
     fn drop(&mut self) {
-        if let Some(id) = self.0.read().unwrap().id() {
-            let mut callbacks = CALLBACKS.lock().unwrap();
-            callbacks.remove(&id);
+        if Arc::strong_count(&self.0) <= 1 {
+            if let Some(id) = self.0.read().unwrap().id() {
+                let mut callbacks = CALLBACKS.lock().unwrap();
+                callbacks.remove(&id);
+            }
         }
     }
 }
