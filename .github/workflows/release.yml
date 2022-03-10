@@ -37,12 +37,6 @@ jobs:
         with:
           command: fmt
           args: --all --check
-        if: ${{ runner.os == 'Linux' }}
-      - uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all --no-default-features --check
-        if: ${{ runner.os == 'Linux' }}
       - uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
