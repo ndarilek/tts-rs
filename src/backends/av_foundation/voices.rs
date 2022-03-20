@@ -10,7 +10,7 @@ use crate::backends::AvFoundation;
 use crate::voices;
 use crate::voices::Gender;
 
-#[derive(Copy,Clone)]
+#[derive(Copy,Clone, Debug)]
 pub(crate) struct AVSpeechSynthesisVoice(*const Object);
 
 impl AVSpeechSynthesisVoice {

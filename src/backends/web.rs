@@ -5,10 +5,14 @@ use lazy_static::lazy_static;
 use log::{info, trace};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{SpeechSynthesisEvent, SpeechSynthesisUtterance};
+use web_sys::{
+    SpeechSynthesisErrorCode, SpeechSynthesisErrorEvent, SpeechSynthesisEvent,
+    SpeechSynthesisUtterance,
+};
 
 use crate::{Backend, BackendId, Error, Features, UtteranceId, CALLBACKS};
 
+#[derive(Clone, Debug)]
 pub struct Web {
     id: BackendId,
     rate: f32,
@@ -18,6 +22,8 @@ pub struct Web {
 
 lazy_static! {
     static ref NEXT_BACKEND_ID: Mutex<u64> = Mutex::new(0);
+    static ref UTTERANCE_MAPPINGS: Mutex<Vec<(BackendId, UtteranceId)>> = Mutex::new(Vec::new());
+    static ref NEXT_UTTERANCE_ID: Mutex<u64> = Mutex::new(0);
 }
 
 impl Web {
@@ -59,25 +65,43 @@ impl Backend for Web {
         utterance.set_pitch(self.pitch);
         utterance.set_volume(self.volume);
         let id = self.id().unwrap();
-        let utterance_id = UtteranceId::Web(utterance.clone());
-        let callback = Closure::wrap(Box::new(move |evt: SpeechSynthesisEvent| {
+        let mut uid = NEXT_UTTERANCE_ID.lock().unwrap();
+        let utterance_id = UtteranceId::Web(*uid);
+        *uid += 1;
+        drop(uid);
+        let mut mappings = UTTERANCE_MAPPINGS.lock().unwrap();
+        mappings.push((self.id, utterance_id));
+        drop(mappings);
+        let callback = Closure::wrap(Box::new(move |_evt: SpeechSynthesisEvent| {
             let mut callbacks = CALLBACKS.lock().unwrap();
             let callback = callbacks.get_mut(&id).unwrap();
             if let Some(f) = callback.utterance_begin.as_mut() {
-                let utterance_id = UtteranceId::Web(evt.utterance());
                 f(utterance_id);
             }
         }) as Box<dyn Fn(_)>);
         utterance.set_onstart(Some(callback.as_ref().unchecked_ref()));
-        let callback = Closure::wrap(Box::new(move |evt: SpeechSynthesisEvent| {
+        let callback = Closure::wrap(Box::new(move |_evt: SpeechSynthesisEvent| {
             let mut callbacks = CALLBACKS.lock().unwrap();
             let callback = callbacks.get_mut(&id).unwrap();
             if let Some(f) = callback.utterance_end.as_mut() {
-                let utterance_id = UtteranceId::Web(evt.utterance());
                 f(utterance_id);
             }
+            let mut mappings = UTTERANCE_MAPPINGS.lock().unwrap();
+            mappings.retain(|v| v.1 != utterance_id);
         }) as Box<dyn Fn(_)>);
         utterance.set_onend(Some(callback.as_ref().unchecked_ref()));
+        let callback = Closure::wrap(Box::new(move |evt: SpeechSynthesisErrorEvent| {
+            if evt.error() == SpeechSynthesisErrorCode::Canceled {
+                let mut callbacks = CALLBACKS.lock().unwrap();
+                let callback = callbacks.get_mut(&id).unwrap();
+                if let Some(f) = callback.utterance_stop.as_mut() {
+                    f(utterance_id);
+                }
+            }
+            let mut mappings = UTTERANCE_MAPPINGS.lock().unwrap();
+            mappings.retain(|v| v.1 != utterance_id);
+        }) as Box<dyn Fn(_)>);
+        utterance.set_onerror(Some(callback.as_ref().unchecked_ref()));
         if interrupt {
             self.stop()?;
         }
@@ -184,5 +208,12 @@ impl Backend for Web {
 
     fn set_voice(&mut self, voice: &str) -> Result<(),Error> {
         unimplemented!()
+    }
+}
+
+impl Drop for Web {
+    fn drop(&mut self) {
+        let mut mappings = UTTERANCE_MAPPINGS.lock().unwrap();
+        mappings.retain(|v| v.0 != self.id);
     }
 }

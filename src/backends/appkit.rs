@@ -9,6 +9,7 @@ use objc::*;
 
 use crate::{Backend, BackendId, Error, Features, UtteranceId};
 
+#[derive(Clone, Debug)]
 pub(crate) struct AppKit(*mut Object, *mut Object);
 
 impl AppKit {
@@ -197,7 +198,7 @@ impl Backend for AppKit {
 
     fn is_speaking(&self) -> Result<bool, Error> {
         let is_speaking: i8 = unsafe { msg_send![self.0, isSpeaking] };
-        Ok(is_speaking == YES)
+        Ok(is_speaking != NO as i8)
     }
 
     fn voice(&self) -> Result<String,Error> {

@@ -1,22 +1,10 @@
-use std::io;
-
-#[cfg(target_os = "macos")]
-use cocoa_foundation::base::id;
-#[cfg(target_os = "macos")]
-use cocoa_foundation::foundation::NSRunLoop;
-#[cfg(target_os = "macos")]
-use objc::{msg_send, sel, sel_impl};
-
 use tts::*;
 
-fn main() -> Result<(), Error> {
-    env_logger::init();
+// The `loop {}` below only simulates an app loop.
+// Without it, the `TTS` instance gets dropped before callbacks can run.
+#[allow(unreachable_code)]
+fn run() -> Result<(), Error> {
     let mut tts = Tts::default()?;
-    if Tts::screen_reader_available() {
-        println!("A screen reader is available on this platform.");
-    } else {
-        println!("No screen reader is available on this platform.");
-    }
     let Features {
         utterance_callbacks,
         ..
@@ -71,31 +59,12 @@ fn main() -> Result<(), Error> {
         tts.speak("This is normal volume.", false)?;
         tts.set_volume(original_volume)?;
     }
-    let Features { voices, .. } = tts.supported_features();
-    if voices {
-        let original_voice = tts.voice()?;
-        let voices_list = tts.list_voices();
-        println!("Available voices:\n===");
-        for v in voices_list.iter() {
-            println!("{}",v);
-            tts.set_voice(v)?;
-            println!("voice set");
-            println!("{}", tts.voice()?);
-            tts.speak(v,false)?;
-        }
-        tts.set_voice(original_voice)?;
-    }
     tts.speak("Goodbye.", false)?;
-    let mut _input = String::new();
-    // The below is only needed to make the example run on MacOS because there is no NSRunLoop in this context.
-    // It shouldn't be needed in an app or game that almost certainly has one already.
-    #[cfg(target_os = "macos")]
-    {
-        let run_loop: id = unsafe { NSRunLoop::currentRunLoop() };
-        unsafe {
-            let _: () = msg_send![run_loop, run];
-        }
-    }
-    io::stdin().read_line(&mut _input)?;
+    loop {}
     Ok(())
+}
+
+#[cfg_attr(target_os = "android", ndk_glue::main(backtrace = "on"))]
+pub fn main() {
+    run().expect("Failed to run");
 }

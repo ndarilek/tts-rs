@@ -2,120 +2,214 @@
  * a Text-To-Speech (TTS) library providing high-level interfaces to a variety of backends.
  * Currently supported backends are:
  * * Windows
- *   * Screen readers/SAPI via Tolk
+ *   * Screen readers/SAPI via Tolk (requires `tolk` Cargo feature)
  *   * WinRT
  * * Linux via [Speech Dispatcher](https://freebsoft.org/speechd)
- * * MacOS
+ * * MacOS/iOS
  *   * AppKit on MacOS 10.13 and below
  *   * AVFoundation on MacOS 10.14 and above, and iOS
+ * * Android
  * * WebAssembly
  */
 
-use std::boxed::Box;
 use std::collections::HashMap;
 #[cfg(target_os = "macos")]
 use std::ffi::CStr;
-use std::sync::Mutex;
+use std::fmt;
+use std::sync::{Arc, Mutex};
+use std::{boxed::Box, sync::RwLock};
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 use cocoa_foundation::base::id;
+use dyn_clonable::*;
 use lazy_static::lazy_static;
 #[cfg(target_os = "macos")]
 use libc::c_char;
 #[cfg(target_os = "macos")]
 use objc::{class, msg_send, sel, sel_impl};
+#[cfg(target_os = "linux")]
+use speech_dispatcher::Error as SpeechDispatcherError;
 use thiserror::Error;
-#[cfg(target_arch = "wasm32")]
-use web_sys::SpeechSynthesisUtterance;
-
-#[cfg(windows)]
-use tts_winrt_bindings::windows::media::playback::MediaPlaybackItem;
+#[cfg(all(windows, feature = "tolk"))]
+use tolk::Tolk;
 
 mod backends;
 mod voices;
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Backends {
-    #[cfg(target_os = "linux")]
-    SpeechDispatcher,
-    #[cfg(target_arch = "wasm32")]
-    Web,
-    #[cfg(windows)]
-    Tolk,
-    #[cfg(windows)]
-    WinRT,
+    #[cfg(target_os = "android")]
+    Android,
     #[cfg(target_os = "macos")]
     AppKit,
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     AvFoundation,
+    #[cfg(target_os = "linux")]
+    SpeechDispatcher,
+    #[cfg(all(windows, feature = "tolk"))]
+    Tolk,
+    #[cfg(target_arch = "wasm32")]
+    Web,
+    #[cfg(windows)]
+    WinRt,
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+impl fmt::Display for Backends {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        match self {
+            #[cfg(target_os = "android")]
+            Backends::Android => writeln!(f, "Android"),
+            #[cfg(target_os = "macos")]
+            Backends::AppKit => writeln!(f, "AppKit"),
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            Backends::AvFoundation => writeln!(f, "AVFoundation"),
+            #[cfg(target_os = "linux")]
+            Backends::SpeechDispatcher => writeln!(f, "Speech Dispatcher"),
+            #[cfg(all(windows, feature = "tolk"))]
+            Backends::Tolk => writeln!(f, "Tolk"),
+            #[cfg(target_arch = "wasm32")]
+            Backends::Web => writeln!(f, "Web"),
+            #[cfg(windows)]
+            Backends::WinRt => writeln!(f, "Windows Runtime"),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BackendId {
+    #[cfg(target_os = "android")]
+    Android(u64),
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    AvFoundation(u64),
     #[cfg(target_os = "linux")]
     SpeechDispatcher(u64),
     #[cfg(target_arch = "wasm32")]
     Web(u64),
     #[cfg(windows)]
-    WinRT(u64),
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
-    AvFoundation(u64),
+    WinRt(u64),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+impl fmt::Display for BackendId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        match self {
+            #[cfg(target_os = "android")]
+            BackendId::Android(id) => writeln!(f, "{}", id),
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            BackendId::AvFoundation(id) => writeln!(f, "{}", id),
+            #[cfg(target_os = "linux")]
+            BackendId::SpeechDispatcher(id) => writeln!(f, "{}", id),
+            #[cfg(target_arch = "wasm32")]
+            BackendId::Web(id) => writeln!(f, "Web({})", id),
+            #[cfg(windows)]
+            BackendId::WinRt(id) => writeln!(f, "{}", id),
+        }
+    }
+}
+
+// # Note
+//
+// Most trait implementations are blocked by cocoa_foundation::base::id;
+// which is a type alias for objc::runtime::Object, which only implements Debug.
+#[derive(Debug)]
+#[cfg_attr(
+    not(any(target_os = "macos", target_os = "ios")),
+    derive(Clone, Copy, Eq, Hash, PartialEq, PartialOrd, Ord)
+)]
+#[cfg_attr(
+    all(feature = "serde", not(any(target_os = "macos", target_os = "ios"))),
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub enum UtteranceId {
+    #[cfg(target_os = "android")]
+    Android(u64),
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    AvFoundation(id),
     #[cfg(target_os = "linux")]
     SpeechDispatcher(u64),
     #[cfg(target_arch = "wasm32")]
-    Web(SpeechSynthesisUtterance),
+    Web(u64),
     #[cfg(windows)]
-    WinRT(MediaPlaybackItem),
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
-    AvFoundation(id),
+    WinRt(u64),
 }
 
-pub struct Features {
-    pub stop: bool,
-    pub rate: bool,
-    pub pitch: bool,
-    pub volume: bool,
-    pub is_speaking: bool,
-    pub voices: bool,
-    pub utterance_callbacks: bool,
-}
-
-impl Default for Features {
-    fn default() -> Self {
-        Self {
-            stop: false,
-            rate: false,
-            pitch: false,
-            volume: false,
-            is_speaking: false,
-            voices: false,
-            utterance_callbacks: false,
+// # Note
+//
+// Display is not implemented by cocoa_foundation::base::id;
+// which is a type alias for objc::runtime::Object, which only implements Debug.
+#[cfg(not(any(target_os = "macos", target_os = "ios")))]
+impl fmt::Display for UtteranceId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        match self {
+            #[cfg(target_os = "android")]
+            UtteranceId::Android(id) => writeln!(f, "{}", id),
+            #[cfg(target_os = "linux")]
+            UtteranceId::SpeechDispatcher(id) => writeln!(f, "{}", id),
+            #[cfg(target_arch = "wasm32")]
+            UtteranceId::Web(id) => writeln!(f, "Web({})", id),
+            #[cfg(windows)]
+            UtteranceId::WinRt(id) => writeln!(f, "{}", id),
         }
+    }
+}
+
+unsafe impl Send for UtteranceId {}
+
+unsafe impl Sync for UtteranceId {}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Features {
+    pub is_speaking: bool,
+    pub pitch: bool,
+    pub rate: bool,
+    pub stop: bool,
+    pub utterance_callbacks: bool,
+    pub voices: bool,
+    pub volume: bool,
+}
+
+impl fmt::Display for Features {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        writeln!(f, "{:#?}", self)
+    }
+}
+
+impl Features {
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("IO error: {0}")]
-    IO(#[from] std::io::Error),
+    Io(#[from] std::io::Error),
     #[error("Value not received")]
     NoneError,
+    #[error("Operation failed")]
+    OperationFailed,
     #[cfg(target_arch = "wasm32")]
-    #[error("JavaScript error: [0])]")]
+    #[error("JavaScript error: [0]")]
     JavaScriptError(wasm_bindgen::JsValue),
+    #[cfg(target_os = "linux")]
+    #[error("Speech Dispatcher error: {0}")]
+    SpeechDispatcher(#[from] SpeechDispatcherError),
     #[cfg(windows)]
     #[error("WinRT error")]
-    WinRT(winrt::Error),
+    WinRt(windows::core::Error),
     #[error("Unsupported feature")]
     UnsupportedFeature,
     #[error("Out of range")]
     OutOfRange,
+    #[cfg(target_os = "android")]
+    #[error("JNI error: [0])]")]
+    JNI(#[from] jni::errors::Error),
 }
 
-pub trait Backend {
+#[clonable]
+pub trait Backend: Clone {
     fn id(&self) -> Option<BackendId>;
     fn supported_features(&self) -> Features;
     fn speak(&mut self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error>;
@@ -145,6 +239,7 @@ pub trait Backend {
 struct Callbacks {
     utterance_begin: Option<Box<dyn FnMut(UtteranceId)>>,
     utterance_end: Option<Box<dyn FnMut(UtteranceId)>>,
+    utterance_stop: Option<Box<dyn FnMut(UtteranceId)>>,
 }
 
 unsafe impl Send for Callbacks {}
@@ -158,47 +253,59 @@ lazy_static! {
     };
 }
 
-pub struct TTS(Box<dyn Backend>);
+#[derive(Clone)]
+pub struct Tts(Arc<RwLock<Box<dyn Backend>>>);
 
-unsafe impl std::marker::Send for TTS {}
+unsafe impl Send for Tts {}
 
-unsafe impl std::marker::Sync for TTS {}
+unsafe impl Sync for Tts {}
 
-impl TTS {
+impl Tts {
     /**
      * Create a new `TTS` instance with the specified backend.
      */
-    pub fn new(backend: Backends) -> Result<TTS, Error> {
+    pub fn new(backend: Backends) -> Result<Tts, Error> {
         let backend = match backend {
             #[cfg(target_os = "linux")]
-            Backends::SpeechDispatcher => Ok(TTS(Box::new(backends::SpeechDispatcher::new()))),
+            Backends::SpeechDispatcher => {
+                let tts = backends::SpeechDispatcher::new()?;
+                Ok(Tts(Arc::new(RwLock::new(Box::new(tts)))))
+            }
             #[cfg(target_arch = "wasm32")]
             Backends::Web => {
                 let tts = backends::Web::new()?;
-                Ok(TTS(Box::new(tts)))
+                Ok(Tts(Arc::new(RwLock::new(Box::new(tts)))))
             }
-            #[cfg(windows)]
+            #[cfg(all(windows, feature = "tolk"))]
             Backends::Tolk => {
                 let tts = backends::Tolk::new();
                 if let Some(tts) = tts {
-                    Ok(TTS(Box::new(tts)))
+                    Ok(Tts(Arc::new(RwLock::new(Box::new(tts)))))
                 } else {
                     Err(Error::NoneError)
                 }
             }
             #[cfg(windows)]
-            Backends::WinRT => {
-                let tts = backends::winrt::WinRT::new()?;
-                Ok(TTS(Box::new(tts)))
+            Backends::WinRt => {
+                let tts = backends::WinRt::new()?;
+                Ok(Tts(Arc::new(RwLock::new(Box::new(tts)))))
             }
             #[cfg(target_os = "macos")]
-            Backends::AppKit => Ok(TTS(Box::new(backends::AppKit::new()))),
+            Backends::AppKit => Ok(Tts(Arc::new(RwLock::new(
+                Box::new(backends::AppKit::new()),
+            )))),
             #[cfg(any(target_os = "macos", target_os = "ios"))]
-            Backends::AvFoundation => Ok(TTS(Box::new(backends::AvFoundation::new()))),
+            Backends::AvFoundation => Ok(Tts(Arc::new(RwLock::new(Box::new(
+                backends::AvFoundation::new(),
+            ))))),
+            #[cfg(target_os = "android")]
+            Backends::Android => {
+                let tts = backends::Android::new()?;
+                Ok(Tts(Arc::new(RwLock::new(Box::new(tts)))))
+            }
         };
-        if backend.is_ok() {
-            let backend = backend.unwrap();
-            if let Some(id) = backend.0.id() {
+        if let Ok(backend) = backend {
+            if let Some(id) = backend.0.read().unwrap().id() {
                 let mut callbacks = CALLBACKS.lock().unwrap();
                 callbacks.insert(id, Callbacks::default());
             }
@@ -208,17 +315,19 @@ impl TTS {
         }
     }
 
-    pub fn default() -> Result<TTS, Error> {
+    pub fn default() -> Result<Tts, Error> {
         #[cfg(target_os = "linux")]
-        let tts = TTS::new(Backends::SpeechDispatcher);
-        #[cfg(windows)]
-        let tts = if let Some(tts) = TTS::new(Backends::Tolk).ok() {
+        let tts = Tts::new(Backends::SpeechDispatcher);
+        #[cfg(all(windows, feature = "tolk"))]
+        let tts = if let Ok(tts) = Tts::new(Backends::Tolk) {
             Ok(tts)
         } else {
-            TTS::new(Backends::WinRT)
+            Tts::new(Backends::WinRt)
         };
+        #[cfg(all(windows, not(feature = "tolk")))]
+        let tts = Tts::new(Backends::WinRt);
         #[cfg(target_arch = "wasm32")]
-        let tts = TTS::new(Backends::Web);
+        let tts = Tts::new(Backends::Web);
         #[cfg(target_os = "macos")]
         let tts = unsafe {
             // Needed because the Rust NSProcessInfo structs report bogus values, and I don't want to pull in a full bindgen stack.
@@ -227,19 +336,21 @@ impl TTS {
             let str: *const c_char = msg_send![version, UTF8String];
             let str = CStr::from_ptr(str);
             let str = str.to_string_lossy();
-            let version: Vec<&str> = str.split(" ").collect();
+            let version: Vec<&str> = str.split(' ').collect();
             let version = version[1];
-            let version_parts: Vec<&str> = version.split(".").collect();
-            let minor_version: i8 = version_parts[1].parse().unwrap();
+            let version_parts: Vec<&str> = version.split('.').collect();
             let major_version: i8 = version_parts[0].parse().unwrap();
-            if minor_version >= 14 || major_version >= 11 {
-                TTS::new(Backends::AvFoundation)
+            let minor_version: i8 = version_parts[1].parse().unwrap();
+            if major_version >= 11 || minor_version >= 14 {
+                Tts::new(Backends::AvFoundation)
             } else {
-                TTS::new(Backends::AppKit)
+                Tts::new(Backends::AppKit)
             }
         };
         #[cfg(target_os = "ios")]
-        let tts = TTS::new(Backends::AvFoundation);
+        let tts = Tts::new(Backends::AvFoundation);
+        #[cfg(target_os = "android")]
+        let tts = Tts::new(Backends::Android);
         tts
     }
 
@@ -247,7 +358,7 @@ impl TTS {
      * Returns the features supported by this TTS engine
      */
     pub fn supported_features(&self) -> Features {
-        self.0.supported_features()
+        self.0.read().unwrap().supported_features()
     }
 
     /**
@@ -258,7 +369,10 @@ impl TTS {
         text: S,
         interrupt: bool,
     ) -> Result<Option<UtteranceId>, Error> {
-        self.0.speak(text.into().as_str(), interrupt)
+        self.0
+            .write()
+            .unwrap()
+            .speak(text.into().as_str(), interrupt)
     }
 
     /**
@@ -267,7 +381,7 @@ impl TTS {
     pub fn stop(&mut self) -> Result<&Self, Error> {
         let Features { stop, .. } = self.supported_features();
         if stop {
-            self.0.stop()?;
+            self.0.write().unwrap().stop()?;
             Ok(self)
         } else {
             Err(Error::UnsupportedFeature)
@@ -278,21 +392,21 @@ impl TTS {
      * Returns the minimum rate for this speech synthesizer.
      */
     pub fn min_rate(&self) -> f32 {
-        self.0.min_rate()
+        self.0.read().unwrap().min_rate()
     }
 
     /**
      * Returns the maximum rate for this speech synthesizer.
      */
     pub fn max_rate(&self) -> f32 {
-        self.0.max_rate()
+        self.0.read().unwrap().max_rate()
     }
 
     /**
      * Returns the normal rate for this speech synthesizer.
      */
     pub fn normal_rate(&self) -> f32 {
-        self.0.normal_rate()
+        self.0.read().unwrap().normal_rate()
     }
 
     /**
@@ -301,7 +415,7 @@ impl TTS {
     pub fn get_rate(&self) -> Result<f32, Error> {
         let Features { rate, .. } = self.supported_features();
         if rate {
-            self.0.get_rate()
+            self.0.read().unwrap().get_rate()
         } else {
             Err(Error::UnsupportedFeature)
         }
@@ -315,10 +429,11 @@ impl TTS {
             rate: rate_feature, ..
         } = self.supported_features();
         if rate_feature {
-            if rate < self.0.min_rate() || rate > self.0.max_rate() {
+            let mut backend = self.0.write().unwrap();
+            if rate < backend.min_rate() || rate > backend.max_rate() {
                 Err(Error::OutOfRange)
             } else {
-                self.0.set_rate(rate)?;
+                backend.set_rate(rate)?;
                 Ok(self)
             }
         } else {
@@ -330,21 +445,21 @@ impl TTS {
      * Returns the minimum pitch for this speech synthesizer.
      */
     pub fn min_pitch(&self) -> f32 {
-        self.0.min_pitch()
+        self.0.read().unwrap().min_pitch()
     }
 
     /**
      * Returns the maximum pitch for this speech synthesizer.
      */
     pub fn max_pitch(&self) -> f32 {
-        self.0.max_pitch()
+        self.0.read().unwrap().max_pitch()
     }
 
     /**
      * Returns the normal pitch for this speech synthesizer.
      */
     pub fn normal_pitch(&self) -> f32 {
-        self.0.normal_pitch()
+        self.0.read().unwrap().normal_pitch()
     }
 
     /**
@@ -353,7 +468,7 @@ impl TTS {
     pub fn get_pitch(&self) -> Result<f32, Error> {
         let Features { pitch, .. } = self.supported_features();
         if pitch {
-            self.0.get_pitch()
+            self.0.read().unwrap().get_pitch()
         } else {
             Err(Error::UnsupportedFeature)
         }
@@ -368,10 +483,11 @@ impl TTS {
             ..
         } = self.supported_features();
         if pitch_feature {
-            if pitch < self.0.min_pitch() || pitch > self.0.max_pitch() {
+            let mut backend = self.0.write().unwrap();
+            if pitch < backend.min_pitch() || pitch > backend.max_pitch() {
                 Err(Error::OutOfRange)
             } else {
-                self.0.set_pitch(pitch)?;
+                backend.set_pitch(pitch)?;
                 Ok(self)
             }
         } else {
@@ -383,21 +499,21 @@ impl TTS {
      * Returns the minimum volume for this speech synthesizer.
      */
     pub fn min_volume(&self) -> f32 {
-        self.0.min_volume()
+        self.0.read().unwrap().min_volume()
     }
 
     /**
      * Returns the maximum volume for this speech synthesizer.
      */
     pub fn max_volume(&self) -> f32 {
-        self.0.max_volume()
+        self.0.read().unwrap().max_volume()
     }
 
     /**
      * Returns the normal volume for this speech synthesizer.
      */
     pub fn normal_volume(&self) -> f32 {
-        self.0.normal_volume()
+        self.0.read().unwrap().normal_volume()
     }
 
     /**
@@ -406,7 +522,7 @@ impl TTS {
     pub fn get_volume(&self) -> Result<f32, Error> {
         let Features { volume, .. } = self.supported_features();
         if volume {
-            self.0.get_volume()
+            self.0.read().unwrap().get_volume()
         } else {
             Err(Error::UnsupportedFeature)
         }
@@ -421,10 +537,11 @@ impl TTS {
             ..
         } = self.supported_features();
         if volume_feature {
-            if volume < self.0.min_volume() || volume > self.0.max_volume() {
+            let mut backend = self.0.write().unwrap();
+            if volume < backend.min_volume() || volume > backend.max_volume() {
                 Err(Error::OutOfRange)
             } else {
-                self.0.set_volume(volume)?;
+                backend.set_volume(volume)?;
                 Ok(self)
             }
         } else {
@@ -438,7 +555,7 @@ impl TTS {
     pub fn is_speaking(&self) -> Result<bool, Error> {
         let Features { is_speaking, .. } = self.supported_features();
         if is_speaking {
-            self.0.is_speaking()
+            self.0.read().unwrap().is_speaking()
         } else {
             Err(Error::UnsupportedFeature)
         }
@@ -448,7 +565,7 @@ impl TTS {
      * Returns list of available voices.
      */
     pub fn list_voices(&self) -> Vec<String> {
-        self.0.list_voices()
+        self.0.read().unwrap().list_voices()
     }
 
     /**
@@ -457,7 +574,7 @@ impl TTS {
     pub fn voice(&self) -> Result<String,Error> {
         let Features { voices, .. } = self.supported_features();
         if voices {
-            self.0.voice()
+            self.0.read().unwrap().voice()
         } else {
             Err(Error::UnsupportedFeature)
         }
@@ -470,9 +587,9 @@ impl TTS {
         let Features {
             voices: voices_feature,
             ..
-        } = self.0.supported_features();
+        } = self.supported_features();
         if voices_feature {
-            self.0.set_voice(voice.into().as_str())
+            self.0.write().unwrap().set_voice(voice.into().as_str())
         } else {
             Err(Error::UnsupportedFeature)
         }
@@ -491,7 +608,7 @@ impl TTS {
         } = self.supported_features();
         if utterance_callbacks {
             let mut callbacks = CALLBACKS.lock().unwrap();
-            let id = self.0.id().unwrap();
+            let id = self.0.read().unwrap().id().unwrap();
             let mut callbacks = callbacks.get_mut(&id).unwrap();
             callbacks.utterance_begin = callback;
             Ok(())
@@ -513,7 +630,7 @@ impl TTS {
         } = self.supported_features();
         if utterance_callbacks {
             let mut callbacks = CALLBACKS.lock().unwrap();
-            let id = self.0.id().unwrap();
+            let id = self.0.read().unwrap().id().unwrap();
             let mut callbacks = callbacks.get_mut(&id).unwrap();
             callbacks.utterance_end = callback;
             Ok(())
@@ -521,13 +638,55 @@ impl TTS {
             Err(Error::UnsupportedFeature)
         }
     }
+
+    /**
+     * Called when this speech synthesizer is stopped and still has utterances in its queue.
+     */
+    pub fn on_utterance_stop(
+        &self,
+        callback: Option<Box<dyn FnMut(UtteranceId)>>,
+    ) -> Result<(), Error> {
+        let Features {
+            utterance_callbacks,
+            ..
+        } = self.supported_features();
+        if utterance_callbacks {
+            let mut callbacks = CALLBACKS.lock().unwrap();
+            let id = self.0.read().unwrap().id().unwrap();
+            let mut callbacks = callbacks.get_mut(&id).unwrap();
+            callbacks.utterance_stop = callback;
+            Ok(())
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
+    }
+
+    /*
+     * Returns `true` if a screen reader is available to provide speech.
+     */
+    #[allow(unreachable_code)]
+    pub fn screen_reader_available() -> bool {
+        #[cfg(target_os = "windows")]
+        {
+            #[cfg(feature = "tolk")]
+            {
+                let tolk = Tolk::new();
+                return tolk.detect_screen_reader().is_some();
+            }
+            #[cfg(not(feature = "tolk"))]
+            return false;
+        }
+        false
+    }
 }
 
-impl Drop for TTS {
+impl Drop for Tts {
     fn drop(&mut self) {
-        if let Some(id) = self.0.id() {
-            let mut callbacks = CALLBACKS.lock().unwrap();
-            callbacks.remove(&id);
+        if Arc::strong_count(&self.0) <= 1 {
+            if let Some(id) = self.0.read().unwrap().id() {
+                let mut callbacks = CALLBACKS.lock().unwrap();
+                callbacks.remove(&id);
+            }
         }
     }
 }

@@ -1,7 +1,5 @@
 #[cfg(target_os = "linux")]
-use std::collections::HashMap;
-use std::convert::TryInto;
-use std::sync::Mutex;
+use std::{collections::HashMap, sync::Mutex};
 
 use lazy_static::*;
 use log::{info, trace};
@@ -9,6 +7,7 @@ use speech_dispatcher::*;
 
 use crate::{Backend, BackendId, Error, Features, UtteranceId, CALLBACKS};
 
+#[derive(Clone, Debug)]
 pub(crate) struct SpeechDispatcher(Connection);
 
 lazy_static! {
@@ -19,9 +18,9 @@ lazy_static! {
 }
 
 impl SpeechDispatcher {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new() -> std::result::Result<Self, Error> {
         info!("Initializing SpeechDispatcher backend");
-        let connection = speech_dispatcher::Connection::open("tts", "tts", "tts", Mode::Threaded);
+        let connection = speech_dispatcher::Connection::open("tts", "tts", "tts", Mode::Threaded)?;
         let sd = SpeechDispatcher(connection);
         let mut speaking = SPEAKING.lock().unwrap();
         speaking.insert(sd.0.client_id(), false);
@@ -47,9 +46,16 @@ impl SpeechDispatcher {
                 f(utterance_id);
             }
         })));
-        sd.0.on_cancel(Some(Box::new(|_msg_id, client_id| {
+        sd.0.on_cancel(Some(Box::new(|msg_id, client_id| {
             let mut speaking = SPEAKING.lock().unwrap();
             speaking.insert(client_id, false);
+            let mut callbacks = CALLBACKS.lock().unwrap();
+            let backend_id = BackendId::SpeechDispatcher(client_id);
+            let cb = callbacks.get_mut(&backend_id).unwrap();
+            let utterance_id = UtteranceId::SpeechDispatcher(msg_id);
+            if let Some(f) = cb.utterance_stop.as_mut() {
+                f(utterance_id);
+            }
         })));
         sd.0.on_pause(Some(Box::new(|_msg_id, client_id| {
             let mut speaking = SPEAKING.lock().unwrap();
@@ -59,7 +65,7 @@ impl SpeechDispatcher {
             let mut speaking = SPEAKING.lock().unwrap();
             speaking.insert(client_id, true);
         })));
-        sd
+        Ok(sd)
     }
 }
 
@@ -87,14 +93,14 @@ impl Backend for SpeechDispatcher {
         }
         let single_char = text.to_string().capacity() == 1;
         if single_char {
-            self.0.set_punctuation(Punctuation::All);
+            self.0.set_punctuation(Punctuation::All)?;
         }
         let id = self.0.say(Priority::Important, text);
         if single_char {
-            self.0.set_punctuation(Punctuation::None);
+            self.0.set_punctuation(Punctuation::None)?;
         }
         if let Some(id) = id {
-            Ok(Some(UtteranceId::SpeechDispatcher(id.try_into().unwrap())))
+            Ok(Some(UtteranceId::SpeechDispatcher(id)))
         } else {
             Err(Error::NoneError)
         }
@@ -102,7 +108,7 @@ impl Backend for SpeechDispatcher {
 
     fn stop(&mut self) -> Result<(), Error> {
         trace!("stop()");
-        self.0.cancel();
+        self.0.cancel()?;
         Ok(())
     }
 
@@ -123,7 +129,7 @@ impl Backend for SpeechDispatcher {
     }
 
     fn set_rate(&mut self, rate: f32) -> Result<(), Error> {
-        self.0.set_voice_rate(rate as i32);
+        self.0.set_voice_rate(rate as i32)?;
         Ok(())
     }
 
@@ -144,7 +150,7 @@ impl Backend for SpeechDispatcher {
     }
 
     fn set_pitch(&mut self, pitch: f32) -> Result<(), Error> {
-        self.0.set_voice_pitch(pitch as i32);
+        self.0.set_voice_pitch(pitch as i32)?;
         Ok(())
     }
 
@@ -165,7 +171,7 @@ impl Backend for SpeechDispatcher {
     }
 
     fn set_volume(&mut self, volume: f32) -> Result<(), Error> {
-        self.0.set_volume(volume as i32);
+        self.0.set_volume(volume as i32)?;
         Ok(())
     }
 

@@ -1,48 +1,57 @@
 [package]
 name = "tts"
-version = "0.8.0"
+version = "0.21.1"
 authors = ["Nolan Darilek <nolan@thewordnerd.info>"]
 repository = "https://github.com/ndarilek/tts-rs"
 description = "High-level Text-To-Speech (TTS) interface"
 license = "MIT"
 exclude = ["*.cfg", "*.yml"]
-edition = "2018"
+edition = "2021"
 
 [package.metadata.patch.speech-dispatcher]
 version = "0.7.0"
-patches = [
-    "speech-dispatcher.patch"
-]
+#patches = [
+#    "speech-dispatcher.patch"
+#]
 
-[patch.crates-io]
-speech-dispatcher = { path = './target/patch/speech-dispatcher-0.7.0'}
+#[patch.crates-io]
+#speech-dispatcher = { path = './target/patch/speech-dispatcher-0.7.0'}
 
 [lib]
 crate-type = ["lib", "cdylib", "staticlib"]
 
+[features]
+speech_dispatcher_0_10 = ["speech-dispatcher/0_10"]
+default = ["speech_dispatcher_0_10"]
+
 [dependencies]
+dyn-clonable = "0.9"
 lazy_static = "1"
 log = "0.4"
 thiserror = "1"
 unic-langid = "0.9.0"
+serde = { version = "1.0", optional = true, features = ["derive"] }
 
 [dev-dependencies]
-env_logger = "0.7"
+env_logger = "0.9"
 
 [target.'cfg(windows)'.dependencies]
-tolk = ">= 0.2.1"
-winrt = "0.7"
-tts_winrt_bindings = { version = "0.1", path="winrt_bindings" }
+tolk = { version = "0.5", optional = true }
+windows = { version = "0.34", features = ["alloc", "Foundation", "Media_Core", "Media_Playback", "Media_SpeechSynthesis", "Storage_Streams"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-speech-dispatcher = "0.7"
+speech-dispatcher = { version = "0.13", default-features = false }
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 cocoa-foundation = "0.1"
 core-foundation = "0.9"
 libc = "0.2"
-objc = "0.2"
+objc = { version = "0.2", features = ["exception"] }
 
 [target.wasm32-unknown-unknown.dependencies]
 wasm-bindgen = "0.2"
-web-sys = { version = "0.3", features = ["EventTarget", "SpeechSynthesis", "SpeechSynthesisEvent", "SpeechSynthesisUtterance", "Window", ] }
+web-sys = { version = "0.3", features = ["EventTarget", "SpeechSynthesis", "SpeechSynthesisErrorCode", "SpeechSynthesisErrorEvent", "SpeechSynthesisEvent", "SpeechSynthesisUtterance", "Window", ] }
+
+[target.'cfg(target_os="android")'.dependencies]
+jni = "0.19"
+ndk-glue = "0.6"
