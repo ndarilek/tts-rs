@@ -16,7 +16,6 @@ use std::collections::HashMap;
 #[cfg(target_os = "macos")]
 use std::ffi::CStr;
 use std::fmt;
-use std::marker::PhantomData;
 use std::sync::{Arc, Mutex};
 use std::{boxed::Box, sync::RwLock};
 
@@ -34,7 +33,6 @@ use thiserror::Error;
 #[cfg(all(windows, feature = "tolk"))]
 use tolk::Tolk;
 pub use unic_langid::LanguageIdentifier;
-use unic_langid::LanguageIdentifierError;
 
 mod backends;
 
@@ -211,7 +209,7 @@ pub enum Error {
 }
 
 #[clonable]
-pub trait Backend<T: VoiceImpl>: Clone {
+pub trait Backend: Clone {
     fn id(&self) -> Option<BackendId>;
     fn supported_features(&self) -> Features;
     fn speak(&mut self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error>;
@@ -232,7 +230,7 @@ pub trait Backend<T: VoiceImpl>: Clone {
     fn get_volume(&self) -> Result<f32, Error>;
     fn set_volume(&mut self, volume: f32) -> Result<(), Error>;
     fn is_speaking(&self) -> Result<bool, Error>;
-    fn voices(&self) -> Result<Vec<Voice<T>>, Error>;
+    fn voices(&self) -> Result<Vec<Voice>, Error>;
     fn voice(&self) -> Result<String, Error>;
     fn set_voice(&mut self, voice: &str) -> Result<(), Error>;
 }
@@ -256,22 +254,22 @@ lazy_static! {
 }
 
 #[derive(Clone)]
-pub struct Tts<T: VoiceImpl>(Arc<RwLock<Box<dyn Backend<T>>>>, PhantomData<T>);
+pub struct Tts(Arc<RwLock<Box<dyn Backend>>>);
 
-unsafe impl<T: VoiceImpl> Send for Tts<T> {}
+unsafe impl Send for Tts {}
 
-unsafe impl<T: VoiceImpl> Sync for Tts<T> {}
+unsafe impl Sync for Tts {}
 
-impl<T: VoiceImpl> Tts<T> {
+impl Tts {
     /**
      * Create a new `TTS` instance with the specified backend.
      */
-    pub fn new(backend: Backends) -> Result<Tts<T>, Error> {
+    pub fn new(backend: Backends) -> Result<Tts, Error> {
         let backend = match backend {
             #[cfg(target_os = "linux")]
             Backends::SpeechDispatcher => {
                 let tts = backends::SpeechDispatcher::new()?;
-                Ok(Tts(Arc::new(RwLock::new(Box::new(tts))), PhantomData))
+                Ok(Tts(Arc::new(RwLock::new(Box::new(tts)))))
             }
             #[cfg(target_arch = "wasm32")]
             Backends::Web => {
@@ -317,7 +315,7 @@ impl<T: VoiceImpl> Tts<T> {
         }
     }
 
-    pub fn default() -> Result<Tts<T>, Error> {
+    pub fn default() -> Result<Tts, Error> {
         #[cfg(target_os = "linux")]
         let tts = Tts::new(Backends::SpeechDispatcher);
         #[cfg(all(windows, feature = "tolk"))]
@@ -566,7 +564,7 @@ impl<T: VoiceImpl> Tts<T> {
     /**
      * Returns list of available voices.
      */
-    pub fn voices(&self) -> Result<Vec<Voice<T>>, Error> {
+    pub fn voices(&self) -> Result<Vec<Voice>, Error> {
         self.0.read().unwrap().voices()
     }
 
@@ -682,7 +680,7 @@ impl<T: VoiceImpl> Tts<T> {
     }
 }
 
-impl<T: VoiceImpl> Drop for Tts<T> {
+impl Drop for Tts {
     fn drop(&mut self) {
         if Arc::strong_count(&self.0) <= 1 {
             if let Some(id) = self.0.read().unwrap().id() {
@@ -694,16 +692,14 @@ impl<T: VoiceImpl> Drop for Tts<T> {
 }
 
 pub enum Gender {
-    Other,
+    Unspecified,
     Male,
     Female,
 }
 
-pub trait VoiceImpl: Sized {
-    fn id(self) -> String;
-    fn name(self) -> String;
-    fn gender(self) -> Gender;
-    fn language(self) -> Result<LanguageIdentifier, LanguageIdentifierError>;
+pub struct Voice {
+    pub id: String,
+    pub name: String,
+    pub gender: Gender,
+    pub language: LanguageIdentifier,
 }
-
-pub struct Voice<T: VoiceImpl + Sized>(Box<T>);

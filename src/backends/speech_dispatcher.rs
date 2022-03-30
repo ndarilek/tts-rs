@@ -1,15 +1,12 @@
-use std::str::FromStr;
 #[cfg(target_os = "linux")]
-use std::{collections::HashMap, sync::Mutex};
+use std::{collections::HashMap, str::FromStr, sync::Mutex};
 
 use lazy_static::*;
 use log::{info, trace};
-use speech_dispatcher::{Voice as SpdVoice, *};
-use unic_langid::{LanguageIdentifier, LanguageIdentifierError};
+use speech_dispatcher::*;
+use unic_langid::LanguageIdentifier;
 
-use crate::{
-    Backend, BackendId, Error, Features, Gender, UtteranceId, Voice, VoiceImpl, CALLBACKS,
-};
+use crate::{Backend, BackendId, Error, Features, Gender, UtteranceId, Voice, CALLBACKS};
 
 #[derive(Clone, Debug)]
 pub(crate) struct SpeechDispatcher(Connection);
@@ -19,24 +16,6 @@ lazy_static! {
         let m: HashMap<u64, bool> = HashMap::new();
         Mutex::new(m)
     };
-}
-
-impl VoiceImpl for SpdVoice {
-    fn id(self) -> String {
-        self.name
-    }
-
-    fn name(self) -> String {
-        self.name
-    }
-
-    fn gender(self) -> Gender {
-        Gender::Other
-    }
-
-    fn language(self) -> Result<LanguageIdentifier, LanguageIdentifierError> {
-        LanguageIdentifier::from_str(&self.language)
-    }
 }
 
 impl SpeechDispatcher {
@@ -91,7 +70,7 @@ impl SpeechDispatcher {
     }
 }
 
-impl Backend<SpdVoice> for SpeechDispatcher {
+impl Backend for SpeechDispatcher {
     fn id(&self) -> Option<BackendId> {
         Some(BackendId::SpeechDispatcher(self.0.client_id()))
     }
@@ -203,14 +182,18 @@ impl Backend<SpdVoice> for SpeechDispatcher {
         Ok(*is_speaking)
     }
 
-    fn voices(&self) -> Result<Vec<Voice<SpdVoice>>, Error> {
+    fn voices(&self) -> Result<Vec<Voice>, Error> {
         let rv = self
             .0
             .list_synthesis_voices()?
             .iter()
-            .cloned()
-            .map(|v| Voice(Box::new(v)))
-            .collect::<Vec<Voice<SpdVoice>>>();
+            .map(|v| Voice {
+                id: v.name.clone(),
+                name: v.name.clone(),
+                gender: Gender::Unspecified,
+                language: LanguageIdentifier::from_str(&v.language).unwrap(),
+            })
+            .collect::<Vec<Voice>>();
         Ok(rv)
     }
 
