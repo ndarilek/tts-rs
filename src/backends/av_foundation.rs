@@ -9,8 +9,8 @@ use log::{info, trace};
 use objc::runtime::{Object, Sel};
 use objc::{class, declare::ClassDecl, msg_send, sel, sel_impl};
 
-use crate::{Backend, BackendId, Error, Features, UtteranceId, CALLBACKS};
 use crate::voices::Backend as VoiceBackend;
+use crate::{Backend, BackendId, Error, Features, UtteranceId, CALLBACKS};
 
 mod voices;
 use voices::*;
@@ -280,15 +280,18 @@ impl Backend for AvFoundation {
         Ok(is_speaking != NO as i8)
     }
 
-    fn voice(&self) -> Result<String,Error> {
+    fn voice(&self) -> Result<String, Error> {
         Ok(self.voice.id())
     }
 
     fn list_voices(&self) -> Vec<String> {
-        AVSpeechSynthesisVoice::list().iter().map(|v| {v.id()}).collect()
+        AVSpeechSynthesisVoice::list()
+            .iter()
+            .map(|v| v.id())
+            .collect()
     }
 
-    fn set_voice(&mut self, voice: &str) -> Result<(),Error> {
+    fn set_voice(&mut self, voice: &str) -> Result<(), Error> {
         self.voice = AVSpeechSynthesisVoice::new();
         Ok(())
     }

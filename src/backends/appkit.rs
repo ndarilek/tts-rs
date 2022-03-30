@@ -201,7 +201,7 @@ impl Backend for AppKit {
         Ok(is_speaking != NO as i8)
     }
 
-    fn voice(&self) -> Result<String,Error> {
+    fn voice(&self) -> Result<String, Error> {
         unimplemented!()
     }
 
@@ -209,7 +209,7 @@ impl Backend for AppKit {
         unimplemented!()
     }
 
-    fn set_voice(&mut self, voice: &str) -> Result<(),Error> {
+    fn set_voice(&mut self, voice: &str) -> Result<(), Error> {
         unimplemented!()
     }
 }

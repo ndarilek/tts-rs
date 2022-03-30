@@ -109,7 +109,7 @@ impl Backend for Tolk {
         unimplemented!()
     }
 
-    fn voice(&self) -> Result<String,Error> {
+    fn voice(&self) -> Result<String, Error> {
         unimplemented!()
     }
 
@@ -117,7 +117,7 @@ impl Backend for Tolk {
         unimplemented!()
     }
 
-    fn set_voice(&mut self, voice: &str) -> Result<(),Error> {
+    fn set_voice(&mut self, voice: &str) -> Result<(), Error> {
         unimplemented!()
     }
 }

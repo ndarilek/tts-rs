@@ -181,7 +181,7 @@ impl Backend for SpeechDispatcher {
         Ok(*is_speaking)
     }
 
-    fn voice(&self) -> Result<String,Error> {
+    fn voice(&self) -> Result<String, Error> {
         unimplemented!()
     }
 
@@ -189,7 +189,7 @@ impl Backend for SpeechDispatcher {
         unimplemented!()
     }
 
-    fn set_voice(&mut self, voice: &str) -> Result<(),Error> {
+    fn set_voice(&mut self, voice: &str) -> Result<(), Error> {
         unimplemented!()
     }
 }

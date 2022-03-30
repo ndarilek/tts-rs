@@ -198,7 +198,7 @@ impl Backend for Web {
         }
     }
 
-    fn voice(&self) -> Result<String,Error> {
+    fn voice(&self) -> Result<String, Error> {
         unimplemented!()
     }
 
@@ -206,7 +206,7 @@ impl Backend for Web {
         unimplemented!()
     }
 
-    fn set_voice(&mut self, voice: &str) -> Result<(),Error> {
+    fn set_voice(&mut self, voice: &str) -> Result<(), Error> {
         unimplemented!()
     }
 }

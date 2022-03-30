@@ -1,4 +1,3 @@
-
 pub use unic_langid::LanguageIdentifier;
 
 pub enum Gender {

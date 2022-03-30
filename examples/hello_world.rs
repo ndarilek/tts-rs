@@ -77,11 +77,11 @@ fn main() -> Result<(), Error> {
         let voices_list = tts.list_voices();
         println!("Available voices:\n===");
         for v in voices_list.iter() {
-            println!("{}",v);
+            println!("{}", v);
             tts.set_voice(v)?;
             println!("voice set");
             println!("{}", tts.voice()?);
-            tts.speak(v,false)?;
+            tts.speak(v, false)?;
         }
         tts.set_voice(original_voice)?;
     }

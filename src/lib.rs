@@ -232,7 +232,7 @@ pub trait Backend: Clone {
     fn is_speaking(&self) -> Result<bool, Error>;
     fn voice(&self) -> Result<String, Error>;
     fn list_voices(&self) -> Vec<String>;
-    fn set_voice(&mut self, voice: &str) -> Result<(),Error>;
+    fn set_voice(&mut self, voice: &str) -> Result<(), Error>;
 }
 
 #[derive(Default)]
@@ -569,9 +569,9 @@ impl Tts {
     }
 
     /**
-     * Return the current speaking voice. 
+     * Return the current speaking voice.
      */
-    pub fn voice(&self) -> Result<String,Error> {
+    pub fn voice(&self) -> Result<String, Error> {
         let Features { voices, .. } = self.supported_features();
         if voices {
             self.0.read().unwrap().voice()
@@ -583,7 +583,7 @@ impl Tts {
     /**
      * Set speaking voice.
      */
-    pub fn set_voice<S: Into<String>>(&mut self, voice: S) -> Result<(),Error> {
+    pub fn set_voice<S: Into<String>>(&mut self, voice: S) -> Result<(), Error> {
         let Features {
             voices: voices_feature,
             ..

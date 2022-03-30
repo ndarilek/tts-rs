@@ -291,7 +291,7 @@ impl Backend for WinRt {
         Ok(!utterances.is_empty())
     }
 
-    fn voice(&self) -> Result<String,Error> {
+    fn voice(&self) -> Result<String, Error> {
         unimplemented!()
     }
 
@@ -299,7 +299,7 @@ impl Backend for WinRt {
         unimplemented!()
     }
 
-    fn set_voice(&mut self, voice: &str) -> Result<(),Error> {
+    fn set_voice(&mut self, voice: &str) -> Result<(), Error> {
         unimplemented!()
     }
 }
