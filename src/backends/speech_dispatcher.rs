@@ -91,7 +91,7 @@ impl SpeechDispatcher {
     }
 }
 
-impl<T: VoiceImpl> Backend<T> for SpeechDispatcher {
+impl Backend<SpdVoice> for SpeechDispatcher {
     fn id(&self) -> Option<BackendId> {
         Some(BackendId::SpeechDispatcher(self.0.client_id()))
     }
@@ -203,14 +203,14 @@ impl<T: VoiceImpl> Backend<T> for SpeechDispatcher {
         Ok(*is_speaking)
     }
 
-    fn voices(&self) -> Result<Vec<Voice<T>>, Error> {
+    fn voices(&self) -> Result<Vec<Voice<SpdVoice>>, Error> {
         let rv = self
             .0
             .list_synthesis_voices()?
             .iter()
             .cloned()
             .map(|v| Voice(Box::new(v)))
-            .collect::<Vec<Voice<T>>>();
+            .collect::<Vec<Voice<SpdVoice>>>();
         Ok(rv)
     }
 
