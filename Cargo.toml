@@ -8,6 +8,15 @@ license = "MIT"
 exclude = ["*.cfg", "*.yml"]
 edition = "2021"
 
+[package.metadata.patch.speech-dispatcher]
+version = "0.7.0"
+#patches = [
+#    "speech-dispatcher.patch"
+#]
+
+#[patch.crates-io]
+#speech-dispatcher = { path = './target/patch/speech-dispatcher-0.7.0'}
+
 [lib]
 crate-type = ["lib", "cdylib", "staticlib"]
 
@@ -20,6 +29,7 @@ dyn-clonable = "0.9"
 lazy_static = "1"
 log = "0.4"
 thiserror = "1"
+unic-langid = "0.9.0"
 serde = { version = "1.0", optional = true, features = ["derive"] }
 
 [dev-dependencies]
@@ -34,6 +44,7 @@ speech-dispatcher = { version = "0.13", default-features = false }
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 cocoa-foundation = "0.1"
+core-foundation = "0.9"
 libc = "0.2"
 objc = { version = "0.2", features = ["exception"] }
 

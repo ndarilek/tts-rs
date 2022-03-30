@@ -108,4 +108,16 @@ impl Backend for Tolk {
     fn is_speaking(&self) -> Result<bool, Error> {
         unimplemented!()
     }
+
+    fn voice(&self) -> Result<String,Error> {
+        unimplemented!()
+    }
+
+    fn list_voices(&self) -> Vec<String> {
+        unimplemented!()
+    }
+
+    fn set_voice(&mut self, voice: &str) -> Result<(),Error> {
+        unimplemented!()
+    }
 }

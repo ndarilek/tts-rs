@@ -34,6 +34,7 @@ use thiserror::Error;
 use tolk::Tolk;
 
 mod backends;
+mod voices;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -165,6 +166,7 @@ pub struct Features {
     pub rate: bool,
     pub stop: bool,
     pub utterance_callbacks: bool,
+    pub voices: bool,
     pub volume: bool,
 }
 
@@ -207,7 +209,7 @@ pub enum Error {
 }
 
 #[clonable]
-trait Backend: Clone {
+pub trait Backend: Clone {
     fn id(&self) -> Option<BackendId>;
     fn supported_features(&self) -> Features;
     fn speak(&mut self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error>;
@@ -228,6 +230,9 @@ trait Backend: Clone {
     fn get_volume(&self) -> Result<f32, Error>;
     fn set_volume(&mut self, volume: f32) -> Result<(), Error>;
     fn is_speaking(&self) -> Result<bool, Error>;
+    fn voice(&self) -> Result<String, Error>;
+    fn list_voices(&self) -> Vec<String>;
+    fn set_voice(&mut self, voice: &str) -> Result<(),Error>;
 }
 
 #[derive(Default)]
@@ -551,6 +556,40 @@ impl Tts {
         let Features { is_speaking, .. } = self.supported_features();
         if is_speaking {
             self.0.read().unwrap().is_speaking()
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
+    }
+
+    /**
+     * Returns list of available voices.
+     */
+    pub fn list_voices(&self) -> Vec<String> {
+        self.0.read().unwrap().list_voices()
+    }
+
+    /**
+     * Return the current speaking voice. 
+     */
+    pub fn voice(&self) -> Result<String,Error> {
+        let Features { voices, .. } = self.supported_features();
+        if voices {
+            self.0.read().unwrap().voice()
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
+    }
+
+    /**
+     * Set speaking voice.
+     */
+    pub fn set_voice<S: Into<String>>(&mut self, voice: S) -> Result<(),Error> {
+        let Features {
+            voices: voices_feature,
+            ..
+        } = self.supported_features();
+        if voices_feature {
+            self.0.write().unwrap().set_voice(voice.into().as_str())
         } else {
             Err(Error::UnsupportedFeature)
         }

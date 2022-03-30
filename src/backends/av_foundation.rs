@@ -10,6 +10,10 @@ use objc::runtime::{Object, Sel};
 use objc::{class, declare::ClassDecl, msg_send, sel, sel_impl};
 
 use crate::{Backend, BackendId, Error, Features, UtteranceId, CALLBACKS};
+use crate::voices::Backend as VoiceBackend;
+
+mod voices;
+use voices::*;
 
 #[derive(Clone, Debug)]
 pub(crate) struct AvFoundation {
@@ -19,6 +23,7 @@ pub(crate) struct AvFoundation {
     rate: f32,
     volume: f32,
     pitch: f32,
+    voice: AVSpeechSynthesisVoice,
 }
 
 lazy_static! {
@@ -142,6 +147,7 @@ impl AvFoundation {
                 rate: 0.5,
                 volume: 1.,
                 pitch: 1.,
+                voice: AVSpeechSynthesisVoice::new(),
             }
         };
         *backend_id += 1;
@@ -161,6 +167,7 @@ impl Backend for AvFoundation {
             pitch: true,
             volume: true,
             is_speaking: true,
+            voices: true,
             utterance_callbacks: true,
         }
     }
@@ -185,6 +192,7 @@ impl Backend for AvFoundation {
             let _: () = msg_send![utterance, setVolume: self.volume];
             trace!("Setting pitch to {}", self.pitch);
             let _: () = msg_send![utterance, setPitchMultiplier: self.pitch];
+            let _: () = msg_send![utterance, setVoice: self.voice];
             trace!("Enqueuing");
             let _: () = msg_send![self.synth, speakUtterance: utterance];
             trace!("Done queuing");
@@ -270,6 +278,19 @@ impl Backend for AvFoundation {
         trace!("is_speaking()");
         let is_speaking: i8 = unsafe { msg_send![self.synth, isSpeaking] };
         Ok(is_speaking != NO as i8)
+    }
+
+    fn voice(&self) -> Result<String,Error> {
+        Ok(self.voice.id())
+    }
+
+    fn list_voices(&self) -> Vec<String> {
+        AVSpeechSynthesisVoice::list().iter().map(|v| {v.id()}).collect()
+    }
+
+    fn set_voice(&mut self, voice: &str) -> Result<(),Error> {
+        self.voice = AVSpeechSynthesisVoice::new();
+        Ok(())
     }
 }
 

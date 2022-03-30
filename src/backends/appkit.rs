@@ -200,6 +200,18 @@ impl Backend for AppKit {
         let is_speaking: i8 = unsafe { msg_send![self.0, isSpeaking] };
         Ok(is_speaking != NO as i8)
     }
+
+    fn voice(&self) -> Result<String,Error> {
+        unimplemented!()
+    }
+
+    fn list_voices(&self) -> Vec<String> {
+        unimplemented!()
+    }
+
+    fn set_voice(&mut self, voice: &str) -> Result<(),Error> {
+        unimplemented!()
+    }
 }
 
 impl Drop for AppKit {
