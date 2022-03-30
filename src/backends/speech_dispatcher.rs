@@ -1,11 +1,15 @@
+use std::str::FromStr;
 #[cfg(target_os = "linux")]
 use std::{collections::HashMap, sync::Mutex};
 
 use lazy_static::*;
 use log::{info, trace};
-use speech_dispatcher::*;
+use speech_dispatcher::{Voice as SpdVoice, *};
+use unic_langid::{LanguageIdentifier, LanguageIdentifierError};
 
-use crate::{Backend, BackendId, Error, Features, UtteranceId, CALLBACKS};
+use crate::{
+    Backend, BackendId, Error, Features, Gender, UtteranceId, Voice, VoiceImpl, CALLBACKS,
+};
 
 #[derive(Clone, Debug)]
 pub(crate) struct SpeechDispatcher(Connection);
@@ -15,6 +19,24 @@ lazy_static! {
         let m: HashMap<u64, bool> = HashMap::new();
         Mutex::new(m)
     };
+}
+
+impl VoiceImpl for SpdVoice {
+    fn id(self) -> String {
+        self.name
+    }
+
+    fn name(self) -> String {
+        self.name
+    }
+
+    fn gender(self) -> Gender {
+        Gender::Other
+    }
+
+    fn language(self) -> Result<LanguageIdentifier, LanguageIdentifierError> {
+        LanguageIdentifier::from_str(&self.language)
+    }
 }
 
 impl SpeechDispatcher {
@@ -69,7 +91,7 @@ impl SpeechDispatcher {
     }
 }
 
-impl Backend for SpeechDispatcher {
+impl<T: VoiceImpl> Backend<T> for SpeechDispatcher {
     fn id(&self) -> Option<BackendId> {
         Some(BackendId::SpeechDispatcher(self.0.client_id()))
     }
@@ -181,11 +203,18 @@ impl Backend for SpeechDispatcher {
         Ok(*is_speaking)
     }
 
-    fn voice(&self) -> Result<String, Error> {
-        unimplemented!()
+    fn voices(&self) -> Result<Vec<Voice<T>>, Error> {
+        let rv = self
+            .0
+            .list_synthesis_voices()?
+            .iter()
+            .cloned()
+            .map(|v| Voice(Box::new(v)))
+            .collect::<Vec<Voice<T>>>();
+        Ok(rv)
     }
 
-    fn list_voices(&self) -> Vec<String> {
+    fn voice(&self) -> Result<String, Error> {
         unimplemented!()
     }
 

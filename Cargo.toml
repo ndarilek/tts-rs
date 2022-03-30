@@ -8,21 +8,11 @@ license = "MIT"
 exclude = ["*.cfg", "*.yml"]
 edition = "2021"
 
-[package.metadata.patch.speech-dispatcher]
-version = "0.7.0"
-#patches = [
-#    "speech-dispatcher.patch"
-#]
-
-#[patch.crates-io]
-#speech-dispatcher = { path = './target/patch/speech-dispatcher-0.7.0'}
-
 [lib]
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [features]
 speech_dispatcher_0_10 = ["speech-dispatcher/0_10"]
-default = ["speech_dispatcher_0_10"]
 
 [dependencies]
 dyn-clonable = "0.9"
