@@ -82,7 +82,8 @@ impl Backend for SpeechDispatcher {
             pitch: true,
             volume: true,
             is_speaking: true,
-            voices: false,
+            voice: true,
+            get_voice: false,
             utterance_callbacks: true,
         }
     }
@@ -201,8 +202,14 @@ impl Backend for SpeechDispatcher {
         unimplemented!()
     }
 
-    fn set_voice(&mut self, voice: &str) -> Result<(), Error> {
-        unimplemented!()
+    fn set_voice(&mut self, voice: &Voice) -> Result<(), Error> {
+        for v in self.0.list_synthesis_voices()? {
+            if v.name == voice.name {
+                self.0.set_synthesis_voice(&v)?;
+                return Ok(());
+            }
+        }
+        Err(Error::OperationFailed)
     }
 }
 

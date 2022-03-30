@@ -166,7 +166,8 @@ pub struct Features {
     pub rate: bool,
     pub stop: bool,
     pub utterance_callbacks: bool,
-    pub voices: bool,
+    pub voice: bool,
+    pub get_voice: bool,
     pub volume: bool,
 }
 
@@ -232,7 +233,7 @@ pub trait Backend: Clone {
     fn is_speaking(&self) -> Result<bool, Error>;
     fn voices(&self) -> Result<Vec<Voice>, Error>;
     fn voice(&self) -> Result<String, Error>;
-    fn set_voice(&mut self, voice: &str) -> Result<(), Error>;
+    fn set_voice(&mut self, voice: &Voice) -> Result<(), Error>;
 }
 
 #[derive(Default)]
@@ -565,15 +566,20 @@ impl Tts {
      * Returns list of available voices.
      */
     pub fn voices(&self) -> Result<Vec<Voice>, Error> {
-        self.0.read().unwrap().voices()
+        let Features { voice, .. } = self.supported_features();
+        if voice {
+            self.0.read().unwrap().voices()
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
     }
 
     /**
      * Return the current speaking voice.
      */
     pub fn voice(&self) -> Result<String, Error> {
-        let Features { voices, .. } = self.supported_features();
-        if voices {
+        let Features { get_voice, .. } = self.supported_features();
+        if get_voice {
             self.0.read().unwrap().voice()
         } else {
             Err(Error::UnsupportedFeature)
@@ -583,13 +589,13 @@ impl Tts {
     /**
      * Set speaking voice.
      */
-    pub fn set_voice<S: Into<String>>(&mut self, voice: S) -> Result<(), Error> {
+    pub fn set_voice(&mut self, voice: &Voice) -> Result<(), Error> {
         let Features {
-            voices: voices_feature,
+            voice: voice_feature,
             ..
         } = self.supported_features();
-        if voices_feature {
-            self.0.write().unwrap().set_voice(voice.into().as_str())
+        if voice_feature {
+            self.0.write().unwrap().set_voice(voice)
         } else {
             Err(Error::UnsupportedFeature)
         }
