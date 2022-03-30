@@ -22,6 +22,7 @@ use std::{boxed::Box, sync::RwLock};
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 use cocoa_foundation::base::id;
 use dyn_clonable::*;
+pub use unic_langid::LanguageIdentifier;
 use lazy_static::lazy_static;
 #[cfg(target_os = "macos")]
 use libc::c_char;
@@ -34,7 +35,6 @@ use thiserror::Error;
 use tolk::Tolk;
 
 mod backends;
-mod voices;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -690,3 +690,22 @@ impl Drop for Tts {
         }
     }
 }
+
+pub enum Gender {
+    Other,
+    Male,
+    Female,
+}
+
+pub trait VoiceImpl: Sized {
+    type Backend: crate::Backend;
+    fn from_id(id: String) -> Self;
+    fn from_language(lang: LanguageIdentifier) -> Self;
+    fn list() -> Vec<Self>;
+    fn name(self) -> String;
+    fn gender(self) -> Gender;
+    fn id(self) -> String;
+    fn language(self) -> LanguageIdentifier;
+}
+
+pub struct Voice<T: VoiceImpl + Sized>(Box<T>);
