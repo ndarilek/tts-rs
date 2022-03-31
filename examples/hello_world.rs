@@ -81,11 +81,13 @@ fn main() -> Result<(), Error> {
         let Features { get_voice, .. } = tts.supported_features();
         if get_voice {
             let original_voice = tts.voice()?;
-            for v in &voices {
-                tts.set_voice(v)?;
-                tts.speak(format!("This is {}.", v.name), false)?;
+            if let Some(original_voice) = original_voice {
+                for v in &voices {
+                    tts.set_voice(v)?;
+                    tts.speak(format!("This is {}.", v.name()), false)?;
+                }
+                tts.set_voice(&original_voice)?;
             }
-            tts.set_voice(&original_voice)?;
         }
     }
     tts.speak("Goodbye.", false)?;
