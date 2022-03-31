@@ -1,19 +1,23 @@
 #[cfg(windows)]
-use std::collections::{HashMap, VecDeque};
-use std::sync::Mutex;
+use std::{
+    collections::{HashMap, VecDeque},
+    str::FromStr,
+    sync::Mutex,
+};
 
 use lazy_static::lazy_static;
 use log::{info, trace};
+use unic_langid::LanguageIdentifier;
 use windows::{
     Foundation::TypedEventHandler,
     Media::{
         Core::MediaSource,
         Playback::{MediaPlayer, MediaPlayerAudioCategory},
-        SpeechSynthesis::SpeechSynthesizer,
+        SpeechSynthesis::{SpeechSynthesizer, VoiceGender, VoiceInformation},
     },
 };
 
-use crate::{Backend, BackendId, Error, Features, UtteranceId, CALLBACKS};
+use crate::{Backend, BackendId, Error, Features, Gender, UtteranceId, Voice, CALLBACKS};
 
 impl From<windows::core::Error> for Error {
     fn from(e: windows::core::Error) -> Self {
@@ -29,6 +33,7 @@ pub struct WinRt {
     rate: f32,
     pitch: f32,
     volume: f32,
+    voice: VoiceInformation,
 }
 
 struct Utterance {
@@ -37,6 +42,7 @@ struct Utterance {
     rate: f32,
     pitch: f32,
     volume: f32,
+    voice: VoiceInformation,
 }
 
 lazy_static! {
@@ -102,6 +108,7 @@ impl WinRt {
                                         tts.Options()?.SetSpeakingRate(utterance.rate.into())?;
                                         tts.Options()?.SetAudioPitch(utterance.pitch.into())?;
                                         tts.Options()?.SetAudioVolume(utterance.volume.into())?;
+                                        tts.SetVoice(utterance.voice.clone())?;
                                         let stream = tts
                                             .SynthesizeTextToStreamAsync(utterance.text.as_str())?
                                             .get()?;
@@ -129,6 +136,7 @@ impl WinRt {
             rate: 1.,
             pitch: 1.,
             volume: 1.,
+            voice: SpeechSynthesizer::DefaultVoice()?,
         })
     }
 }
@@ -145,7 +153,8 @@ impl Backend for WinRt {
             pitch: true,
             volume: true,
             is_speaking: true,
-            voices: true,
+            voice: true,
+            get_voice: true,
             utterance_callbacks: true,
         }
     }
@@ -175,6 +184,7 @@ impl Backend for WinRt {
                     rate: self.rate,
                     pitch: self.pitch,
                     volume: self.volume,
+                    voice: self.voice.clone(),
                 };
                 utterances.push_back(utterance);
             }
@@ -291,16 +301,28 @@ impl Backend for WinRt {
         Ok(!utterances.is_empty())
     }
 
-    fn voice(&self) -> Result<String, Error> {
-        unimplemented!()
+    fn voice(&self) -> Result<Voice, Error> {
+        let voice = self.synth.Voice()?;
+        voice.try_into()
     }
 
-    fn list_voices(&self) -> Vec<String> {
-        unimplemented!()
+    fn voices(&self) -> Result<Vec<Voice>, Error> {
+        let mut rv: Vec<Voice> = vec![];
+        for voice in SpeechSynthesizer::AllVoices()? {
+            rv.push(voice.try_into()?);
+        }
+        Ok(rv)
     }
 
-    fn set_voice(&mut self, voice: &str) -> Result<(), Error> {
-        unimplemented!()
+    fn set_voice(&mut self, voice: &Voice) -> Result<(), Error> {
+        for v in SpeechSynthesizer::AllVoices()? {
+            let vid: String = v.Id()?.try_into()?;
+            if vid == voice.id {
+                self.voice = v.clone();
+                return Ok(());
+            }
+        }
+        Err(Error::OperationFailed)
     }
 }
 
@@ -313,5 +335,26 @@ impl Drop for WinRt {
         backend_to_speech_synthesizer.remove(&id);
         let mut utterances = UTTERANCES.lock().unwrap();
         utterances.remove(&id);
+    }
+}
+
+impl TryInto<Voice> for VoiceInformation {
+    type Error = Error;
+
+    fn try_into(self) -> Result<Voice, Self::Error> {
+        let gender = self.Gender()?;
+        let gender = if gender == VoiceGender::Male {
+            Gender::Male
+        } else {
+            Gender::Female
+        };
+        let language: String = self.Language()?.try_into()?;
+        let language = LanguageIdentifier::from_str(&language).unwrap();
+        Ok(Voice {
+            id: self.Id()?.try_into()?,
+            name: self.DisplayName()?.try_into()?,
+            gender,
+            language,
+        })
     }
 }

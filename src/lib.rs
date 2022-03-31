@@ -16,6 +16,7 @@ use std::collections::HashMap;
 #[cfg(target_os = "macos")]
 use std::ffi::CStr;
 use std::fmt;
+use std::string::FromUtf16Error;
 use std::sync::{Arc, Mutex};
 use std::{boxed::Box, sync::RwLock};
 
@@ -200,6 +201,9 @@ pub enum Error {
     #[cfg(windows)]
     #[error("WinRT error")]
     WinRt(windows::core::Error),
+    #[cfg(windows)]
+    #[error("UTF string conversion failed")]
+    UtfStringConversionFailed(#[from] FromUtf16Error),
     #[error("Unsupported feature")]
     UnsupportedFeature,
     #[error("Out of range")]
@@ -232,7 +236,7 @@ pub trait Backend: Clone {
     fn set_volume(&mut self, volume: f32) -> Result<(), Error>;
     fn is_speaking(&self) -> Result<bool, Error>;
     fn voices(&self) -> Result<Vec<Voice>, Error>;
-    fn voice(&self) -> Result<String, Error>;
+    fn voice(&self) -> Result<Voice, Error>;
     fn set_voice(&mut self, voice: &Voice) -> Result<(), Error>;
 }
 
@@ -577,7 +581,7 @@ impl Tts {
     /**
      * Return the current speaking voice.
      */
-    pub fn voice(&self) -> Result<String, Error> {
+    pub fn voice(&self) -> Result<Voice, Error> {
         let Features { get_voice, .. } = self.supported_features();
         if get_voice {
             self.0.read().unwrap().voice()
@@ -697,12 +701,14 @@ impl Drop for Tts {
     }
 }
 
+#[derive(Debug)]
 pub enum Gender {
     Unspecified,
     Male,
     Female,
 }
 
+#[derive(Debug)]
 pub struct Voice {
     pub id: String,
     pub name: String,
