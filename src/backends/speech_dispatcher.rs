@@ -6,7 +6,7 @@ use log::{info, trace};
 use speech_dispatcher::*;
 use unic_langid::LanguageIdentifier;
 
-use crate::{Backend, BackendId, Error, Features, Gender, UtteranceId, Voice, CALLBACKS};
+use crate::{Backend, BackendId, Error, Features, UtteranceId, Voice, CALLBACKS};
 
 #[derive(Clone, Debug)]
 pub(crate) struct SpeechDispatcher(Connection);
@@ -191,7 +191,7 @@ impl Backend for SpeechDispatcher {
             .map(|v| Voice {
                 id: v.name.clone(),
                 name: v.name.clone(),
-                gender: Gender::Unspecified,
+                gender: None,
                 language: LanguageIdentifier::from_str(&v.language).unwrap(),
             })
             .collect::<Vec<Voice>>();

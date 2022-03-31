@@ -11,9 +11,7 @@ use web_sys::{
     SpeechSynthesisUtterance, SpeechSynthesisVoice,
 };
 
-use crate::Gender;
-use crate::Voice;
-use crate::{Backend, BackendId, Error, Features, UtteranceId, CALLBACKS};
+use crate::{Backend, BackendId, Error, Features, UtteranceId, Voice, CALLBACKS};
 
 #[derive(Clone, Debug)]
 pub struct Web {
@@ -270,7 +268,7 @@ impl From<SpeechSynthesisVoice> for Voice {
         Voice {
             id: other.voice_uri(),
             name: other.name(),
-            gender: Gender::Unspecified,
+            gender: None,
             language,
         }
     }

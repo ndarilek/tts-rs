@@ -354,7 +354,7 @@ impl TryInto<Voice> for VoiceInformation {
         Ok(Voice {
             id: self.Id()?.try_into()?,
             name: self.DisplayName()?.try_into()?,
-            gender,
+            gender: Some(gender),
             language,
         })
     }
