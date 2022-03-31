@@ -42,6 +42,12 @@ impl AvFoundation {
             utterance: id,
         ) {
             trace!("speech_synthesizer_did_start_speech_utterance");
+            let vid: id = unsafe { msg_send![utterance, voice] };
+            if vid == nil {
+                println!("nil voice");
+            } else {
+                println!("Got voice ID");
+            }
             unsafe {
                 let backend_id: u64 = *this.get_ivar("backend_id");
                 let backend_id = BackendId::AvFoundation(backend_id);
