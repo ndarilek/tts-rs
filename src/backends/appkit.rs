@@ -209,7 +209,7 @@ impl Backend for AppKit {
         unimplemented!()
     }
 
-    fn set_voice(&mut self, voice: &Voice) -> Result<(), Error> {
+    fn set_voice(&mut self, _voice: &Voice) -> Result<(), Error> {
         unimplemented!()
     }
 }
