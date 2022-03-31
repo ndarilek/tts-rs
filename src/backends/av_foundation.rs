@@ -1,18 +1,18 @@
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 #[link(name = "AVFoundation", kind = "framework")]
-use std::sync::Mutex;
+use std::{str::FromStr, sync::Mutex};
 
 use cocoa_foundation::base::{id, nil, NO};
 use cocoa_foundation::foundation::NSString;
+use core_foundation::array::CFArray;
+use core_foundation::string::CFString;
 use lazy_static::lazy_static;
 use log::{info, trace};
 use objc::runtime::{Object, Sel};
 use objc::{class, declare::ClassDecl, msg_send, sel, sel_impl};
+use unic_langid::LanguageIdentifier;
 
-use crate::{Backend, BackendId, Error, Features, UtteranceId, Voice, CALLBACKS};
-
-mod voices;
-use voices::*;
+use crate::{Backend, BackendId, Error, Features, Gender, UtteranceId, Voice, CALLBACKS};
 
 #[derive(Clone, Debug)]
 pub(crate) struct AvFoundation {
@@ -22,7 +22,7 @@ pub(crate) struct AvFoundation {
     rate: f32,
     volume: f32,
     pitch: f32,
-    voice: AVSpeechSynthesisVoice,
+    voice: Option<Voice>,
 }
 
 lazy_static! {
@@ -146,7 +146,7 @@ impl AvFoundation {
                 rate: 0.5,
                 volume: 1.,
                 pitch: 1.,
-                voice: AVSpeechSynthesisVoice::new(),
+                voice: None,
             }
         };
         *backend_id += 1;
@@ -167,7 +167,7 @@ impl Backend for AvFoundation {
             volume: true,
             is_speaking: true,
             voice: true,
-            get_voice: true,
+            get_voice: false,
             utterance_callbacks: true,
         }
     }
@@ -192,7 +192,12 @@ impl Backend for AvFoundation {
             let _: () = msg_send![utterance, setVolume: self.volume];
             trace!("Setting pitch to {}", self.pitch);
             let _: () = msg_send![utterance, setPitchMultiplier: self.pitch];
-            let _: () = msg_send![utterance, setVoice: self.voice];
+            if let Some(voice) = &self.voice {
+                let mut vid = NSString::alloc(nil);
+                vid = vid.init_str(&voice.id());
+                let v: id = msg_send![class!(AVSpeechSynthesisVoice), voiceWithIdentifier: vid];
+                let _: () = msg_send![utterance, setVoice: v];
+            }
             trace!("Enqueuing");
             let _: () = msg_send![self.synth, speakUtterance: utterance];
             trace!("Done queuing");
@@ -285,11 +290,35 @@ impl Backend for AvFoundation {
     }
 
     fn voices(&self) -> Result<Vec<Voice>, Error> {
-        unimplemented!()
+        let voices: CFArray = unsafe { msg_send![class!(AVSpeechSynthesisVoice), speechVoices] };
+        let rv = voices
+            .iter()
+            .map(|v| {
+                let id: CFString = unsafe { msg_send![*v as *const Object, identifier] };
+                let name: CFString = unsafe { msg_send![*v as *const Object, name] };
+                let gender: i64 = unsafe { msg_send![*v as *const Object, gender] };
+                let gender = match gender {
+                    0 => Gender::Male,
+                    1 => Gender::Female,
+                    _ => Gender::Unspecified,
+                };
+                let language: CFString = unsafe { msg_send![*v as *const Object, language] };
+                let language = language.to_string();
+                let language = LanguageIdentifier::from_str(&language).unwrap();
+                Voice {
+                    id: id.to_string(),
+                    name: name.to_string(),
+                    gender,
+                    language,
+                }
+            })
+            .collect();
+        Ok(rv)
     }
 
     fn set_voice(&mut self, voice: &Voice) -> Result<(), Error> {
-        unimplemented!()
+        self.voice = Some(voice.clone());
+        Ok(())
     }
 }
 

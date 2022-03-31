@@ -709,7 +709,7 @@ pub enum Gender {
     Female,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Voice {
     pub(crate) id: String,
     pub(crate) name: String,
