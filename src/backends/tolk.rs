@@ -109,7 +109,7 @@ impl Backend for Tolk {
         unimplemented!()
     }
 
-    fn voice(&self) -> Result<Voice, Error> {
+    fn voice(&self) -> Result<Option<Voice>, Error> {
         unimplemented!()
     }
 
