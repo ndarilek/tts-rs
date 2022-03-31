@@ -9,8 +9,7 @@ use log::{info, trace};
 use objc::runtime::{Object, Sel};
 use objc::{class, declare::ClassDecl, msg_send, sel, sel_impl};
 
-use crate::voices::Backend as VoiceBackend;
-use crate::{Backend, BackendId, Error, Features, UtteranceId, CALLBACKS};
+use crate::{Backend, BackendId, Error, Features, UtteranceId, Voice, CALLBACKS};
 
 mod voices;
 use voices::*;
@@ -167,7 +166,8 @@ impl Backend for AvFoundation {
             pitch: true,
             volume: true,
             is_speaking: true,
-            voices: true,
+            voice: true,
+            get_voice: true,
             utterance_callbacks: true,
         }
     }
@@ -280,20 +280,16 @@ impl Backend for AvFoundation {
         Ok(is_speaking != NO as i8)
     }
 
-    fn voice(&self) -> Result<String, Error> {
-        Ok(self.voice.id())
+    fn voice(&self) -> Result<Option<Voice>, Error> {
+        unimplemented!()
     }
 
-    fn list_voices(&self) -> Vec<String> {
-        AVSpeechSynthesisVoice::list()
-            .iter()
-            .map(|v| v.id())
-            .collect()
+    fn voices(&self) -> Result<Vec<Voice>, Error> {
+        unimplemented!()
     }
 
-    fn set_voice(&mut self, voice: &str) -> Result<(), Error> {
-        self.voice = AVSpeechSynthesisVoice::new();
-        Ok(())
+    fn set_voice(&mut self, voice: &Voice) -> Result<(), Error> {
+        unimplemented!()
     }
 }
 

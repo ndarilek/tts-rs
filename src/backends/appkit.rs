@@ -7,7 +7,7 @@ use objc::declare::ClassDecl;
 use objc::runtime::*;
 use objc::*;
 
-use crate::{Backend, BackendId, Error, Features, UtteranceId};
+use crate::{Backend, BackendId, Error, Features, UtteranceId, Voice};
 
 #[derive(Clone, Debug)]
 pub(crate) struct AppKit(*mut Object, *mut Object);
@@ -201,15 +201,15 @@ impl Backend for AppKit {
         Ok(is_speaking != NO as i8)
     }
 
-    fn voice(&self) -> Result<String, Error> {
+    fn voice(&self) -> Result<Option<Voice>, Error> {
         unimplemented!()
     }
 
-    fn list_voices(&self) -> Vec<String> {
+    fn voices(&self) -> Result<Vec<Voice>, Error> {
         unimplemented!()
     }
 
-    fn set_voice(&mut self, voice: &str) -> Result<(), Error> {
+    fn set_voice(&mut self, voice: &Voice) -> Result<(), Error> {
         unimplemented!()
     }
 }
