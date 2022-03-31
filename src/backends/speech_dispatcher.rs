@@ -198,7 +198,7 @@ impl Backend for SpeechDispatcher {
         Ok(rv)
     }
 
-    fn voice(&self) -> Result<Voice, Error> {
+    fn voice(&self) -> Result<Option<Voice>, Error> {
         unimplemented!()
     }
 

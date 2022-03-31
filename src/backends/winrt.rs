@@ -301,9 +301,10 @@ impl Backend for WinRt {
         Ok(!utterances.is_empty())
     }
 
-    fn voice(&self) -> Result<Voice, Error> {
+    fn voice(&self) -> Result<Option<Voice>, Error> {
         let voice = self.synth.Voice()?;
-        voice.try_into()
+        let voice = voice.try_into()?;
+        Ok(Some(voice))
     }
 
     fn voices(&self) -> Result<Vec<Voice>, Error> {
