@@ -16,7 +16,7 @@ use jni::{
 use lazy_static::lazy_static;
 use log::{error, info};
 
-use crate::{Backend, BackendId, Error, Features, UtteranceId, CALLBACKS};
+use crate::{Backend, BackendId, Error, Features, UtteranceId, Voice, CALLBACKS};
 
 lazy_static! {
     static ref BRIDGE: Mutex<Option<GlobalRef>> = Mutex::new(None);
@@ -248,6 +248,8 @@ impl Backend for Android {
             volume: false,
             is_speaking: true,
             utterance_callbacks: true,
+            voice: false,
+            get_voice: false,
         }
     }
 
@@ -384,5 +386,17 @@ impl Backend for Android {
         let rv = env.call_method(tts, "isSpeaking", "()Z", &[])?;
         let rv = rv.z()?;
         Ok(rv)
+    }
+
+    fn voice(&self) -> Result<Option<Voice>, Error> {
+        unimplemented!()
+    }
+
+    fn voices(&self) -> Result<Vec<Voice>, Error> {
+        unimplemented!()
+    }
+
+    fn set_voice(&mut self, voice: &Voice) -> Result<(), Error> {
+        unimplemented!()
     }
 }
