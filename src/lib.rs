@@ -16,6 +16,7 @@ use std::collections::HashMap;
 #[cfg(target_os = "macos")]
 use std::ffi::CStr;
 use std::fmt;
+#[cfg(windows)]
 use std::string::FromUtf16Error;
 use std::sync::{Arc, Mutex};
 use std::{boxed::Box, sync::RwLock};
