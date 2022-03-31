@@ -4,7 +4,7 @@ use std::sync::Arc;
 use log::{info, trace};
 use tolk::Tolk as TolkPtr;
 
-use crate::{Backend, BackendId, Error, Features, UtteranceId};
+use crate::{Backend, BackendId, Error, Features, UtteranceId, Voice};
 
 #[derive(Clone, Debug)]
 pub(crate) struct Tolk(Arc<TolkPtr>);
@@ -109,15 +109,15 @@ impl Backend for Tolk {
         unimplemented!()
     }
 
-    fn voice(&self) -> Result<String, Error> {
+    fn voice(&self) -> Result<Voice, Error> {
         unimplemented!()
     }
 
-    fn list_voices(&self) -> Vec<String> {
+    fn voices(&self) -> Result<Vec<Voice>, Error> {
         unimplemented!()
     }
 
-    fn set_voice(&mut self, voice: &str) -> Result<(), Error> {
+    fn set_voice(&mut self, _voice: &Voice) -> Result<(), Error> {
         unimplemented!()
     }
 }
