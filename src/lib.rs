@@ -704,7 +704,6 @@ impl Drop for Tts {
 
 #[derive(Clone, Copy, Debug)]
 pub enum Gender {
-    Unspecified,
     Male,
     Female,
 }
@@ -713,7 +712,7 @@ pub enum Gender {
 pub struct Voice {
     pub(crate) id: String,
     pub(crate) name: String,
-    pub(crate) gender: Gender,
+    pub(crate) gender: Option<Gender>,
     pub(crate) language: LanguageIdentifier,
 }
 
@@ -726,7 +725,7 @@ impl Voice {
         self.name.clone()
     }
 
-    pub fn gender(&self) -> Gender {
+    pub fn gender(&self) -> Option<Gender> {
         self.gender
     }
 

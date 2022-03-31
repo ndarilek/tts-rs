@@ -298,9 +298,9 @@ impl Backend for AvFoundation {
                 let name: CFString = unsafe { msg_send![*v as *const Object, name] };
                 let gender: i64 = unsafe { msg_send![*v as *const Object, gender] };
                 let gender = match gender {
-                    0 => Gender::Male,
-                    1 => Gender::Female,
-                    _ => Gender::Unspecified,
+                    0 => Some(Gender::Male),
+                    1 => Some(Gender::Female),
+                    _ => None,
                 };
                 let language: CFString = unsafe { msg_send![*v as *const Object, language] };
                 let language = language.to_string();
