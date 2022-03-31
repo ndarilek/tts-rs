@@ -15,13 +15,20 @@ enum Msg {
     RateChanged(String),
     PitchChanged(String),
     VolumeChanged(String),
+    VoiceChanged(String),
     Speak,
 }
 
 fn init(_: Url, _: &mut impl Orders<Msg>) -> Model {
-    let tts = Tts::default().unwrap();
+    let mut tts = Tts::default().unwrap();
+    if tts.voices().unwrap().iter().len() > 0 {
+        if tts.voice().unwrap().is_none() {
+            tts.set_voice(tts.voices().unwrap().first().unwrap())
+                .expect("Failed to set voice");
+        }
+    }
     Model {
-        text: Default::default(),
+        text: "Hello, world. This is a test of the current text-to-speech values.".into(),
         tts,
     }
 }
@@ -42,6 +49,13 @@ fn update(msg: Msg, model: &mut Model, _: &mut impl Orders<Msg>) {
             let volume = volume.parse::<f32>().unwrap();
             model.tts.set_volume(volume).unwrap();
         }
+        VoiceChanged(voice) => {
+            for v in model.tts.voices().unwrap() {
+                if v.id() == voice {
+                    model.tts.set_voice(&v).unwrap();
+                }
+            }
+        }
         Speak => {
             model.tts.speak(&model.text, false).unwrap();
         }
@@ -49,6 +63,7 @@ fn update(msg: Msg, model: &mut Model, _: &mut impl Orders<Msg>) {
 }
 
 fn view(model: &Model) -> Node<Msg> {
+    let should_show_voices = model.tts.voices().unwrap().iter().len() > 0;
     form![
         div![label![
             "Text to speak",
@@ -96,6 +111,36 @@ fn view(model: &Model) -> Node<Msg> {
                 input_ev(Ev::Input, Msg::VolumeChanged)
             ],
         ],],
+        if should_show_voices {
+            div![
+                label!["Voice"],
+                select![
+                    model.tts.voices().unwrap().iter().map(|v| {
+                        let selected = if let Some(voice) = model.tts.voice().unwrap() {
+                            voice.id() == v.id()
+                        } else {
+                            false
+                        };
+                        option![
+                            attrs! {
+                                At::Value => v.id()
+                            },
+                            if selected {
+                                attrs! {
+                                    At::Selected => selected
+                                }
+                            } else {
+                                attrs! {}
+                            },
+                            v.name()
+                        ]
+                    }),
+                    input_ev(Ev::Change, Msg::VoiceChanged)
+                ]
+            ]
+        } else {
+            div!["Your browser does not seem to support selecting voices."]
+        },
         button![
             "Speak",
             ev(Ev::Click, |e| {
@@ -107,5 +152,6 @@ fn view(model: &Model) -> Node<Msg> {
 }
 
 fn main() {
+    console_log::init().expect("Error initializing logger");
     App::start("app", init, update, view);
 }

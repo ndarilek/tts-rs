@@ -237,7 +237,7 @@ pub trait Backend: Clone {
     fn set_volume(&mut self, volume: f32) -> Result<(), Error>;
     fn is_speaking(&self) -> Result<bool, Error>;
     fn voices(&self) -> Result<Vec<Voice>, Error>;
-    fn voice(&self) -> Result<Voice, Error>;
+    fn voice(&self) -> Result<Option<Voice>, Error>;
     fn set_voice(&mut self, voice: &Voice) -> Result<(), Error>;
 }
 
@@ -582,7 +582,7 @@ impl Tts {
     /**
      * Return the current speaking voice.
      */
-    pub fn voice(&self) -> Result<Voice, Error> {
+    pub fn voice(&self) -> Result<Option<Voice>, Error> {
         let Features { get_voice, .. } = self.supported_features();
         if get_voice {
             self.0.read().unwrap().voice()
@@ -702,7 +702,7 @@ impl Drop for Tts {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum Gender {
     Unspecified,
     Male,
@@ -711,8 +711,26 @@ pub enum Gender {
 
 #[derive(Debug)]
 pub struct Voice {
-    pub id: String,
-    pub name: String,
-    pub gender: Gender,
-    pub language: LanguageIdentifier,
+    pub(crate) id: String,
+    pub(crate) name: String,
+    pub(crate) gender: Gender,
+    pub(crate) language: LanguageIdentifier,
+}
+
+impl Voice {
+    pub fn id(&self) -> String {
+        self.id.clone()
+    }
+
+    pub fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    pub fn gender(&self) -> Gender {
+        self.gender
+    }
+
+    pub fn language(&self) -> LanguageIdentifier {
+        self.language.clone()
+    }
 }
