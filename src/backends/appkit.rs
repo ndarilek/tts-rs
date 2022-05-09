@@ -1,5 +1,4 @@
 #[cfg(target_os = "macos")]
-#[link(name = "AppKit", kind = "framework")]
 use cocoa_foundation::base::{id, nil};
 use cocoa_foundation::foundation::NSString;
 use log::{info, trace};
