@@ -1,16 +1,14 @@
-/*!
- * a Text-To-Speech (TTS) library providing high-level interfaces to a variety of backends.
- * Currently supported backends are:
- * * Windows
- *   * Screen readers/SAPI via Tolk (requires `tolk` Cargo feature)
- *   * WinRT
- * * Linux via [Speech Dispatcher](https://freebsoft.org/speechd)
- * * MacOS/iOS
- *   * AppKit on MacOS 10.13 and below
- *   * AVFoundation on MacOS 10.14 and above, and iOS
- * * Android
- * * WebAssembly
- */
+//! * a Text-To-Speech (TTS) library providing high-level interfaces to a variety of backends.
+//!  * Currently supported backends are:
+//!  * * Windows
+//!  *   * Screen readers/SAPI via Tolk (requires `tolk` Cargo feature)
+//!  *   * WinRT
+//!  * * Linux via [Speech Dispatcher](https://freebsoft.org/speechd)
+//!  * * MacOS/iOS
+//!  *   * AppKit on MacOS 10.13 and below
+//!  *   * AVFoundation on MacOS 10.14 and above, and iOS
+//!  * * Android
+//!  * * WebAssembly
 
 use std::collections::HashMap;
 #[cfg(target_os = "macos")]
@@ -267,9 +265,7 @@ unsafe impl Send for Tts {}
 unsafe impl Sync for Tts {}
 
 impl Tts {
-    /**
-     * Create a new `TTS` instance with the specified backend.
-     */
+    /// Create a new `TTS` instance with the specified backend.
     pub fn new(backend: Backends) -> Result<Tts, Error> {
         let backend = match backend {
             #[cfg(target_os = "linux")]
@@ -360,16 +356,12 @@ impl Tts {
         tts
     }
 
-    /**
-     * Returns the features supported by this TTS engine
-     */
+    /// Returns the features supported by this TTS engine
     pub fn supported_features(&self) -> Features {
         self.0.read().unwrap().supported_features()
     }
 
-    /**
-     * Speaks the specified text, optionally interrupting current speech.
-     */
+    /// Speaks the specified text, optionally interrupting current speech.
     pub fn speak<S: Into<String>>(
         &mut self,
         text: S,
@@ -381,9 +373,7 @@ impl Tts {
             .speak(text.into().as_str(), interrupt)
     }
 
-    /**
-     * Stops current speech.
-     */
+    /// Stops current speech.
     pub fn stop(&mut self) -> Result<&Self, Error> {
         let Features { stop, .. } = self.supported_features();
         if stop {
@@ -394,30 +384,22 @@ impl Tts {
         }
     }
 
-    /**
-     * Returns the minimum rate for this speech synthesizer.
-     */
+    /// Returns the minimum rate for this speech synthesizer.
     pub fn min_rate(&self) -> f32 {
         self.0.read().unwrap().min_rate()
     }
 
-    /**
-     * Returns the maximum rate for this speech synthesizer.
-     */
+    /// Returns the maximum rate for this speech synthesizer.
     pub fn max_rate(&self) -> f32 {
         self.0.read().unwrap().max_rate()
     }
 
-    /**
-     * Returns the normal rate for this speech synthesizer.
-     */
+    /// Returns the normal rate for this speech synthesizer.
     pub fn normal_rate(&self) -> f32 {
         self.0.read().unwrap().normal_rate()
     }
 
-    /**
-     * Gets the current speech rate.
-     */
+    /// Gets the current speech rate.
     pub fn get_rate(&self) -> Result<f32, Error> {
         let Features { rate, .. } = self.supported_features();
         if rate {
@@ -427,9 +409,7 @@ impl Tts {
         }
     }
 
-    /**
-     * Sets the desired speech rate.
-     */
+    /// Sets the desired speech rate.
     pub fn set_rate(&mut self, rate: f32) -> Result<&Self, Error> {
         let Features {
             rate: rate_feature, ..
@@ -447,30 +427,22 @@ impl Tts {
         }
     }
 
-    /**
-     * Returns the minimum pitch for this speech synthesizer.
-     */
+    /// Returns the minimum pitch for this speech synthesizer.
     pub fn min_pitch(&self) -> f32 {
         self.0.read().unwrap().min_pitch()
     }
 
-    /**
-     * Returns the maximum pitch for this speech synthesizer.
-     */
+    /// Returns the maximum pitch for this speech synthesizer.
     pub fn max_pitch(&self) -> f32 {
         self.0.read().unwrap().max_pitch()
     }
 
-    /**
-     * Returns the normal pitch for this speech synthesizer.
-     */
+    /// Returns the normal pitch for this speech synthesizer.
     pub fn normal_pitch(&self) -> f32 {
         self.0.read().unwrap().normal_pitch()
     }
 
-    /**
-     * Gets the current speech pitch.
-     */
+    /// Gets the current speech pitch.
     pub fn get_pitch(&self) -> Result<f32, Error> {
         let Features { pitch, .. } = self.supported_features();
         if pitch {
@@ -480,9 +452,7 @@ impl Tts {
         }
     }
 
-    /**
-     * Sets the desired speech pitch.
-     */
+    /// Sets the desired speech pitch.
     pub fn set_pitch(&mut self, pitch: f32) -> Result<&Self, Error> {
         let Features {
             pitch: pitch_feature,
@@ -501,30 +471,22 @@ impl Tts {
         }
     }
 
-    /**
-     * Returns the minimum volume for this speech synthesizer.
-     */
+    /// Returns the minimum volume for this speech synthesizer.
     pub fn min_volume(&self) -> f32 {
         self.0.read().unwrap().min_volume()
     }
 
-    /**
-     * Returns the maximum volume for this speech synthesizer.
-     */
+    /// Returns the maximum volume for this speech synthesizer.
     pub fn max_volume(&self) -> f32 {
         self.0.read().unwrap().max_volume()
     }
 
-    /**
-     * Returns the normal volume for this speech synthesizer.
-     */
+    /// Returns the normal volume for this speech synthesizer.
     pub fn normal_volume(&self) -> f32 {
         self.0.read().unwrap().normal_volume()
     }
 
-    /**
-     * Gets the current speech volume.
-     */
+    /// Gets the current speech volume.
     pub fn get_volume(&self) -> Result<f32, Error> {
         let Features { volume, .. } = self.supported_features();
         if volume {
@@ -534,9 +496,7 @@ impl Tts {
         }
     }
 
-    /**
-     * Sets the desired speech volume.
-     */
+    /// Sets the desired speech volume.
     pub fn set_volume(&mut self, volume: f32) -> Result<&Self, Error> {
         let Features {
             volume: volume_feature,
@@ -555,9 +515,7 @@ impl Tts {
         }
     }
 
-    /**
-     * Returns whether this speech synthesizer is speaking.
-     */
+    /// Returns whether this speech synthesizer is speaking.
     pub fn is_speaking(&self) -> Result<bool, Error> {
         let Features { is_speaking, .. } = self.supported_features();
         if is_speaking {
@@ -567,9 +525,7 @@ impl Tts {
         }
     }
 
-    /**
-     * Returns list of available voices.
-     */
+    /// Returns list of available voices.
     pub fn voices(&self) -> Result<Vec<Voice>, Error> {
         let Features { voice, .. } = self.supported_features();
         if voice {
@@ -579,9 +535,7 @@ impl Tts {
         }
     }
 
-    /**
-     * Return the current speaking voice.
-     */
+    /// Return the current speaking voice.
     pub fn voice(&self) -> Result<Option<Voice>, Error> {
         let Features { get_voice, .. } = self.supported_features();
         if get_voice {
@@ -591,9 +545,7 @@ impl Tts {
         }
     }
 
-    /**
-     * Set speaking voice.
-     */
+    /// Set speaking voice.
     pub fn set_voice(&mut self, voice: &Voice) -> Result<(), Error> {
         let Features {
             voice: voice_feature,
@@ -606,9 +558,7 @@ impl Tts {
         }
     }
 
-    /**
-     * Called when this speech synthesizer begins speaking an utterance.
-     */
+    /// Called when this speech synthesizer begins speaking an utterance.
     pub fn on_utterance_begin(
         &self,
         callback: Option<Box<dyn FnMut(UtteranceId)>>,
@@ -628,9 +578,7 @@ impl Tts {
         }
     }
 
-    /**
-     * Called when this speech synthesizer finishes speaking an utterance.
-     */
+    /// Called when this speech synthesizer finishes speaking an utterance.
     pub fn on_utterance_end(
         &self,
         callback: Option<Box<dyn FnMut(UtteranceId)>>,
@@ -650,9 +598,7 @@ impl Tts {
         }
     }
 
-    /**
-     * Called when this speech synthesizer is stopped and still has utterances in its queue.
-     */
+    /// Called when this speech synthesizer is stopped and still has utterances in its queue.
     pub fn on_utterance_stop(
         &self,
         callback: Option<Box<dyn FnMut(UtteranceId)>>,
