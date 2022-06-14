@@ -293,12 +293,12 @@ impl Tts {
                 Ok(Tts(Arc::new(RwLock::new(Box::new(tts)))))
             }
             #[cfg(target_os = "macos")]
-            Backends::AppKit => Ok(Tts(Arc::new(RwLock::new(
-                Box::new(backends::AppKit::new()),
-            )))),
+            Backends::AppKit => Ok(Tts(Arc::new(RwLock::new(Box::new(
+                backends::AppKit::new()?
+            ))))),
             #[cfg(any(target_os = "macos", target_os = "ios"))]
             Backends::AvFoundation => Ok(Tts(Arc::new(RwLock::new(Box::new(
-                backends::AvFoundation::new(),
+                backends::AvFoundation::new()?,
             ))))),
             #[cfg(target_os = "android")]
             Backends::Android => {

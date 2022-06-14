@@ -12,12 +12,12 @@ use crate::{Backend, BackendId, Error, Features, UtteranceId, Voice};
 pub(crate) struct AppKit(*mut Object, *mut Object);
 
 impl AppKit {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new() -> Result<Self, Error> {
         info!("Initializing AppKit backend");
         unsafe {
             let obj: *mut Object = msg_send![class!(NSSpeechSynthesizer), new];
-            let mut decl =
-                ClassDecl::new("MyNSSpeechSynthesizerDelegate", class!(NSObject)).unwrap();
+            let mut decl = ClassDecl::new("MyNSSpeechSynthesizerDelegate", class!(NSObject))
+                .ok_or(Error::OperationFailed)?;
             decl.add_ivar::<id>("synth");
             decl.add_ivar::<id>("strings");
 
@@ -81,11 +81,17 @@ impl AppKit {
 
             let delegate_class = decl.register();
             let delegate_obj: *mut Object = msg_send![delegate_class, new];
-            delegate_obj.as_mut().unwrap().set_ivar("synth", obj);
+            delegate_obj
+                .as_mut()
+                .ok_or(Error::OperationFailed)?
+                .set_ivar("synth", obj);
             let strings: id = msg_send![class!(NSMutableArray), new];
-            delegate_obj.as_mut().unwrap().set_ivar("strings", strings);
+            delegate_obj
+                .as_mut()
+                .ok_or(Error::OperationFailed)?
+                .set_ivar("strings", strings);
             let _: Object = msg_send![obj, setDelegate: delegate_obj];
-            AppKit(obj, delegate_obj)
+            Ok(AppKit(obj, delegate_obj))
         }
     }
 }

@@ -29,9 +29,10 @@ lazy_static! {
 }
 
 impl AvFoundation {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new() -> Result<Self, Error> {
         info!("Initializing AVFoundation backend");
-        let mut decl = ClassDecl::new("MyNSSpeechSynthesizerDelegate", class!(NSObject)).unwrap();
+        let mut decl = ClassDecl::new("MyNSSpeechSynthesizerDelegate", class!(NSObject))
+            .ok_or(Error::OperationFailed)?;
         decl.add_ivar::<u64>("backend_id");
 
         extern "C" fn speech_synthesizer_did_start_speech_utterance(
@@ -149,7 +150,7 @@ impl AvFoundation {
             }
         };
         *backend_id += 1;
-        rv
+        Ok(rv)
     }
 }
 
