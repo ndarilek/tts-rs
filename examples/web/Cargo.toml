@@ -9,5 +9,6 @@ edition = "2018"
 [dependencies]
 console_log = "0.2"
 log = "0.4"
-seed = "0.8"
+seed = "0.9"
 tts = { path = "../.." }
+wasm-bindgen = "= 0.2.80"
