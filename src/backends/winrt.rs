@@ -86,7 +86,7 @@ impl WinRt {
         backend_to_speech_synthesizer.insert(bid, synth.clone());
         drop(backend_to_speech_synthesizer);
         let bid_clone = bid;
-        player.MediaEnded(TypedEventHandler::new(
+        player.MediaEnded(&TypedEventHandler::new(
             move |sender: &Option<MediaPlayer>, _args| {
                 if let Some(sender) = sender {
                     let backend_to_media_player = BACKEND_TO_MEDIA_PLAYER.lock().unwrap();
@@ -110,14 +110,14 @@ impl WinRt {
                                         tts.Options()?.SetSpeakingRate(utterance.rate.into())?;
                                         tts.Options()?.SetAudioPitch(utterance.pitch.into())?;
                                         tts.Options()?.SetAudioVolume(utterance.volume.into())?;
-                                        tts.SetVoice(utterance.voice.clone())?;
-                                        let stream = tts
-                                            .SynthesizeTextToStreamAsync(utterance.text.as_str())?
-                                            .get()?;
+                                        tts.SetVoice(&utterance.voice)?;
+                                        let text = &utterance.text;
+                                        let stream =
+                                            tts.SynthesizeTextToStreamAsync(&text.into())?.get()?;
                                         let content_type = stream.ContentType()?;
                                         let source =
-                                            MediaSource::CreateFromStream(stream, content_type)?;
-                                        sender.SetSource(source)?;
+                                            MediaSource::CreateFromStream(&stream, &content_type)?;
+                                        sender.SetSource(&source)?;
                                         sender.Play()?;
                                         if let Some(callback) = callbacks.utterance_begin.as_mut() {
                                             callback(utterance.id);
@@ -147,6 +147,7 @@ impl WinRt {
         self.synth.Options()?.SetAudioPitch(self.pitch.into())?;
         self.synth.Options()?.SetAudioVolume(self.volume.into())?;
 
+        self.synth.SetVoice(&self.voice)?;
         let synth_stream = self.synth.SynthesizeTextToStreamAsync(text)?.get()?;
 
         let size = synth_stream.Size()?;
@@ -347,7 +348,7 @@ impl Backend for WinRt {
         for v in SpeechSynthesizer::AllVoices()? {
             let vid: String = v.Id()?.try_into()?;
             if vid == voice.id {
-                self.voice = v.clone();
+                self.voice = v;
                 return Ok(());
             }
         }
