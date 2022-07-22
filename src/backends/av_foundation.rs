@@ -169,6 +169,7 @@ impl Backend for AvFoundation {
             voice: true,
             get_voice: false,
             utterance_callbacks: true,
+            synthesize: false,
         }
     }
 
@@ -203,6 +204,10 @@ impl Backend for AvFoundation {
             trace!("Done queuing");
         }
         Ok(Some(UtteranceId::AvFoundation(utterance)))
+    }
+
+    fn synthesize(&mut self, text: &str) -> Result<Vec<u8>, Error> {
+        unimplemented!();
     }
 
     fn stop(&mut self) -> Result<(), Error> {

@@ -156,6 +156,7 @@ impl Backend for WinRt {
             voice: true,
             get_voice: true,
             utterance_callbacks: true,
+            synthesize: false,
         }
     }
 
@@ -205,6 +206,10 @@ impl Backend for WinRt {
             }
         }
         Ok(Some(utterance_id))
+    }
+
+    fn synthesize(&mut self, text: &str) -> Result<Vec<u8>, Error> {
+        unimplemented!()
     }
 
     fn stop(&mut self) -> std::result::Result<(), Error> {
