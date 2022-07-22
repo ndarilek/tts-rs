@@ -193,6 +193,7 @@ impl Backend for WinRt {
             self.synth.Options()?.SetSpeakingRate(self.rate.into())?;
             self.synth.Options()?.SetAudioPitch(self.pitch.into())?;
             self.synth.Options()?.SetAudioVolume(self.volume.into())?;
+            self.synth.SetVoice(&self.voice)?;
             let stream = self
                 .synth
                 .SynthesizeTextToStreamAsync(&text.into())?
