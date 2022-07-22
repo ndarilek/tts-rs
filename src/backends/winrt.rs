@@ -9,12 +9,14 @@ use lazy_static::lazy_static;
 use log::{info, trace};
 use unic_langid::LanguageIdentifier;
 use windows::{
+    core::HSTRING,
     Foundation::TypedEventHandler,
     Media::{
         Core::MediaSource,
         Playback::{MediaPlayer, MediaPlayerAudioCategory},
         SpeechSynthesis::{SpeechSynthesizer, VoiceGender, VoiceInformation},
     },
+    Storage::Streams::{DataReader, DataWriter, InMemoryRandomAccessStream},
 };
 
 use crate::{Backend, BackendId, Error, Features, Gender, UtteranceId, Voice, CALLBACKS};
@@ -139,6 +141,22 @@ impl WinRt {
             voice: SpeechSynthesizer::DefaultVoice()?,
         })
     }
+
+    fn synthesize_with_content_type(&mut self, text: &str) -> Result<(Vec<u8>, HSTRING), Error> {
+        self.synth.Options()?.SetSpeakingRate(self.rate.into())?;
+        self.synth.Options()?.SetAudioPitch(self.pitch.into())?;
+        self.synth.Options()?.SetAudioVolume(self.volume.into())?;
+
+        let synth_stream = self.synth.SynthesizeTextToStreamAsync(text)?.get()?;
+
+        let size = synth_stream.Size()?;
+        let data_reader = DataReader::CreateDataReader(synth_stream.GetInputStreamAt(0)?)?;
+        let mut bytes = vec![0; size as usize];
+        data_reader.LoadAsync(size as u32)?.get()?;
+        data_reader.ReadBytes(&mut bytes)?;
+
+        Ok((bytes, synth_stream.ContentType()?))
+    }
 }
 
 impl Backend for WinRt {
@@ -156,7 +174,7 @@ impl Backend for WinRt {
             voice: true,
             get_voice: true,
             utterance_callbacks: true,
-            synthesize: false,
+            synthesize: true,
         }
     }
 
@@ -191,14 +209,18 @@ impl Backend for WinRt {
             }
         }
         if no_utterances {
-            self.synth.Options()?.SetSpeakingRate(self.rate.into())?;
-            self.synth.Options()?.SetAudioPitch(self.pitch.into())?;
-            self.synth.Options()?.SetAudioVolume(self.volume.into())?;
-            let stream = self.synth.SynthesizeTextToStreamAsync(text)?.get()?;
-            let content_type = stream.ContentType()?;
+            let (bytes, content_type) = self.synthesize_with_content_type(text)?;
+
+            let stream = InMemoryRandomAccessStream::new()?;
+            let data_writer = DataWriter::CreateDataWriter(&stream)?;
+            data_writer.WriteBytes(&bytes)?;
+            data_writer.StoreAsync()?;
+            data_writer.FlushAsync()?;
+
             let source = MediaSource::CreateFromStream(stream, content_type)?;
-            self.player.SetSource(source)?;
+            self.player.SetSource(&source)?;
             self.player.Play()?;
+
             let mut callbacks = CALLBACKS.lock().unwrap();
             let callbacks = callbacks.get_mut(&self.id).unwrap();
             if let Some(callback) = callbacks.utterance_begin.as_mut() {
@@ -209,7 +231,8 @@ impl Backend for WinRt {
     }
 
     fn synthesize(&mut self, text: &str) -> Result<Vec<u8>, Error> {
-        unimplemented!()
+        let (bytes, _) = self.synthesize_with_content_type(text)?;
+        Ok(bytes)
     }
 
     fn stop(&mut self) -> std::result::Result<(), Error> {
