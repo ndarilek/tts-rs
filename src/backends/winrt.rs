@@ -148,10 +148,13 @@ impl WinRt {
         self.synth.Options()?.SetAudioVolume(self.volume.into())?;
 
         self.synth.SetVoice(&self.voice)?;
-        let synth_stream = self.synth.SynthesizeTextToStreamAsync(text)?.get()?;
+        let synth_stream = self
+            .synth
+            .SynthesizeTextToStreamAsync(&text.into())?
+            .get()?;
 
         let size = synth_stream.Size()?;
-        let data_reader = DataReader::CreateDataReader(synth_stream.GetInputStreamAt(0)?)?;
+        let data_reader = DataReader::CreateDataReader(&synth_stream.GetInputStreamAt(0)?)?;
         let mut bytes = vec![0; size as usize];
         data_reader.LoadAsync(size as u32)?.get()?;
         data_reader.ReadBytes(&mut bytes)?;
@@ -218,7 +221,7 @@ impl Backend for WinRt {
             data_writer.StoreAsync()?;
             data_writer.FlushAsync()?;
 
-            let source = MediaSource::CreateFromStream(stream, content_type)?;
+            let source = MediaSource::CreateFromStream(&stream, &content_type)?;
             self.player.SetSource(&source)?;
             self.player.Play()?;
 
