@@ -1,18 +1,22 @@
 #[cfg(target_os = "android")]
-use std::collections::HashSet;
-use std::ffi::{CStr, CString};
-use std::os::raw::c_void;
-use std::sync::{Mutex, RwLock};
-use std::thread;
-use std::time::Duration;
+use std::{
+    collections::HashSet,
+    ffi::{CStr, CString},
+    os::raw::c_void,
+    sync::{Mutex, RwLock},
+    thread,
+    time::{Duration, Instant},
+};
 
-use jni::objects::{GlobalRef, JObject, JString};
-use jni::sys::{jfloat, jint, JNI_VERSION_1_6};
-use jni::{JNIEnv, JavaVM};
+use jni::{
+    objects::{GlobalRef, JObject, JString},
+    sys::{jfloat, jint, JNI_VERSION_1_6},
+    JNIEnv, JavaVM,
+};
 use lazy_static::lazy_static;
 use log::{error, info};
 
-use crate::{Backend, BackendId, Error, Features, UtteranceId, CALLBACKS};
+use crate::{Backend, BackendId, Error, Features, UtteranceId, Voice, CALLBACKS};
 
 lazy_static! {
     static ref BRIDGE: Mutex<Option<GlobalRef>> = Mutex::new(None);
@@ -198,11 +202,17 @@ impl Android {
             }
             let tts = env.new_global_ref(tts)?;
             // This hack makes my brain bleed.
+            const MAX_WAIT_TIME: Duration = Duration::from_millis(500);
+            let start = Instant::now();
+            // Wait a max of 500ms for initialization, then return an error to avoid hanging.
             loop {
                 {
                     let pending = PENDING_INITIALIZATIONS.read().unwrap();
                     if !(*pending).contains(&bid) {
                         break;
+                    }
+                    if start.elapsed() > MAX_WAIT_TIME {
+                        return Err(Error::OperationFailed);
                     }
                 }
                 thread::sleep(Duration::from_millis(5));
@@ -238,6 +248,8 @@ impl Backend for Android {
             volume: false,
             is_speaking: true,
             utterance_callbacks: true,
+            voice: false,
+            get_voice: false,
         }
     }
 
@@ -374,5 +386,17 @@ impl Backend for Android {
         let rv = env.call_method(tts, "isSpeaking", "()Z", &[])?;
         let rv = rv.z()?;
         Ok(rv)
+    }
+
+    fn voice(&self) -> Result<Option<Voice>, Error> {
+        unimplemented!()
+    }
+
+    fn voices(&self) -> Result<Vec<Voice>, Error> {
+        unimplemented!()
+    }
+
+    fn set_voice(&mut self, _voice: &Voice) -> Result<(), Error> {
+        unimplemented!()
     }
 }

@@ -71,6 +71,23 @@ fn main() -> Result<(), Error> {
         tts.speak("This is normal volume.", false)?;
         tts.set_volume(original_volume)?;
     }
+    let Features { voice, .. } = tts.supported_features();
+    if voice {
+        let voices = tts.voices()?;
+        println!("Available voices:\n===");
+        for v in &voices {
+            println!("{:?}", v);
+        }
+        let Features { get_voice, .. } = tts.supported_features();
+        let original_voice = if get_voice { tts.voice()? } else { None };
+        for v in &voices {
+            tts.set_voice(v)?;
+            tts.speak(format!("This is {}.", v.name()), false)?;
+        }
+        if let Some(original_voice) = original_voice {
+            tts.set_voice(&original_voice)?;
+        }
+    }
     tts.speak("Goodbye.", false)?;
     let mut _input = String::new();
     // The below is only needed to make the example run on MacOS because there is no NSRunLoop in this context.

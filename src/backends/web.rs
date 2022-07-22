@@ -1,16 +1,17 @@
 #[cfg(target_arch = "wasm32")]
-use std::sync::Mutex;
+use std::{str::FromStr, sync::Mutex};
 
 use lazy_static::lazy_static;
 use log::{info, trace};
+use unic_langid::LanguageIdentifier;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{
     SpeechSynthesisErrorCode, SpeechSynthesisErrorEvent, SpeechSynthesisEvent,
-    SpeechSynthesisUtterance,
+    SpeechSynthesisUtterance, SpeechSynthesisVoice,
 };
 
-use crate::{Backend, BackendId, Error, Features, UtteranceId, CALLBACKS};
+use crate::{Backend, BackendId, Error, Features, UtteranceId, Voice, CALLBACKS};
 
 #[derive(Clone, Debug)]
 pub struct Web {
@@ -18,6 +19,7 @@ pub struct Web {
     rate: f32,
     pitch: f32,
     volume: f32,
+    voice: Option<SpeechSynthesisVoice>,
 }
 
 lazy_static! {
@@ -35,6 +37,7 @@ impl Web {
             rate: 1.,
             pitch: 1.,
             volume: 1.,
+            voice: None,
         };
         *backend_id += 1;
         Ok(rv)
@@ -53,6 +56,8 @@ impl Backend for Web {
             pitch: true,
             volume: true,
             is_speaking: true,
+            voice: true,
+            get_voice: true,
             utterance_callbacks: true,
         }
     }
@@ -63,6 +68,9 @@ impl Backend for Web {
         utterance.set_rate(self.rate);
         utterance.set_pitch(self.pitch);
         utterance.set_volume(self.volume);
+        if self.voice.is_some() {
+            utterance.set_voice(self.voice.as_ref());
+        }
         let id = self.id().unwrap();
         let mut uid = NEXT_UTTERANCE_ID.lock().unwrap();
         let utterance_id = UtteranceId::Web(*uid);
@@ -196,11 +204,72 @@ impl Backend for Web {
             Err(Error::NoneError)
         }
     }
+
+    fn voice(&self) -> Result<Option<Voice>, Error> {
+        if let Some(voice) = &self.voice {
+            Ok(Some(voice.clone().into()))
+        } else {
+            if let Some(window) = web_sys::window() {
+                let speech_synthesis = window.speech_synthesis().unwrap();
+                for voice in speech_synthesis.get_voices().iter() {
+                    let voice: SpeechSynthesisVoice = voice.into();
+                    if voice.default() {
+                        return Ok(Some(voice.into()));
+                    }
+                }
+            } else {
+                return Err(Error::NoneError);
+            }
+            Ok(None)
+        }
+    }
+
+    fn voices(&self) -> Result<Vec<Voice>, Error> {
+        if let Some(window) = web_sys::window() {
+            let speech_synthesis = window.speech_synthesis().unwrap();
+            let mut rv: Vec<Voice> = vec![];
+            for v in speech_synthesis.get_voices().iter() {
+                let v: SpeechSynthesisVoice = v.into();
+                rv.push(v.into());
+            }
+            Ok(rv)
+        } else {
+            Err(Error::NoneError)
+        }
+    }
+
+    fn set_voice(&mut self, voice: &Voice) -> Result<(), Error> {
+        if let Some(window) = web_sys::window() {
+            let speech_synthesis = window.speech_synthesis().unwrap();
+            for v in speech_synthesis.get_voices().iter() {
+                let v: SpeechSynthesisVoice = v.into();
+                if v.voice_uri() == voice.id {
+                    self.voice = Some(v);
+                    return Ok(());
+                }
+            }
+            return Err(Error::OperationFailed);
+        } else {
+            Err(Error::NoneError)
+        }
+    }
 }
 
 impl Drop for Web {
     fn drop(&mut self) {
         let mut mappings = UTTERANCE_MAPPINGS.lock().unwrap();
         mappings.retain(|v| v.0 != self.id);
+    }
+}
+
+impl From<SpeechSynthesisVoice> for Voice {
+    fn from(other: SpeechSynthesisVoice) -> Self {
+        let language = LanguageIdentifier::from_str(&other.lang()).unwrap();
+        Voice {
+            id: other.voice_uri(),
+            name: other.name(),
+            gender: None,
+            language,
+        }
     }
 }

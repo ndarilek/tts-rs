@@ -1,12 +1,12 @@
 #[cfg(target_os = "linux")]
-use std::collections::HashMap;
-use std::sync::Mutex;
+use std::{collections::HashMap, str::FromStr, sync::Mutex};
 
 use lazy_static::*;
 use log::{info, trace};
 use speech_dispatcher::*;
+use unic_langid::LanguageIdentifier;
 
-use crate::{Backend, BackendId, Error, Features, UtteranceId, CALLBACKS};
+use crate::{Backend, BackendId, Error, Features, UtteranceId, Voice, CALLBACKS};
 
 #[derive(Clone, Debug)]
 pub(crate) struct SpeechDispatcher(Connection);
@@ -19,9 +19,9 @@ lazy_static! {
 }
 
 impl SpeechDispatcher {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new() -> std::result::Result<Self, Error> {
         info!("Initializing SpeechDispatcher backend");
-        let connection = speech_dispatcher::Connection::open("tts", "tts", "tts", Mode::Threaded);
+        let connection = speech_dispatcher::Connection::open("tts", "tts", "tts", Mode::Threaded)?;
         let sd = SpeechDispatcher(connection);
         let mut speaking = SPEAKING.lock().unwrap();
         speaking.insert(sd.0.client_id(), false);
@@ -66,7 +66,7 @@ impl SpeechDispatcher {
             let mut speaking = SPEAKING.lock().unwrap();
             speaking.insert(client_id, true);
         })));
-        sd
+        Ok(sd)
     }
 }
 
@@ -82,6 +82,8 @@ impl Backend for SpeechDispatcher {
             pitch: true,
             volume: true,
             is_speaking: true,
+            voice: true,
+            get_voice: false,
             utterance_callbacks: true,
         }
     }
@@ -93,11 +95,11 @@ impl Backend for SpeechDispatcher {
         }
         let single_char = text.to_string().capacity() == 1;
         if single_char {
-            self.0.set_punctuation(Punctuation::All);
+            self.0.set_punctuation(Punctuation::All)?;
         }
         let id = self.0.say(Priority::Important, text);
         if single_char {
-            self.0.set_punctuation(Punctuation::None);
+            self.0.set_punctuation(Punctuation::None)?;
         }
         if let Some(id) = id {
             Ok(Some(UtteranceId::SpeechDispatcher(id)))
@@ -108,7 +110,7 @@ impl Backend for SpeechDispatcher {
 
     fn stop(&mut self) -> Result<(), Error> {
         trace!("stop()");
-        self.0.cancel();
+        self.0.cancel()?;
         Ok(())
     }
 
@@ -129,7 +131,7 @@ impl Backend for SpeechDispatcher {
     }
 
     fn set_rate(&mut self, rate: f32) -> Result<(), Error> {
-        self.0.set_voice_rate(rate as i32);
+        self.0.set_voice_rate(rate as i32)?;
         Ok(())
     }
 
@@ -150,7 +152,7 @@ impl Backend for SpeechDispatcher {
     }
 
     fn set_pitch(&mut self, pitch: f32) -> Result<(), Error> {
-        self.0.set_voice_pitch(pitch as i32);
+        self.0.set_voice_pitch(pitch as i32)?;
         Ok(())
     }
 
@@ -171,7 +173,7 @@ impl Backend for SpeechDispatcher {
     }
 
     fn set_volume(&mut self, volume: f32) -> Result<(), Error> {
-        self.0.set_volume(volume as i32);
+        self.0.set_volume(volume as i32)?;
         Ok(())
     }
 
@@ -179,6 +181,35 @@ impl Backend for SpeechDispatcher {
         let speaking = SPEAKING.lock().unwrap();
         let is_speaking = speaking.get(&self.0.client_id()).unwrap();
         Ok(*is_speaking)
+    }
+
+    fn voices(&self) -> Result<Vec<Voice>, Error> {
+        let rv = self
+            .0
+            .list_synthesis_voices()?
+            .iter()
+            .map(|v| Voice {
+                id: v.name.clone(),
+                name: v.name.clone(),
+                gender: None,
+                language: LanguageIdentifier::from_str(&v.language).unwrap(),
+            })
+            .collect::<Vec<Voice>>();
+        Ok(rv)
+    }
+
+    fn voice(&self) -> Result<Option<Voice>, Error> {
+        unimplemented!()
+    }
+
+    fn set_voice(&mut self, voice: &Voice) -> Result<(), Error> {
+        for v in self.0.list_synthesis_voices()? {
+            if v.name == voice.name {
+                self.0.set_synthesis_voice(&v)?;
+                return Ok(());
+            }
+        }
+        Err(Error::OperationFailed)
     }
 }
 
