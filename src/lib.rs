@@ -375,6 +375,15 @@ impl Tts {
             .speak(text.into().as_str(), interrupt)
     }
 
+    pub fn synthesize<S: Into<String>>(&mut self, text: S) -> Result<Vec<u8>, Error> {
+        let Features { synthesize, .. } = self.supported_features();
+        if synthesize {
+            self.0.write().unwrap().synthesize(text.into().as_str())
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
+    }
+
     /// Stops current speech.
     pub fn stop(&mut self) -> Result<&Self, Error> {
         let Features { stop, .. } = self.supported_features();
