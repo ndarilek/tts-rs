@@ -7,7 +7,7 @@ use std::{
     ptr,
 };
 
-use crate::{Backends, Features, UtteranceId, Tts};
+use crate::{Backends, Features, Tts, UtteranceId};
 
 thread_local! {
     /// Stores the last reported error, so it can be retrieved at will from C
@@ -78,11 +78,12 @@ pub unsafe extern "C" fn tts_free(tts: *mut Tts) {
     Box::from_raw(tts); // Goes out of scope and is dropped
 }
 
-/// Returns the features supported by this Tts engine.
+/// Returns the features supported by this Tts engine in the object specified by `features`.
 /// `tts` must be a valid pointer to a Tts object.
+/// `features` must be a valid pointer to an uninitialized `Features` object.
 #[no_mangle]
-pub unsafe extern "C" fn tts_supported_features(tts: *const Tts) -> Features {
-    tts.as_ref().unwrap().supported_features()
+pub unsafe extern "C" fn tts_supported_features(tts: *const Tts, features: *mut Features) {
+    *features = tts.as_ref().unwrap().supported_features()
 }
 
 /// Speaks the specified text, optionally interrupting current speech.
