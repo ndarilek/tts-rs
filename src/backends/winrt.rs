@@ -114,10 +114,23 @@ impl WinRt {
         let utterances_clone = tts.utterances.clone();
         tts.player.MediaEnded(&TypedEventHandler::new(
             move |player: &Option<MediaPlayer>, _args| {
-                utterances_clone.lock().unwrap().pop_front(); // Utterance that just ended
+                let mut utterances = utterances_clone.lock().unwrap();
 
-                if let Some(utterance) = utterances_clone.lock().unwrap().front() {
-                    utterance.speak(
+                let ended_utterance = utterances.pop_front().unwrap();
+
+                if let Some(callback) = CALLBACKS
+                    .lock()
+                    .unwrap()
+                    .get_mut(&bid)
+                    .unwrap()
+                    .utterance_end
+                    .as_mut()
+                {
+                    callback(ended_utterance.id);
+                }
+
+                if let Some(new_utterance) = utterances.front() {
+                    new_utterance.speak(
                         &synth_clone,
                         player.as_ref().unwrap(),
                         CALLBACKS.lock().unwrap().get_mut(&bid).unwrap(),
