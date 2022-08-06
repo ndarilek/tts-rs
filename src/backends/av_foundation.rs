@@ -7,7 +7,7 @@ use core_foundation::array::CFArray;
 use core_foundation::string::CFString;
 use lazy_static::lazy_static;
 use log::{info, trace};
-use objc::runtime::{Object, Sel};
+use objc::runtime::{Class, Object, Sel};
 use objc::{class, declare::ClassDecl, msg_send, sel, sel_impl};
 use unic_langid::LanguageIdentifier;
 
@@ -24,109 +24,114 @@ pub(crate) struct AvFoundation {
     voice: Option<Voice>,
 }
 
+fn make_speech_sythesizer_delegate() -> Result<&'static Class, Error> {
+    let mut decl = ClassDecl::new("MyNSSpeechSynthesizerDelegate", class!(NSObject))
+        .ok_or(Error::OperationFailed)?;
+    decl.add_ivar::<u64>("backend_id");
+
+    extern "C" fn speech_synthesizer_did_start_speech_utterance(
+        this: &Object,
+        _: Sel,
+        _synth: *const Object,
+        utterance: id,
+    ) {
+        trace!("speech_synthesizer_did_start_speech_utterance");
+        unsafe {
+            let backend_id: u64 = *this.get_ivar("backend_id");
+            let backend_id = BackendId::AvFoundation(backend_id);
+            trace!("Locking callbacks");
+            let mut callbacks = CALLBACKS.lock().unwrap();
+            trace!("Locked");
+            let callbacks = callbacks.get_mut(&backend_id).unwrap();
+            if let Some(callback) = callbacks.utterance_begin.as_mut() {
+                trace!("Calling utterance_begin");
+                let utterance_id = UtteranceId::AvFoundation(utterance);
+                callback(utterance_id);
+                trace!("Called");
+            }
+        }
+        trace!("Done speech_synthesizer_did_start_speech_utterance");
+    }
+
+    extern "C" fn speech_synthesizer_did_finish_speech_utterance(
+        this: &Object,
+        _: Sel,
+        _synth: *const Object,
+        utterance: id,
+    ) {
+        trace!("speech_synthesizer_did_finish_speech_utterance");
+        unsafe {
+            let backend_id: u64 = *this.get_ivar("backend_id");
+            let backend_id = BackendId::AvFoundation(backend_id);
+            trace!("Locking callbacks");
+            let mut callbacks = CALLBACKS.lock().unwrap();
+            trace!("Locked");
+            let callbacks = callbacks.get_mut(&backend_id).unwrap();
+            if let Some(callback) = callbacks.utterance_end.as_mut() {
+                trace!("Calling utterance_end");
+                let utterance_id = UtteranceId::AvFoundation(utterance);
+                callback(utterance_id);
+                trace!("Called");
+            }
+        }
+        trace!("Done speech_synthesizer_did_finish_speech_utterance");
+    }
+
+    extern "C" fn speech_synthesizer_did_cancel_speech_utterance(
+        this: &Object,
+        _: Sel,
+        _synth: *const Object,
+        utterance: id,
+    ) {
+        trace!("speech_synthesizer_did_cancel_speech_utterance");
+        unsafe {
+            let backend_id: u64 = *this.get_ivar("backend_id");
+            let backend_id = BackendId::AvFoundation(backend_id);
+            trace!("Locking callbacks");
+            let mut callbacks = CALLBACKS.lock().unwrap();
+            trace!("Locked");
+            let callbacks = callbacks.get_mut(&backend_id).unwrap();
+            if let Some(callback) = callbacks.utterance_stop.as_mut() {
+                trace!("Calling utterance_stop");
+                let utterance_id = UtteranceId::AvFoundation(utterance);
+                callback(utterance_id);
+                trace!("Called");
+            }
+        }
+        trace!("Done speech_synthesizer_did_cancel_speech_utterance");
+    }
+
+    unsafe {
+        decl.add_method(
+            sel!(speechSynthesizer:didStartSpeechUtterance:),
+            speech_synthesizer_did_start_speech_utterance
+                as extern "C" fn(&Object, Sel, *const Object, id) -> (),
+        );
+        decl.add_method(
+            sel!(speechSynthesizer:didFinishSpeechUtterance:),
+            speech_synthesizer_did_finish_speech_utterance
+                as extern "C" fn(&Object, Sel, *const Object, id) -> (),
+        );
+        decl.add_method(
+            sel!(speechSynthesizer:didCancelSpeechUtterance:),
+            speech_synthesizer_did_cancel_speech_utterance
+                as extern "C" fn(&Object, Sel, *const Object, id) -> (),
+        );
+    }
+
+    Ok(decl.register())
+}
+
 lazy_static! {
     static ref NEXT_BACKEND_ID: Mutex<u64> = Mutex::new(0);
+    static ref DELEGATE_CLASS: &'static Class = make_speech_sythesizer_delegate().unwrap();
 }
 
 impl AvFoundation {
     pub(crate) fn new() -> Result<Self, Error> {
         info!("Initializing AVFoundation backend");
-        let mut decl = ClassDecl::new("MyNSSpeechSynthesizerDelegate", class!(NSObject))
-            .ok_or(Error::OperationFailed)?;
-        decl.add_ivar::<u64>("backend_id");
 
-        extern "C" fn speech_synthesizer_did_start_speech_utterance(
-            this: &Object,
-            _: Sel,
-            _synth: *const Object,
-            utterance: id,
-        ) {
-            trace!("speech_synthesizer_did_start_speech_utterance");
-            unsafe {
-                let backend_id: u64 = *this.get_ivar("backend_id");
-                let backend_id = BackendId::AvFoundation(backend_id);
-                trace!("Locking callbacks");
-                let mut callbacks = CALLBACKS.lock().unwrap();
-                trace!("Locked");
-                let callbacks = callbacks.get_mut(&backend_id).unwrap();
-                if let Some(callback) = callbacks.utterance_begin.as_mut() {
-                    trace!("Calling utterance_begin");
-                    let utterance_id = UtteranceId::AvFoundation(utterance);
-                    callback(utterance_id);
-                    trace!("Called");
-                }
-            }
-            trace!("Done speech_synthesizer_did_start_speech_utterance");
-        }
-
-        extern "C" fn speech_synthesizer_did_finish_speech_utterance(
-            this: &Object,
-            _: Sel,
-            _synth: *const Object,
-            utterance: id,
-        ) {
-            trace!("speech_synthesizer_did_finish_speech_utterance");
-            unsafe {
-                let backend_id: u64 = *this.get_ivar("backend_id");
-                let backend_id = BackendId::AvFoundation(backend_id);
-                trace!("Locking callbacks");
-                let mut callbacks = CALLBACKS.lock().unwrap();
-                trace!("Locked");
-                let callbacks = callbacks.get_mut(&backend_id).unwrap();
-                if let Some(callback) = callbacks.utterance_end.as_mut() {
-                    trace!("Calling utterance_end");
-                    let utterance_id = UtteranceId::AvFoundation(utterance);
-                    callback(utterance_id);
-                    trace!("Called");
-                }
-            }
-            trace!("Done speech_synthesizer_did_finish_speech_utterance");
-        }
-
-        extern "C" fn speech_synthesizer_did_cancel_speech_utterance(
-            this: &Object,
-            _: Sel,
-            _synth: *const Object,
-            utterance: id,
-        ) {
-            trace!("speech_synthesizer_did_cancel_speech_utterance");
-            unsafe {
-                let backend_id: u64 = *this.get_ivar("backend_id");
-                let backend_id = BackendId::AvFoundation(backend_id);
-                trace!("Locking callbacks");
-                let mut callbacks = CALLBACKS.lock().unwrap();
-                trace!("Locked");
-                let callbacks = callbacks.get_mut(&backend_id).unwrap();
-                if let Some(callback) = callbacks.utterance_stop.as_mut() {
-                    trace!("Calling utterance_stop");
-                    let utterance_id = UtteranceId::AvFoundation(utterance);
-                    callback(utterance_id);
-                    trace!("Called");
-                }
-            }
-            trace!("Done speech_synthesizer_did_cancel_speech_utterance");
-        }
-
-        unsafe {
-            decl.add_method(
-                sel!(speechSynthesizer:didStartSpeechUtterance:),
-                speech_synthesizer_did_start_speech_utterance
-                    as extern "C" fn(&Object, Sel, *const Object, id) -> (),
-            );
-            decl.add_method(
-                sel!(speechSynthesizer:didFinishSpeechUtterance:),
-                speech_synthesizer_did_finish_speech_utterance
-                    as extern "C" fn(&Object, Sel, *const Object, id) -> (),
-            );
-            decl.add_method(
-                sel!(speechSynthesizer:didCancelSpeechUtterance:),
-                speech_synthesizer_did_cancel_speech_utterance
-                    as extern "C" fn(&Object, Sel, *const Object, id) -> (),
-            );
-        }
-
-        let delegate_class = decl.register();
-        let delegate_obj: *mut Object = unsafe { msg_send![delegate_class, new] };
+        let delegate_obj: *mut Object = unsafe { msg_send![*DELEGATE_CLASS, new] };
         let mut backend_id = NEXT_BACKEND_ID.lock().unwrap();
         let rv = unsafe {
             trace!("Creating synth");
