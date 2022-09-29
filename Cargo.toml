@@ -12,6 +12,7 @@ edition = "2021"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [features]
+ffi = ["cbindgen"]
 speech_dispatcher_0_10 = ["speech-dispatcher/0_10"]
 speech_dispatcher_0_11 = ["speech-dispatcher/0_11"]
 default = ["speech_dispatcher_0_11"]
@@ -19,6 +20,7 @@ default = ["speech_dispatcher_0_11"]
 [dependencies]
 dyn-clonable = "0.9"
 lazy_static = "1"
+libc = {version = "0.2", optional = true}
 log = "0.4"
 serde = { version = "1", optional = true, features = ["derive"] }
 thiserror = "1"
@@ -26,6 +28,9 @@ unic-langid = "0.9.0"
 
 [dev-dependencies]
 env_logger = "0.9"
+
+[build-dependencies]
+cbindgen = {version = "0.18.0", optional = true}
 
 [target.'cfg(windows)'.dependencies]
 tolk = { version = "0.5", optional = true }

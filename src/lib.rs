@@ -35,7 +35,10 @@ use tolk::Tolk;
 pub use unic_langid::LanguageIdentifier;
 
 mod backends;
+#[cfg(feature = "ffi")]
+pub mod ffi;
 
+#[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Backends {
@@ -158,6 +161,7 @@ unsafe impl Send for UtteranceId {}
 
 unsafe impl Sync for UtteranceId {}
 
+#[repr(C)]
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Features {
