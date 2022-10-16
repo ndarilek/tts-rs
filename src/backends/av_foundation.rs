@@ -296,7 +296,7 @@ impl Backend for AvFoundation {
         };
         let rv = voices
             .iter()
-            .map(|v| unsafe {
+            .map(|v| {
                 let id: CFString = unsafe {
                     CFString::wrap_under_get_rule(msg_send![*v as *const Object, identifier])
                 };
