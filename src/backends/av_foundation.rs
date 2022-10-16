@@ -13,6 +13,28 @@ use unic_langid::LanguageIdentifier;
 
 use crate::{Backend, BackendId, Error, Features, Gender, UtteranceId, Voice, CALLBACKS};
 
+impl Voice {
+    pub fn from_av_speech_synthesis_voice(voice: id) -> Voice {
+        let id: CFString = unsafe { msg_send![voice, identifier] };
+        let name: CFString = unsafe { msg_send![voice, name] };
+        let gender: i64 = unsafe { msg_send![voice, gender] };
+        let gender = match gender {
+            1 => Some(Gender::Male),
+            2 => Some(Gender::Female),
+            _ => None,
+        };
+        let language: CFString = unsafe { msg_send![voice, language] };
+        let language = language.to_string();
+        let language = LanguageIdentifier::from_str(&language).unwrap();
+        Voice {
+            id: id.to_string(),
+            name: name.to_string(),
+            gender,
+            language,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct AvFoundation {
     id: BackendId,
@@ -152,6 +174,13 @@ impl AvFoundation {
         *backend_id += 1;
         Ok(rv)
     }
+
+    fn default_voice(&self) -> Result<Voice, Error> {
+        unsafe {
+            let v: id = msg_send![class!(AVSpeechSynthesisVoice), voiceWithLanguage: nil];
+            Ok(Voice::from_av_speech_synthesis_voice(v))
+        }
+    }
 }
 
 impl Backend for AvFoundation {
@@ -167,7 +196,7 @@ impl Backend for AvFoundation {
             volume: true,
             is_speaking: true,
             voice: true,
-            get_voice: false,
+            get_voice: true,
             utterance_callbacks: true,
         }
     }
@@ -286,32 +315,18 @@ impl Backend for AvFoundation {
     }
 
     fn voice(&self) -> Result<Option<Voice>, Error> {
-        unimplemented!()
+        if let Some(voice) = self.voice.clone() {
+            Ok(Some(voice))
+        } else {
+            Ok(Some(self.default_voice()?))
+        }
     }
 
     fn voices(&self) -> Result<Vec<Voice>, Error> {
         let voices: CFArray = unsafe { msg_send![class!(AVSpeechSynthesisVoice), speechVoices] };
         let rv = voices
             .iter()
-            .map(|v| {
-                let id: CFString = unsafe { msg_send![*v as *const Object, identifier] };
-                let name: CFString = unsafe { msg_send![*v as *const Object, name] };
-                let gender: i64 = unsafe { msg_send![*v as *const Object, gender] };
-                let gender = match gender {
-                    1 => Some(Gender::Male),
-                    2 => Some(Gender::Female),
-                    _ => None,
-                };
-                let language: CFString = unsafe { msg_send![*v as *const Object, language] };
-                let language = language.to_string();
-                let language = LanguageIdentifier::from_str(&language).unwrap();
-                Voice {
-                    id: id.to_string(),
-                    name: name.to_string(),
-                    gender,
-                    language,
-                }
-            })
+            .map(|v| Voice::from_av_speech_synthesis_voice(*v as *mut objc::runtime::Object))
             .collect();
         Ok(rv)
     }
