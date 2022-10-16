@@ -46,13 +46,15 @@ impl AppKit {
             ) {
                 unsafe {
                     let strings: id = *this.get_ivar("strings");
-                    let str: id = msg_send!(strings, firstObject);
-                    let _: () = msg_send![str, release];
-                    let _: () = msg_send!(strings, removeObjectAtIndex:0);
                     let count: u32 = msg_send![strings, count];
                     if count > 0 {
                         let str: id = msg_send!(strings, firstObject);
-                        let _: BOOL = msg_send![synth, startSpeakingString: str];
+                        let _: () = msg_send![str, release];
+                        let _: () = msg_send!(strings, removeObjectAtIndex:0);
+                        if count > 1 {
+                            let str: id = msg_send!(strings, firstObject);
+                            let _: BOOL = msg_send![synth, startSpeakingString: str];
+                        }
                     }
                 }
             }
