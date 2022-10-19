@@ -12,8 +12,8 @@ use crate::{Backend, BackendId, Error, Features, UtteranceId, Voice, CALLBACKS};
 pub(crate) struct SpeechDispatcher(Connection);
 
 lazy_static! {
-    static ref SPEAKING: Mutex<HashMap<u64, bool>> = {
-        let m: HashMap<u64, bool> = HashMap::new();
+    static ref SPEAKING: Mutex<HashMap<usize, bool>> = {
+        let m: HashMap<usize, bool> = HashMap::new();
         Mutex::new(m)
     };
 }
@@ -31,7 +31,7 @@ impl SpeechDispatcher {
             let mut callbacks = CALLBACKS.lock().unwrap();
             let backend_id = BackendId::SpeechDispatcher(client_id);
             let cb = callbacks.get_mut(&backend_id).unwrap();
-            let utterance_id = UtteranceId::SpeechDispatcher(msg_id);
+            let utterance_id = UtteranceId::SpeechDispatcher(msg_id as u64);
             if let Some(f) = cb.utterance_begin.as_mut() {
                 f(utterance_id);
             }
@@ -42,7 +42,7 @@ impl SpeechDispatcher {
             let mut callbacks = CALLBACKS.lock().unwrap();
             let backend_id = BackendId::SpeechDispatcher(client_id);
             let cb = callbacks.get_mut(&backend_id).unwrap();
-            let utterance_id = UtteranceId::SpeechDispatcher(msg_id);
+            let utterance_id = UtteranceId::SpeechDispatcher(msg_id as u64);
             if let Some(f) = cb.utterance_end.as_mut() {
                 f(utterance_id);
             }
@@ -53,7 +53,7 @@ impl SpeechDispatcher {
             let mut callbacks = CALLBACKS.lock().unwrap();
             let backend_id = BackendId::SpeechDispatcher(client_id);
             let cb = callbacks.get_mut(&backend_id).unwrap();
-            let utterance_id = UtteranceId::SpeechDispatcher(msg_id);
+            let utterance_id = UtteranceId::SpeechDispatcher(msg_id as u64);
             if let Some(f) = cb.utterance_stop.as_mut() {
                 f(utterance_id);
             }

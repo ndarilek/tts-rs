@@ -84,7 +84,7 @@ pub enum BackendId {
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     AvFoundation(u64),
     #[cfg(target_os = "linux")]
-    SpeechDispatcher(u64),
+    SpeechDispatcher(usize),
     #[cfg(target_arch = "wasm32")]
     Web(u64),
     #[cfg(windows)]
