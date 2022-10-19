@@ -4,6 +4,7 @@ use std::{str::FromStr, sync::Mutex};
 use cocoa_foundation::base::{id, nil, NO};
 use cocoa_foundation::foundation::NSString;
 use core_foundation::array::CFArray;
+use core_foundation::base::TCFType;
 use core_foundation::string::CFString;
 use lazy_static::lazy_static;
 use log::{info, trace};
@@ -290,19 +291,26 @@ impl Backend for AvFoundation {
     }
 
     fn voices(&self) -> Result<Vec<Voice>, Error> {
-        let voices: CFArray = unsafe { msg_send![class!(AVSpeechSynthesisVoice), speechVoices] };
+        let voices: CFArray = unsafe {
+            CFArray::wrap_under_get_rule(msg_send![class!(AVSpeechSynthesisVoice), speechVoices])
+        };
         let rv = voices
             .iter()
             .map(|v| {
-                let id: CFString = unsafe { msg_send![*v as *const Object, identifier] };
-                let name: CFString = unsafe { msg_send![*v as *const Object, name] };
+                let id: CFString = unsafe {
+                    CFString::wrap_under_get_rule(msg_send![*v as *const Object, identifier])
+                };
+                let name: CFString =
+                    unsafe { CFString::wrap_under_get_rule(msg_send![*v as *const Object, name]) };
                 let gender: i64 = unsafe { msg_send![*v as *const Object, gender] };
                 let gender = match gender {
                     1 => Some(Gender::Male),
                     2 => Some(Gender::Female),
                     _ => None,
                 };
-                let language: CFString = unsafe { msg_send![*v as *const Object, language] };
+                let language: CFString = unsafe {
+                    CFString::wrap_under_get_rule(msg_send![*v as *const Object, language])
+                };
                 let language = language.to_string();
                 let language = LanguageIdentifier::from_str(&language).unwrap();
                 Voice {
