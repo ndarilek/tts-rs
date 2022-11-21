@@ -1,10 +1,10 @@
 #[cfg(target_os = "linux")]
-use std::{collections::HashMap, str::FromStr, sync::Mutex};
+use std::{collections::HashMap, sync::Mutex};
 
 use lazy_static::*;
 use log::{info, trace};
+use oxilangtag::LanguageTag;
 use speech_dispatcher::*;
-use unic_langid::LanguageIdentifier;
 
 use crate::{Backend, BackendId, Error, Features, UtteranceId, Voice, CALLBACKS};
 
@@ -192,7 +192,7 @@ impl Backend for SpeechDispatcher {
                 id: v.name.clone(),
                 name: v.name.clone(),
                 gender: None,
-                language: LanguageIdentifier::from_str(&v.language).unwrap(),
+                language: LanguageTag::parse(v.language.clone()).unwrap(),
             })
             .collect::<Vec<Voice>>();
         Ok(rv)

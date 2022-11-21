@@ -22,6 +22,7 @@ use std::{boxed::Box, sync::RwLock};
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 use cocoa_foundation::base::id;
 use dyn_clonable::*;
+pub use oxilangtag::LanguageTag;
 use lazy_static::lazy_static;
 #[cfg(target_os = "macos")]
 use libc::c_char;
@@ -32,7 +33,6 @@ use speech_dispatcher::Error as SpeechDispatcherError;
 use thiserror::Error;
 #[cfg(all(windows, feature = "tolk"))]
 use tolk::Tolk;
-pub use unic_langid::LanguageIdentifier;
 
 mod backends;
 
@@ -659,7 +659,7 @@ pub struct Voice {
     pub(crate) id: String,
     pub(crate) name: String,
     pub(crate) gender: Option<Gender>,
-    pub(crate) language: LanguageIdentifier,
+    pub(crate) language: LanguageTag<String>,
 }
 
 impl Voice {
@@ -675,7 +675,7 @@ impl Voice {
         self.gender
     }
 
-    pub fn language(&self) -> LanguageIdentifier {
+    pub fn language(&self) -> LanguageTag<String> {
         self.language.clone()
     }
 }

@@ -1,9 +1,9 @@
 #[cfg(target_arch = "wasm32")]
-use std::{str::FromStr, sync::Mutex};
+use std::sync::Mutex;
 
 use lazy_static::lazy_static;
 use log::{info, trace};
-use unic_langid::LanguageIdentifier;
+use oxilangtag::LanguageTag;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{
@@ -264,7 +264,7 @@ impl Drop for Web {
 
 impl From<SpeechSynthesisVoice> for Voice {
     fn from(other: SpeechSynthesisVoice) -> Self {
-        let language = LanguageIdentifier::from_str(&other.lang()).unwrap();
+        let language = LanguageTag::parse(other.lang()).unwrap();
         Voice {
             id: other.voice_uri(),
             name: other.name(),

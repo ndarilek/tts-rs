@@ -1,13 +1,12 @@
 #[cfg(windows)]
 use std::{
     collections::{HashMap, VecDeque},
-    str::FromStr,
     sync::Mutex,
 };
 
 use lazy_static::lazy_static;
 use log::{info, trace};
-use unic_langid::LanguageIdentifier;
+use oxilangtag::LanguageTag;
 use windows::{
     Foundation::TypedEventHandler,
     Media::{
@@ -354,7 +353,7 @@ impl TryInto<Voice> for VoiceInformation {
             Gender::Female
         };
         let language: String = self.Language()?.try_into()?;
-        let language = LanguageIdentifier::from_str(&language).unwrap();
+        let language = LanguageTag::parse(language).unwrap();
         Ok(Voice {
             id: self.Id()?.try_into()?,
             name: self.DisplayName()?.try_into()?,
