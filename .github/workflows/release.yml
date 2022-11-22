@@ -6,82 +6,16 @@ on:
       - "v*"
 
 jobs:
-  check:
-    name: Check
-    strategy:
-      matrix:
-        os: [windows-latest, ubuntu-22.04, macos-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v3
-      - run: rustup toolchain install stable
-      - uses: Swatinem/rust-cache@v2
-      - run: sudo apt-get update; sudo apt-get install -y libspeechd-dev
-        if: ${{ runner.os == 'Linux' }}
-      - uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --all-features --examples
-        if: ${{ runner.os != 'Linux' }}
-      - uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --no-default-features --examples
-        if: ${{ runner.os == 'Linux' }}
-      - uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all --check
-      - uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: --all-features
-        if: ${{ runner.os != 'Linux' }}
-      - uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: --no-default-features
-        if: ${{ runner.os == 'Linux' }}
-
-  check_web:
-    name: Check Web
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v3
-      - run: rustup toolchain install stable
-      - uses: Swatinem/rust-cache@v2
-      - uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --all-features --examples --target wasm32-unknown-unknown
-      - uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
-      - uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: --all-features --target wasm32-unknown-unknown
-      - uses: actions-rs/install@v0.1
-        with:
-          crate: cargo-make
-      - uses: actions-rs/cargo@v1
-        with:
-          command: make
-          args: build-web-example
-
   publish:
     name: Publish
     runs-on: ubuntu-22.04
-    needs: [check, check_web]
     env:
       CARGO_TOKEN: ${{ secrets.CARGO_TOKEN }}
     steps:
       - uses: actions/checkout@v3
-      - run: rustup toolchain install stable
-      - uses: Swatinem/rust-cache@v2
       - run: |
           sudo apt-get update
           sudo apt-get install -y libspeechd-dev
           cargo login $CARGO_TOKEN
-          cargo publish --no-default-features
+          rustup toolchain install stable
+          cargo publish
