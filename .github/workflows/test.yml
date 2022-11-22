@@ -17,8 +17,8 @@ jobs:
         if: ${{ runner.os == 'Linux' }}
       - run: |
           rustup toolchain install stable
-          cargo fmt --all --check
-          cargo clippy --all-features
+          cargo fmt --check
+          cargo clippy
 
   check_web:
     name: Check Web
@@ -29,7 +29,7 @@ jobs:
           rustup toolchain install stable
           rustup target add wasm32-unknown-unknown
           cargo fmt --all --check
-          cargo clippy --all-features --target wasm32-unknown-unknown
+          cargo clippy --target wasm32-unknown-unknown
 
   check_android:
     name: Check Android
