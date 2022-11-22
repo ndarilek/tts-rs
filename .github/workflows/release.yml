@@ -13,8 +13,8 @@ jobs:
         os: [windows-latest, ubuntu-22.04, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v2
-      - uses: Swatinem/rust-cache@v1
+      - uses: actions/checkout@v3
+      - uses: Swatinem/rust-cache@v2
       - run: sudo apt-get update; sudo apt-get install -y libspeechd-dev
         if: ${{ runner.os == 'Linux' }}
       - uses: actions-rs/toolchain@v1
@@ -52,8 +52,8 @@ jobs:
     name: Check Web
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v2
-      - uses: Swatinem/rust-cache@v1
+      - uses: actions/checkout@v3
+      - uses: Swatinem/rust-cache@v2
       - uses: actions-rs/toolchain@v1
         with:
           target: wasm32-unknown-unknown
@@ -88,8 +88,8 @@ jobs:
     env:
       CARGO_TOKEN: ${{ secrets.CARGO_TOKEN }}
     steps:
-      - uses: actions/checkout@v2
-      - uses: Swatinem/rust-cache@v1
+      - uses: actions/checkout@v3
+      - uses: Swatinem/rust-cache@v2
       - uses: actions-rs/toolchain@v1
         with:
           target: wasm32-unknown-unknown
