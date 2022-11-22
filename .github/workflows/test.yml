@@ -13,10 +13,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
-      - run: rustup toolchain install stable
-      - uses: Swatinem/rust-cache@v2
       - run: sudo apt-get update; sudo apt-get install -y libspeechd-dev
         if: ${{ runner.os == 'Linux' }}
+      - run: rustup toolchain install stable
       - uses: actions-rs/cargo@v1
         with:
           command: check
@@ -48,7 +47,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - run: rustup toolchain install stable
-      - uses: Swatinem/rust-cache@v2
       - uses: actions-rs/cargo@v1
         with:
           command: check
@@ -67,13 +65,13 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
-      - run: rustup toolchain install stable
-      - uses: Swatinem/rust-cache@v2
       - uses: actions-rs/install@v0.1
         with:
           crate: cargo-apk
           # use-tool-cache: true
-      - run: rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+      - run: |
+          rustup toolchain install stable
+          rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
       - uses: actions-rs/cargo@v1
         with:
           command: apk
@@ -85,7 +83,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - run: rustup toolchain install stable
-      - uses: Swatinem/rust-cache@v2
       - uses: actions-rs/install@v0.1
         with:
           crate: cargo-make
