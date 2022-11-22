@@ -45,8 +45,9 @@ wasm-bindgen = "0.2"
 web-sys = { version = "0.3", features = ["EventTarget", "SpeechSynthesis", "SpeechSynthesisErrorCode", "SpeechSynthesisErrorEvent", "SpeechSynthesisEvent", "SpeechSynthesisUtterance", "SpeechSynthesisVoice", "Window", ] }
 
 [target.'cfg(target_os="android")'.dependencies]
-jni = "0.19"
-ndk-glue = "0.6"
+jni = "0.20"
+ndk-context = "0.1"
+ndk-glue = "0.7"
 
 [package.metadata.docs.rs]
 no-default-features = true
