@@ -179,8 +179,9 @@ impl Android {
         let id = BackendId::Android(bid);
         *backend_id += 1;
         drop(backend_id);
-        let native_activity = ndk_glue::native_activity();
-        let vm = Self::vm()?;
+        let ctx = ndk_context::android_context();
+        let vm = unsafe { jni::JavaVM::from_raw(ctx.vm().cast()) }?;
+        let context = unsafe { JObject::from_raw(ctx.context().cast()) };
         let env = vm.attach_current_thread_permanently()?;
         let bridge = BRIDGE.lock().unwrap();
         if let Some(bridge) = &*bridge {
@@ -188,7 +189,7 @@ impl Android {
             let tts = env.new_object(
                 "android/speech/tts/TextToSpeech",
                 "(Landroid/content/Context;Landroid/speech/tts/TextToSpeech$OnInitListener;)V",
-                &[native_activity.activity().into(), bridge.into()],
+                &[context.into(), bridge.into()],
             )?;
             env.call_method(
                 tts,
@@ -229,9 +230,8 @@ impl Android {
     }
 
     fn vm() -> Result<JavaVM, jni::errors::Error> {
-        let native_activity = ndk_glue::native_activity();
-        let vm_ptr = native_activity.vm();
-        unsafe { jni::JavaVM::from_raw(vm_ptr) }
+        let ctx = ndk_context::android_context();
+        unsafe { jni::JavaVM::from_raw(ctx.vm().cast()) }
     }
 }
 

@@ -12,106 +12,43 @@ jobs:
         os: [windows-latest, ubuntu-22.04, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v2
-      - uses: Swatinem/rust-cache@v1
+      - uses: actions/checkout@v3
       - run: sudo apt-get update; sudo apt-get install -y libspeechd-dev
         if: ${{ runner.os == 'Linux' }}
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          components: rustfmt, clippy
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --all-features --examples
-        if: ${{ runner.os != 'Linux' }}
-      - uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --no-default-features --examples
-        if: ${{ runner.os == 'Linux' }}
-      - uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all --check
-      - uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: --all-features
-        if: ${{ runner.os != 'Linux' }}
-      - uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: --no-default-features
-        if: ${{ runner.os == 'Linux' }}
+      - run: |
+          rustup toolchain install stable
+          cargo fmt --all --check
+          cargo clippy --all-features
 
   check_web:
     name: Check Web
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v2
-      - uses: Swatinem/rust-cache@v1
-      - uses: actions-rs/toolchain@v1
-        with:
-          target: wasm32-unknown-unknown
-          profile: minimal
-          toolchain: stable
-          components: rustfmt, clippy
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --all-features --examples --target wasm32-unknown-unknown
-      - uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all --check
-      - uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: --all-features --target wasm32-unknown-unknown
+      - uses: actions/checkout@v3
+      - run: |
+          rustup toolchain install stable
+          rustup target add wasm32-unknown-unknown
+          cargo fmt --all --check
+          cargo clippy --all-features --target wasm32-unknown-unknown
 
   check_android:
     name: Check Android
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v2
-      - uses: Swatinem/rust-cache@v1
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          components: rustfmt, clippy
-          override: true
-      - uses: actions-rs/install@v0.1
-        with:
-          crate: cargo-apk
-          # use-tool-cache: true
-      - run: rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
-      - uses: actions-rs/cargo@v1
-        with:
-          command: apk
-          args: build
+      - uses: actions/checkout@v3
+      - run: |
+          rustup toolchain install stable
+          rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+          cargo install -f cargo-apk
+          cargo apk build
 
   check_web_example:
     name: Check Web Example
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v2
-      - uses: Swatinem/rust-cache@v1
-      - uses: actions-rs/toolchain@v1
-        with:
-          target: wasm32-unknown-unknown
-          profile: minimal
-          toolchain: stable
-          components: rustfmt, clippy
-          override: true
-      - uses: actions-rs/install@v0.1
-        with:
-          crate: cargo-make
-      - uses: actions-rs/cargo@v1
-        with:
-          command: make
-          args: build-web-example
+      - uses: actions/checkout@v3
+      - run: |
+          rustup toolchain install stable
+          rustup target add wasm32-unknown-unknown
+          cargo install cargo-make
+          cargo make build-web-example
