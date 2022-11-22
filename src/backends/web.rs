@@ -248,7 +248,7 @@ impl Backend for Web {
                     return Ok(());
                 }
             }
-            return Err(Error::OperationFailed);
+            Err(Error::OperationFailed)
         } else {
             Err(Error::NoneError)
         }
