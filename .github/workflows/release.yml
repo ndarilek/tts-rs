@@ -14,15 +14,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
+      - run: rustup toolchain install stable
       - uses: Swatinem/rust-cache@v2
       - run: sudo apt-get update; sudo apt-get install -y libspeechd-dev
         if: ${{ runner.os == 'Linux' }}
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          components: rustfmt, clippy
-          override: true
       - uses: actions-rs/cargo@v1
         with:
           command: check
@@ -53,14 +48,8 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
+      - run: rustup toolchain install stable
       - uses: Swatinem/rust-cache@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          target: wasm32-unknown-unknown
-          profile: minimal
-          toolchain: stable
-          components: rustfmt, clippy
-          override: true
       - uses: actions-rs/cargo@v1
         with:
           command: check
@@ -89,13 +78,8 @@ jobs:
       CARGO_TOKEN: ${{ secrets.CARGO_TOKEN }}
     steps:
       - uses: actions/checkout@v3
+      - run: rustup toolchain install stable
       - uses: Swatinem/rust-cache@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          target: wasm32-unknown-unknown
-          profile: minimal
-          toolchain: stable
-          override: true
       - run: |
           sudo apt-get update
           sudo apt-get install -y libspeechd-dev
