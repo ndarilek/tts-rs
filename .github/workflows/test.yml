@@ -26,8 +26,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - run: |
-          rustup toolchain install stable
           rustup target add wasm32-unknown-unknown
+          rustup toolchain install stable
           cargo fmt --all --check
           cargo clippy --target wasm32-unknown-unknown
 
@@ -48,7 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - run: |
-          rustup toolchain install stable
           rustup target add wasm32-unknown-unknown
-          cargo install cargo-make
-          cargo make build-web-example
+          rustup toolchain install stable
+          cd examples/web
+          cargo build --target wasm32-unknown-unknown
