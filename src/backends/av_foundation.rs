@@ -10,7 +10,7 @@ use lazy_static::lazy_static;
 use log::{info, trace};
 use objc::runtime::{Object, Sel};
 use objc::{class, declare::ClassDecl, msg_send, sel, sel_impl};
-use oxylangtag::LanguageTag;
+use oxilangtag::LanguageTag;
 
 use crate::{Backend, BackendId, Error, Features, Gender, UtteranceId, Voice, CALLBACKS};
 
