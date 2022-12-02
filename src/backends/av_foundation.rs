@@ -312,7 +312,7 @@ impl Backend for AvFoundation {
                     CFString::wrap_under_get_rule(msg_send![*v as *const Object, language])
                 };
                 let language = language.to_string();
-                let language = LanguageTag::parse(&language).unwrap();
+                let language = LanguageTag::parse(language).unwrap();
                 Voice {
                     id: id.to_string(),
                     name: name.to_string(),
