@@ -1,5 +1,5 @@
 #[cfg(any(target_os = "macos", target_os = "ios"))]
-use std::{str::FromStr, sync::Mutex};
+use std::sync::Mutex;
 
 use cocoa_foundation::base::{id, nil, NO};
 use cocoa_foundation::foundation::NSString;
@@ -312,7 +312,7 @@ impl Backend for AvFoundation {
                     CFString::wrap_under_get_rule(msg_send![*v as *const Object, language])
                 };
                 let language = language.to_string();
-                let language = LanguageIdentifier::from_str(&language).unwrap();
+                let language = LanguageTag::from_str(&language).unwrap();
                 Voice {
                     id: id.to_string(),
                     name: name.to_string(),
