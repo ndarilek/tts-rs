@@ -30,7 +30,7 @@ env_logger = "0.10"
 
 [target.'cfg(windows)'.dependencies]
 tolk = { version = "0.5", optional = true }
-windows = { version = "0.43", features = ["Foundation", "Foundation_Collections", "Media_Core", "Media_Playback", "Media_SpeechSynthesis", "Storage_Streams"] }
+windows = { version = "0.44", features = ["Foundation", "Foundation_Collections", "Media_Core", "Media_Playback", "Media_SpeechSynthesis", "Storage_Streams"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 speech-dispatcher = { version = "0.16", default-features = false }
