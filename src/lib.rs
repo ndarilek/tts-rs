@@ -95,15 +95,15 @@ impl fmt::Display for BackendId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
             #[cfg(target_os = "android")]
-            BackendId::Android(id) => writeln!(f, "{}", id),
+            BackendId::Android(id) => writeln!(f, "Android({id})"),
             #[cfg(any(target_os = "macos", target_os = "ios"))]
-            BackendId::AvFoundation(id) => writeln!(f, "{}", id),
+            BackendId::AvFoundation(id) => writeln!(f, "AvFoundation({id})"),
             #[cfg(target_os = "linux")]
-            BackendId::SpeechDispatcher(id) => writeln!(f, "{}", id),
+            BackendId::SpeechDispatcher(id) => writeln!(f, "SpeechDispatcher({id})"),
             #[cfg(target_arch = "wasm32")]
-            BackendId::Web(id) => writeln!(f, "Web({})", id),
+            BackendId::Web(id) => writeln!(f, "Web({id})"),
             #[cfg(windows)]
-            BackendId::WinRt(id) => writeln!(f, "{}", id),
+            BackendId::WinRt(id) => writeln!(f, "WinRT({id})"),
         }
     }
 }
@@ -143,13 +143,13 @@ impl fmt::Display for UtteranceId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
             #[cfg(target_os = "android")]
-            UtteranceId::Android(id) => writeln!(f, "{}", id),
+            UtteranceId::Android(id) => writeln!(f, "Android({id})"),
             #[cfg(target_os = "linux")]
-            UtteranceId::SpeechDispatcher(id) => writeln!(f, "{}", id),
+            UtteranceId::SpeechDispatcher(id) => writeln!(f, "SpeechDispatcher({id})"),
             #[cfg(target_arch = "wasm32")]
             UtteranceId::Web(id) => writeln!(f, "Web({})", id),
             #[cfg(windows)]
-            UtteranceId::WinRt(id) => writeln!(f, "{}", id),
+            UtteranceId::WinRt(id) => writeln!(f, "WinRt({id})"),
         }
     }
 }
@@ -173,7 +173,7 @@ pub struct Features {
 
 impl fmt::Display for Features {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        writeln!(f, "{:#?}", self)
+        writeln!(f, "{self:#?}")
     }
 }
 
@@ -317,6 +317,7 @@ impl Tts {
         }
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn default() -> Result<Tts, Error> {
         #[cfg(target_os = "linux")]
         let tts = Tts::new(Backends::SpeechDispatcher);
