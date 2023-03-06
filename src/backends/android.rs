@@ -28,7 +28,7 @@ lazy_static! {
 #[allow(non_snake_case)]
 #[no_mangle]
 pub extern "system" fn JNI_OnLoad(vm: JavaVM, _: *mut c_void) -> jint {
-    let env = vm.get_env().expect("Cannot get reference to the JNIEnv");
+    let mut env = vm.get_env().expect("Cannot get reference to the JNIEnv");
     let b = env
         .find_class("rs/tts/Bridge")
         .expect("Failed to find `Bridge`");
@@ -42,7 +42,7 @@ pub extern "system" fn JNI_OnLoad(vm: JavaVM, _: *mut c_void) -> jint {
 
 #[no_mangle]
 #[allow(non_snake_case)]
-pub unsafe extern "C" fn Java_rs_tts_Bridge_onInit(env: JNIEnv, obj: JObject, status: jint) {
+pub unsafe extern "C" fn Java_rs_tts_Bridge_onInit(mut env: JNIEnv, obj: JObject, status: jint) {
     let id = env
         .get_field(obj, "backendId", "I")
         .expect("Failed to get backend ID")
@@ -58,7 +58,7 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onInit(env: JNIEnv, obj: JObject, st
 #[no_mangle]
 #[allow(non_snake_case)]
 pub unsafe extern "C" fn Java_rs_tts_Bridge_onStart(
-    env: JNIEnv,
+    mut env: JNIEnv,
     obj: JObject,
     utterance_id: JString,
 ) {
@@ -69,7 +69,7 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onStart(
         .expect("Failed to cast to int") as u64;
     let backend_id = BackendId::Android(backend_id);
     let utterance_id = CString::from(CStr::from_ptr(
-        env.get_string(utterance_id).unwrap().as_ptr(),
+        env.get_string(&utterance_id).unwrap().as_ptr(),
     ))
     .into_string()
     .unwrap();
@@ -85,7 +85,7 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onStart(
 #[no_mangle]
 #[allow(non_snake_case)]
 pub unsafe extern "C" fn Java_rs_tts_Bridge_onStop(
-    env: JNIEnv,
+    mut env: JNIEnv,
     obj: JObject,
     utterance_id: JString,
 ) {
@@ -96,7 +96,7 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onStop(
         .expect("Failed to cast to int") as u64;
     let backend_id = BackendId::Android(backend_id);
     let utterance_id = CString::from(CStr::from_ptr(
-        env.get_string(utterance_id).unwrap().as_ptr(),
+        env.get_string(&utterance_id).unwrap().as_ptr(),
     ))
     .into_string()
     .unwrap();
@@ -112,7 +112,7 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onStop(
 #[no_mangle]
 #[allow(non_snake_case)]
 pub unsafe extern "C" fn Java_rs_tts_Bridge_onDone(
-    env: JNIEnv,
+    mut env: JNIEnv,
     obj: JObject,
     utterance_id: JString,
 ) {
@@ -123,7 +123,7 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onDone(
         .expect("Failed to cast to int") as u64;
     let backend_id = BackendId::Android(backend_id);
     let utterance_id = CString::from(CStr::from_ptr(
-        env.get_string(utterance_id).unwrap().as_ptr(),
+        env.get_string(&utterance_id).unwrap().as_ptr(),
     ))
     .into_string()
     .unwrap();
@@ -139,7 +139,7 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onDone(
 #[no_mangle]
 #[allow(non_snake_case)]
 pub unsafe extern "C" fn Java_rs_tts_Bridge_onError(
-    env: JNIEnv,
+    mut env: JNIEnv,
     obj: JObject,
     utterance_id: JString,
 ) {
@@ -150,7 +150,7 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onError(
         .expect("Failed to cast to int") as u64;
     let backend_id = BackendId::Android(backend_id);
     let utterance_id = CString::from(CStr::from_ptr(
-        env.get_string(utterance_id).unwrap().as_ptr(),
+        env.get_string(&utterance_id).unwrap().as_ptr(),
     ))
     .into_string()
     .unwrap();
@@ -182,20 +182,20 @@ impl Android {
         let ctx = ndk_context::android_context();
         let vm = unsafe { jni::JavaVM::from_raw(ctx.vm().cast()) }?;
         let context = unsafe { JObject::from_raw(ctx.context().cast()) };
-        let env = vm.attach_current_thread_permanently()?;
+        let mut env = vm.attach_current_thread_permanently()?;
         let bridge = BRIDGE.lock().unwrap();
         if let Some(bridge) = &*bridge {
             let bridge = env.new_object(bridge, "(I)V", &[(bid as jint).into()])?;
             let tts = env.new_object(
                 "android/speech/tts/TextToSpeech",
                 "(Landroid/content/Context;Landroid/speech/tts/TextToSpeech$OnInitListener;)V",
-                &[context.into(), bridge.into()],
+                &[(&context).into(), (&bridge).into()],
             )?;
             env.call_method(
-                tts,
+                &tts,
                 "setOnUtteranceProgressListener",
                 "(Landroid/speech/tts/UtteranceProgressListener;)I",
-                &[bridge.into()],
+                &[(&bridge).into()],
             )?;
             {
                 let mut pending = PENDING_INITIALIZATIONS.write().unwrap();
@@ -255,7 +255,7 @@ impl Backend for Android {
 
     fn speak(&mut self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error> {
         let vm = Self::vm()?;
-        let env = vm.get_env()?;
+        let mut env = vm.get_env()?;
         let tts = self.tts.as_obj();
         let text = env.new_string(text)?;
         let queue_mode = if interrupt { 0 } else { 1 };
@@ -270,10 +270,10 @@ impl Backend for Android {
             "speak",
             "(Ljava/lang/CharSequence;ILandroid/os/Bundle;Ljava/lang/String;)I",
             &[
-                text.into(),
+                (&text).into(),
                 queue_mode.into(),
-                JObject::null().into(),
-                uid.into(),
+                (&JObject::null()).into(),
+                (&uid).into(),
             ],
         )?;
         let rv = rv.i()?;
@@ -286,7 +286,7 @@ impl Backend for Android {
 
     fn stop(&mut self) -> Result<(), Error> {
         let vm = Self::vm()?;
-        let env = vm.get_env()?;
+        let mut env = vm.get_env()?;
         let tts = self.tts.as_obj();
         let rv = env.call_method(tts, "stop", "()I", &[])?;
         let rv = rv.i()?;
@@ -315,7 +315,7 @@ impl Backend for Android {
 
     fn set_rate(&mut self, rate: f32) -> Result<(), Error> {
         let vm = Self::vm()?;
-        let env = vm.get_env()?;
+        let mut env = vm.get_env()?;
         let tts = self.tts.as_obj();
         let rate = rate as jfloat;
         let rv = env.call_method(tts, "setSpeechRate", "(F)I", &[rate.into()])?;
@@ -346,7 +346,7 @@ impl Backend for Android {
 
     fn set_pitch(&mut self, pitch: f32) -> Result<(), Error> {
         let vm = Self::vm()?;
-        let env = vm.get_env()?;
+        let mut env = vm.get_env()?;
         let tts = self.tts.as_obj();
         let pitch = pitch as jfloat;
         let rv = env.call_method(tts, "setPitch", "(F)I", &[pitch.into()])?;
@@ -381,7 +381,7 @@ impl Backend for Android {
 
     fn is_speaking(&self) -> Result<bool, Error> {
         let vm = Self::vm()?;
-        let env = vm.get_env()?;
+        let mut env = vm.get_env()?;
         let tts = self.tts.as_obj();
         let rv = env.call_method(tts, "isSpeaking", "()Z", &[])?;
         let rv = rv.z()?;
