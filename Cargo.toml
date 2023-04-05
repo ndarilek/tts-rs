@@ -1,6 +1,6 @@
 [package]
 name = "tts"
-version = "0.25.3"
+version = "0.25.4"
 authors = ["Nolan Darilek <nolan@thewordnerd.info>"]
 repository = "https://github.com/ndarilek/tts-rs"
 description = "High-level Text-To-Speech (TTS) interface"
@@ -52,4 +52,4 @@ ndk-glue = "0.7"
 
 [package.metadata.docs.rs]
 no-default-features = true
-features = ["speech_dispatcher_0_9"]
+features = ["speech_dispatcher_0_10"]
