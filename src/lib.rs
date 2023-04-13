@@ -169,6 +169,7 @@ pub struct Features {
     pub voice: bool,
     pub get_voice: bool,
     pub volume: bool,
+    pub pause_resume: bool,
 }
 
 impl fmt::Display for Features {
@@ -244,6 +245,8 @@ struct Callbacks {
     utterance_begin: Option<Box<dyn FnMut(UtteranceId)>>,
     utterance_end: Option<Box<dyn FnMut(UtteranceId)>>,
     utterance_stop: Option<Box<dyn FnMut(UtteranceId)>>,
+    utterance_pause: Option<Box<dyn FnMut(UtteranceId)>>,
+    utterance_resume: Option<Box<dyn FnMut(UtteranceId)>>,
 }
 
 unsafe impl Send for Callbacks {}
@@ -379,6 +382,28 @@ impl Tts {
         let Features { stop, .. } = self.supported_features();
         if stop {
             self.0.write().unwrap().stop()?;
+            Ok(self)
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
+    }
+
+    /// Pauses current speech.
+    pub fn pause(&mut self) -> Result<&Self, Error> {
+        let Features { pause, .. } = self.supported_features();
+        if pause {
+            self.0.write().unwrap().pause()?;
+            Ok(self)
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
+    }
+
+    /// Resumes current speech.
+    pub fn resume(&mut self) -> Result<&Self, Error> {
+        let Features { resume, .. } = self.supported_features();
+        if resume {
+            self.0.write().unwrap().resume()?;
             Ok(self)
         } else {
             Err(Error::UnsupportedFeature)
