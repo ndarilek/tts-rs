@@ -571,7 +571,7 @@ impl Tts {
         if utterance_callbacks {
             let mut callbacks = CALLBACKS.lock().unwrap();
             let id = self.0.read().unwrap().id().unwrap();
-            let mut callbacks = callbacks.get_mut(&id).unwrap();
+            let callbacks = callbacks.get_mut(&id).unwrap();
             callbacks.utterance_begin = callback;
             Ok(())
         } else {
@@ -591,7 +591,7 @@ impl Tts {
         if utterance_callbacks {
             let mut callbacks = CALLBACKS.lock().unwrap();
             let id = self.0.read().unwrap().id().unwrap();
-            let mut callbacks = callbacks.get_mut(&id).unwrap();
+            let callbacks = callbacks.get_mut(&id).unwrap();
             callbacks.utterance_end = callback;
             Ok(())
         } else {
@@ -611,7 +611,7 @@ impl Tts {
         if utterance_callbacks {
             let mut callbacks = CALLBACKS.lock().unwrap();
             let id = self.0.read().unwrap().id().unwrap();
-            let mut callbacks = callbacks.get_mut(&id).unwrap();
+            let callbacks = callbacks.get_mut(&id).unwrap();
             callbacks.utterance_stop = callback;
             Ok(())
         } else {
