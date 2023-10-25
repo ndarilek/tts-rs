@@ -188,6 +188,7 @@ impl Backend for SpeechDispatcher {
             .0
             .list_synthesis_voices()?
             .iter()
+            .filter(|v| LanguageTag::parse(v.language.clone()).is_ok())
             .map(|v| Voice {
                 id: v.name.clone(),
                 name: v.name.clone(),
