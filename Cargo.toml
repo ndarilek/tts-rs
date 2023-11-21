@@ -64,7 +64,6 @@ web-sys = { version = "0.3", features = [
 [target.'cfg(target_os="android")'.dependencies]
 jni = "0.21"
 ndk-context = "0.1"
-ndk-glue = "0.7"
 
 [package.metadata.docs.rs]
 no-default-features = true
