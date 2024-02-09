@@ -5,6 +5,17 @@ on:
   pull_request:
 
 jobs:
+  check_formatting:
+    name: Check Formatting
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          rustup toolchain install stable
+          cargo fmt --all --check
+          cd examples/web
+          cargo fmt --all --check
+
   check:
     name: Check
     strategy:
@@ -17,8 +28,7 @@ jobs:
         if: ${{ runner.os == 'Linux' }}
       - run: |
           rustup toolchain install stable
-          cargo fmt --check
-          cargo clippy
+          cargo clippy --all-targets
 
   check_web:
     name: Check Web
@@ -28,8 +38,7 @@ jobs:
       - run: |
           rustup target add wasm32-unknown-unknown
           rustup toolchain install stable
-          cargo fmt --all --check
-          cargo clippy --target wasm32-unknown-unknown
+          cargo clippy --all-targets --target wasm32-unknown-unknown
 
   check_android:
     name: Check Android
@@ -37,10 +46,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: |
+          rustup target add aarch64-linux-android
           rustup toolchain install stable
-          rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
-          cargo install -f xbuild
-          cargo build --target aarch64-linux-android
+          cargo clippy --all-targets --target aarch64-linux-android
 
   check_web_example:
     name: Check Web Example
