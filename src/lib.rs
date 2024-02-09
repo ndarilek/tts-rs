@@ -14,9 +14,10 @@ use std::collections::HashMap;
 #[cfg(target_os = "macos")]
 use std::ffi::CStr;
 use std::fmt;
+use std::rc::Rc;
 #[cfg(windows)]
 use std::string::FromUtf16Error;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use std::{boxed::Box, sync::RwLock};
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
@@ -258,7 +259,7 @@ lazy_static! {
 }
 
 #[derive(Clone)]
-pub struct Tts(Arc<RwLock<Box<dyn Backend>>>);
+pub struct Tts(Rc<RwLock<Box<dyn Backend>>>);
 
 unsafe impl Send for Tts {}
 
@@ -271,18 +272,18 @@ impl Tts {
             #[cfg(target_os = "linux")]
             Backends::SpeechDispatcher => {
                 let tts = backends::SpeechDispatcher::new()?;
-                Ok(Tts(Arc::new(RwLock::new(Box::new(tts)))))
+                Ok(Tts(Rc::new(RwLock::new(Box::new(tts)))))
             }
             #[cfg(target_arch = "wasm32")]
             Backends::Web => {
                 let tts = backends::Web::new()?;
-                Ok(Tts(Arc::new(RwLock::new(Box::new(tts)))))
+                Ok(Tts(Rc::new(RwLock::new(Box::new(tts)))))
             }
             #[cfg(all(windows, feature = "tolk"))]
             Backends::Tolk => {
                 let tts = backends::Tolk::new();
                 if let Some(tts) = tts {
-                    Ok(Tts(Arc::new(RwLock::new(Box::new(tts)))))
+                    Ok(Tts(Rc::new(RwLock::new(Box::new(tts)))))
                 } else {
                     Err(Error::NoneError)
                 }
@@ -290,20 +291,20 @@ impl Tts {
             #[cfg(windows)]
             Backends::WinRt => {
                 let tts = backends::WinRt::new()?;
-                Ok(Tts(Arc::new(RwLock::new(Box::new(tts)))))
+                Ok(Tts(Rc::new(RwLock::new(Box::new(tts)))))
             }
             #[cfg(target_os = "macos")]
-            Backends::AppKit => Ok(Tts(Arc::new(RwLock::new(Box::new(
-                backends::AppKit::new()?
-            ))))),
+            Backends::AppKit => Ok(Tts(Rc::new(RwLock::new(
+                Box::new(backends::AppKit::new()?),
+            )))),
             #[cfg(any(target_os = "macos", target_os = "ios"))]
-            Backends::AvFoundation => Ok(Tts(Arc::new(RwLock::new(Box::new(
+            Backends::AvFoundation => Ok(Tts(Rc::new(RwLock::new(Box::new(
                 backends::AvFoundation::new()?,
             ))))),
             #[cfg(target_os = "android")]
             Backends::Android => {
                 let tts = backends::Android::new()?;
-                Ok(Tts(Arc::new(RwLock::new(Box::new(tts)))))
+                Ok(Tts(Rc::new(RwLock::new(Box::new(tts)))))
             }
         };
         if let Ok(backend) = backend {
@@ -640,7 +641,7 @@ impl Tts {
 
 impl Drop for Tts {
     fn drop(&mut self) {
-        if Arc::strong_count(&self.0) <= 1 {
+        if Rc::strong_count(&self.0) <= 1 {
             if let Some(id) = self.0.read().unwrap().id() {
                 let mut callbacks = CALLBACKS.lock().unwrap();
                 callbacks.remove(&id);
