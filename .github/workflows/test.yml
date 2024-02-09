@@ -40,7 +40,7 @@ jobs:
           rustup toolchain install stable
           rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
           cargo install -f xbuild
-          x build --platform android --arch arm64
+          cargo build --target aarch64-linux-android
 
   check_web_example:
     name: Check Web Example
