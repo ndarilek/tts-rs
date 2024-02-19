@@ -59,6 +59,7 @@ impl Backend for Web {
             voice: true,
             get_voice: true,
             utterance_callbacks: true,
+            pause_resume: true,
         }
     }
 
@@ -109,6 +110,22 @@ impl Backend for Web {
             mappings.retain(|v| v.1 != utterance_id);
         }) as Box<dyn Fn(_)>);
         utterance.set_onerror(Some(callback.as_ref().unchecked_ref()));
+        let callback = Closure::wrap(Box::new(move |evt: SpeechSynthesisErrorEvent| {
+            let mut callbacks = CALLBACKS.lock().unwrap();
+            let callback = callbacks.get_mut(&id).unwrap();
+            if let Some(f) = callback.utterance_pause.as_mut() {
+                f(utterance_id);
+            }
+        }) as Box<dyn Fn(_)>);
+        utterance.set_onpause(Some(callback.as_ref().unchecked_ref()));
+        let callback = Closure::wrap(Box::new(move |evt: SpeechSynthesisErrorEvent| {
+            let mut callbacks = CALLBACKS.lock().unwrap();
+            let callback = callbacks.get_mut(&id).unwrap();
+            if let Some(f) = callback.utterance_resume.as_mut() {
+                f(utterance_id);
+            }
+        }) as Box<dyn Fn(_)>);
+        utterance.set_onresume(Some(callback.as_ref().unchecked_ref()));
         if interrupt {
             self.stop()?;
         }
@@ -126,6 +143,24 @@ impl Backend for Web {
         if let Some(window) = web_sys::window() {
             let speech_synthesis = window.speech_synthesis().unwrap();
             speech_synthesis.cancel();
+        }
+        Ok(())
+    }
+
+    fn pause(&mut self) -> Result<(), Error> {
+        trace!("pause()");
+        if let Some(window) = web_sys::window() {
+            let speech_synthesis = window.speech_synthesis().unwrap();
+            speech_synthesis.pause();
+        }
+        Ok(())
+    }
+
+    fn resume(&mut self) -> Result<(), Error> {
+        trace!("resume()");
+        if let Some(window) = web_sys::window() {
+            let speech_synthesis = window.speech_synthesis().unwrap();
+            speech_synthesis.resume();
         }
         Ok(())
     }
