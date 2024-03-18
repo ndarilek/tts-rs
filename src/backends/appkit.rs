@@ -125,6 +125,10 @@ impl Backend for AppKit {
         Ok(None)
     }
 
+    fn synthesize(&mut self, text: &str) -> Result<Vec<u8>, Error> {
+        unimplemented!();
+    }
+
     fn stop(&mut self) -> Result<(), Error> {
         trace!("stop()");
         unsafe {

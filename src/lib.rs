@@ -163,6 +163,7 @@ unsafe impl Sync for UtteranceId {}
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Features {
     pub is_speaking: bool,
+    pub synthesize: bool,
     pub pitch: bool,
     pub rate: bool,
     pub stop: bool,
@@ -218,6 +219,7 @@ pub trait Backend: Clone {
     fn id(&self) -> Option<BackendId>;
     fn supported_features(&self) -> Features;
     fn speak(&mut self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error>;
+    fn synthesize(&mut self, text: &str) -> Result<Vec<u8>, Error>;
     fn stop(&mut self) -> Result<(), Error>;
     fn min_rate(&self) -> f32;
     fn max_rate(&self) -> f32;
@@ -373,6 +375,15 @@ impl Tts {
             .write()
             .unwrap()
             .speak(text.into().as_str(), interrupt)
+    }
+
+    pub fn synthesize<S: Into<String>>(&mut self, text: S) -> Result<Vec<u8>, Error> {
+        let Features { synthesize, .. } = self.supported_features();
+        if synthesize {
+            self.0.write().unwrap().synthesize(text.into().as_str())
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
     }
 
     /// Stops current speech.
