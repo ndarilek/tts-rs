@@ -250,6 +250,7 @@ impl Backend for Android {
             utterance_callbacks: true,
             voice: false,
             get_voice: false,
+            synthesize: false,
         }
     }
 
@@ -282,6 +283,10 @@ impl Backend for Android {
         } else {
             Err(Error::OperationFailed)
         }
+    }
+
+    fn synthesize(&mut self, text: &str) -> Result<Vec<u8>, Error> {
+        unimplemented!();
     }
 
     fn stop(&mut self) -> Result<(), Error> {
