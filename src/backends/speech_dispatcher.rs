@@ -85,6 +85,7 @@ impl Backend for SpeechDispatcher {
             voice: true,
             get_voice: false,
             utterance_callbacks: true,
+            synthesize: false,
         }
     }
 
@@ -106,6 +107,10 @@ impl Backend for SpeechDispatcher {
         } else {
             Err(Error::NoneError)
         }
+    }
+
+    fn synthesize(&mut self, text: &str) -> Result<Vec<u8>, Error> {
+        unimplemented!();
     }
 
     fn stop(&mut self) -> Result<(), Error> {
