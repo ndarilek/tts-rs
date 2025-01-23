@@ -1,22 +1,108 @@
-#![allow(deprecated)] // TODO
 use std::sync::Mutex;
 
 use lazy_static::lazy_static;
 use log::{info, trace};
-use objc2::ffi::id;
 use objc2::rc::Retained;
-use objc2::runtime::{ClassBuilder, Object, Sel};
-use objc2::{class, msg_send, sel};
-use objc2_foundation::{NSArray, NSString};
+use objc2::runtime::ProtocolObject;
+use objc2::{define_class, msg_send, AllocAnyThread, DefinedClass};
+use objc2_avf_audio::{
+    AVSpeechBoundary, AVSpeechSynthesisVoice, AVSpeechSynthesisVoiceGender, AVSpeechSynthesizer,
+    AVSpeechSynthesizerDelegate, AVSpeechUtterance,
+};
+use objc2_foundation::{NSObject, NSObjectProtocol, NSString};
 use oxilangtag::LanguageTag;
 
 use crate::{Backend, BackendId, Error, Features, Gender, UtteranceId, Voice, CALLBACKS};
 
+#[derive(Debug)]
+struct Ivars {
+    backend_id: u64,
+}
+
+define_class!(
+    #[derive(Debug)]
+    #[unsafe(super(NSObject))]
+    #[name = "MyAVSpeechSynthesizerDelegate"]
+    #[ivars = Ivars]
+    struct Delegate;
+
+    unsafe impl NSObjectProtocol for Delegate {}
+
+    unsafe impl AVSpeechSynthesizerDelegate for Delegate {
+        #[unsafe(method(speechSynthesizer:didStartSpeechUtterance:))]
+        fn speech_synthesizer_did_start_speech_utterance(
+            &self,
+            _synthesizer: &AVSpeechSynthesizer,
+            utterance: &AVSpeechUtterance,
+        ) {
+            trace!("speech_synthesizer_did_start_speech_utterance");
+            let backend_id = self.ivars().backend_id;
+            let backend_id = BackendId::AvFoundation(backend_id);
+            trace!("Locking callbacks");
+            let mut callbacks = CALLBACKS.lock().unwrap();
+            trace!("Locked");
+            let callbacks = callbacks.get_mut(&backend_id).unwrap();
+            if let Some(callback) = callbacks.utterance_begin.as_mut() {
+                trace!("Calling utterance_begin");
+                let utterance_id = UtteranceId::AvFoundation(utterance as *const _ as usize);
+                callback(utterance_id);
+                trace!("Called");
+            }
+            trace!("Done speech_synthesizer_did_start_speech_utterance");
+        }
+
+        #[unsafe(method(speechSynthesizer:didFinishSpeechUtterance:))]
+        fn speech_synthesizer_did_finish_speech_utterance(
+            &self,
+            _synthesizer: &AVSpeechSynthesizer,
+            utterance: &AVSpeechUtterance,
+        ) {
+            trace!("speech_synthesizer_did_finish_speech_utterance");
+            let backend_id = self.ivars().backend_id;
+            let backend_id = BackendId::AvFoundation(backend_id);
+            trace!("Locking callbacks");
+            let mut callbacks = CALLBACKS.lock().unwrap();
+            trace!("Locked");
+            let callbacks = callbacks.get_mut(&backend_id).unwrap();
+            if let Some(callback) = callbacks.utterance_end.as_mut() {
+                trace!("Calling utterance_end");
+                let utterance_id = UtteranceId::AvFoundation(utterance as *const _ as usize);
+                callback(utterance_id);
+                trace!("Called");
+            }
+            trace!("Done speech_synthesizer_did_finish_speech_utterance");
+        }
+
+        #[unsafe(method(speechSynthesizer:didCancelSpeechUtterance:))]
+        fn speech_synthesizer_did_cancel_speech_utterance(
+            &self,
+            _synthesizer: &AVSpeechSynthesizer,
+            utterance: &AVSpeechUtterance,
+        ) {
+            trace!("speech_synthesizer_did_cancel_speech_utterance");
+            let backend_id = self.ivars().backend_id;
+            let backend_id = BackendId::AvFoundation(backend_id);
+            trace!("Locking callbacks");
+            let mut callbacks = CALLBACKS.lock().unwrap();
+            trace!("Locked");
+            let callbacks = callbacks.get_mut(&backend_id).unwrap();
+            if let Some(callback) = callbacks.utterance_stop.as_mut() {
+                trace!("Calling utterance_stop");
+                let utterance_id = UtteranceId::AvFoundation(utterance as *const _ as usize);
+                callback(utterance_id);
+                trace!("Called");
+            }
+            trace!("Done speech_synthesizer_did_cancel_speech_utterance");
+        }
+    }
+);
+
 #[derive(Clone, Debug)]
 pub(crate) struct AvFoundation {
     id: BackendId,
-    delegate: *mut Object,
-    synth: *mut Object,
+    /// Kept around to avoid deallocting before we're done.
+    _delegate: Retained<Delegate>,
+    synth: Retained<AVSpeechSynthesizer>,
     rate: f32,
     volume: f32,
     pitch: f32,
@@ -30,117 +116,27 @@ lazy_static! {
 impl AvFoundation {
     pub(crate) fn new() -> Result<Self, Error> {
         info!("Initializing AVFoundation backend");
-        let mut decl = ClassBuilder::new(c"MyNSSpeechSynthesizerDelegate", class!(NSObject))
-            .ok_or(Error::OperationFailed)?;
-        decl.add_ivar::<u64>(c"backend_id");
 
-        extern "C" fn speech_synthesizer_did_start_speech_utterance(
-            this: &Object,
-            _: Sel,
-            _synth: *const Object,
-            utterance: id,
-        ) {
-            trace!("speech_synthesizer_did_start_speech_utterance");
-            unsafe {
-                let backend_id: u64 = *this.get_ivar("backend_id");
-                let backend_id = BackendId::AvFoundation(backend_id);
-                trace!("Locking callbacks");
-                let mut callbacks = CALLBACKS.lock().unwrap();
-                trace!("Locked");
-                let callbacks = callbacks.get_mut(&backend_id).unwrap();
-                if let Some(callback) = callbacks.utterance_begin.as_mut() {
-                    trace!("Calling utterance_begin");
-                    let utterance_id = UtteranceId::AvFoundation(utterance as usize);
-                    callback(utterance_id);
-                    trace!("Called");
-                }
-            }
-            trace!("Done speech_synthesizer_did_start_speech_utterance");
-        }
-
-        extern "C" fn speech_synthesizer_did_finish_speech_utterance(
-            this: &Object,
-            _: Sel,
-            _synth: *const Object,
-            utterance: id,
-        ) {
-            trace!("speech_synthesizer_did_finish_speech_utterance");
-            unsafe {
-                let backend_id: u64 = *this.get_ivar("backend_id");
-                let backend_id = BackendId::AvFoundation(backend_id);
-                trace!("Locking callbacks");
-                let mut callbacks = CALLBACKS.lock().unwrap();
-                trace!("Locked");
-                let callbacks = callbacks.get_mut(&backend_id).unwrap();
-                if let Some(callback) = callbacks.utterance_end.as_mut() {
-                    trace!("Calling utterance_end");
-                    let utterance_id = UtteranceId::AvFoundation(utterance as usize);
-                    callback(utterance_id);
-                    trace!("Called");
-                }
-            }
-            trace!("Done speech_synthesizer_did_finish_speech_utterance");
-        }
-
-        extern "C" fn speech_synthesizer_did_cancel_speech_utterance(
-            this: &Object,
-            _: Sel,
-            _synth: *const Object,
-            utterance: id,
-        ) {
-            trace!("speech_synthesizer_did_cancel_speech_utterance");
-            unsafe {
-                let backend_id: u64 = *this.get_ivar("backend_id");
-                let backend_id = BackendId::AvFoundation(backend_id);
-                trace!("Locking callbacks");
-                let mut callbacks = CALLBACKS.lock().unwrap();
-                trace!("Locked");
-                let callbacks = callbacks.get_mut(&backend_id).unwrap();
-                if let Some(callback) = callbacks.utterance_stop.as_mut() {
-                    trace!("Calling utterance_stop");
-                    let utterance_id = UtteranceId::AvFoundation(utterance as usize);
-                    callback(utterance_id);
-                    trace!("Called");
-                }
-            }
-            trace!("Done speech_synthesizer_did_cancel_speech_utterance");
-        }
-
-        unsafe {
-            decl.add_method(
-                sel!(speechSynthesizer:didStartSpeechUtterance:),
-                speech_synthesizer_did_start_speech_utterance as extern "C" fn(_, _, _, _),
-            );
-            decl.add_method(
-                sel!(speechSynthesizer:didFinishSpeechUtterance:),
-                speech_synthesizer_did_finish_speech_utterance as extern "C" fn(_, _, _, _),
-            );
-            decl.add_method(
-                sel!(speechSynthesizer:didCancelSpeechUtterance:),
-                speech_synthesizer_did_cancel_speech_utterance as extern "C" fn(_, _, _, _),
-            );
-        }
-
-        let delegate_class = decl.register();
-        let delegate_obj: *mut Object = unsafe { msg_send![delegate_class, new] };
         let mut backend_id = NEXT_BACKEND_ID.lock().unwrap();
-        let rv = unsafe {
-            trace!("Creating synth");
-            let synth: *mut Object = msg_send![class!(AVSpeechSynthesizer), new];
-            trace!("Allocated {:?}", synth);
-            *delegate_obj.as_mut().unwrap().get_mut_ivar("backend_id") = *backend_id;
-            trace!("Set backend ID in delegate");
-            let _: () = msg_send![synth, setDelegate: delegate_obj];
-            trace!("Assigned delegate: {:?}", delegate_obj);
-            AvFoundation {
-                id: BackendId::AvFoundation(*backend_id),
-                delegate: delegate_obj,
-                synth,
-                rate: 0.5,
-                volume: 1.,
-                pitch: 1.,
-                voice: None,
-            }
+
+        trace!("Creating synth");
+        let synth = unsafe { AVSpeechSynthesizer::new() };
+        trace!("Creating delegate");
+        let delegate = Delegate::alloc().set_ivars(Ivars {
+            backend_id: *backend_id,
+        });
+        let delegate: Retained<Delegate> = unsafe { msg_send![super(delegate), init] };
+        trace!("Assigning delegate");
+        unsafe { synth.setDelegate(Some(ProtocolObject::from_ref(&*delegate))) };
+
+        let rv = AvFoundation {
+            id: BackendId::AvFoundation(*backend_id),
+            _delegate: delegate,
+            synth,
+            rate: 0.5,
+            volume: 1.,
+            pitch: 1.,
+            voice: None,
         };
         *backend_id += 1;
         Ok(rv)
@@ -170,36 +166,38 @@ impl Backend for AvFoundation {
         if interrupt && self.is_speaking()? {
             self.stop()?;
         }
-        let mut utterance: id;
+        let utterance;
         unsafe {
-            trace!("Allocating utterance string");
+            trace!("Creating utterance string");
             let str = NSString::from_str(text);
-            trace!("Allocating utterance");
-            utterance = msg_send![class!(AVSpeechUtterance), alloc];
-            trace!("Initializing utterance");
-            utterance = msg_send![utterance, initWithString: &*str];
+            trace!("Creating utterance");
+            utterance = AVSpeechUtterance::initWithString(AVSpeechUtterance::alloc(), &str);
             trace!("Setting rate to {}", self.rate);
-            let _: () = msg_send![utterance, setRate: self.rate];
+            utterance.setRate(self.rate);
             trace!("Setting volume to {}", self.volume);
-            let _: () = msg_send![utterance, setVolume: self.volume];
+            utterance.setVolume(self.volume);
             trace!("Setting pitch to {}", self.pitch);
-            let _: () = msg_send![utterance, setPitchMultiplier: self.pitch];
+            utterance.setPitchMultiplier(self.pitch);
             if let Some(voice) = &self.voice {
                 let vid = NSString::from_str(&voice.id());
-                let v: id = msg_send![class!(AVSpeechSynthesisVoice), voiceWithIdentifier: &*vid];
-                let _: () = msg_send![utterance, setVoice: v];
+                let v = AVSpeechSynthesisVoice::voiceWithIdentifier(&*vid)
+                    .ok_or(Error::OperationFailed)?;
+                utterance.setVoice(Some(&v));
             }
             trace!("Enqueuing");
-            let _: () = msg_send![self.synth, speakUtterance: utterance];
+            self.synth.speakUtterance(&utterance);
             trace!("Done queuing");
         }
-        Ok(Some(UtteranceId::AvFoundation(utterance as usize)))
+        Ok(Some(UtteranceId::AvFoundation(
+            &*utterance as *const _ as usize,
+        )))
     }
 
     fn stop(&mut self) -> Result<(), Error> {
         trace!("stop()");
         unsafe {
-            let _: () = msg_send![self.synth, stopSpeakingAtBoundary: 0];
+            self.synth
+                .stopSpeakingAtBoundary(AVSpeechBoundary::Immediate);
         }
         Ok(())
     }
@@ -272,7 +270,7 @@ impl Backend for AvFoundation {
 
     fn is_speaking(&self) -> Result<bool, Error> {
         trace!("is_speaking()");
-        let is_speaking: bool = unsafe { msg_send![self.synth, isSpeaking] };
+        let is_speaking = unsafe { self.synth.isSpeaking() };
         Ok(is_speaking)
     }
 
@@ -281,20 +279,19 @@ impl Backend for AvFoundation {
     }
 
     fn voices(&self) -> Result<Vec<Voice>, Error> {
-        let voices: Retained<NSArray> =
-            unsafe { msg_send![class!(AVSpeechSynthesisVoice), speechVoices] };
+        let voices = unsafe { AVSpeechSynthesisVoice::speechVoices() };
         let rv = voices
             .iter()
             .map(|v| {
-                let id: Retained<NSString> = unsafe { msg_send![&v, identifier] };
-                let name: Retained<NSString> = unsafe { msg_send![&v, name] };
-                let gender: i64 = unsafe { msg_send![&v, gender] };
+                let id = unsafe { v.identifier() };
+                let name = unsafe { v.name() };
+                let gender = unsafe { v.gender() };
                 let gender = match gender {
-                    1 => Some(Gender::Male),
-                    2 => Some(Gender::Female),
+                    AVSpeechSynthesisVoiceGender::Male => Some(Gender::Male),
+                    AVSpeechSynthesisVoiceGender::Female => Some(Gender::Female),
                     _ => None,
                 };
-                let language: Retained<NSString> = unsafe { msg_send![&v, language] };
+                let language = unsafe { v.language() };
                 let language = language.to_string();
                 let language = LanguageTag::parse(language).unwrap();
                 Voice {
@@ -311,14 +308,5 @@ impl Backend for AvFoundation {
     fn set_voice(&mut self, voice: &Voice) -> Result<(), Error> {
         self.voice = Some(voice.clone());
         Ok(())
-    }
-}
-
-impl Drop for AvFoundation {
-    fn drop(&mut self) {
-        unsafe {
-            let _: *mut Object = msg_send![self.delegate, release];
-            let _: *mut Object = msg_send![self.synth, release];
-        }
     }
 }

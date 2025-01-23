@@ -45,6 +45,10 @@ speech-dispatcher = { version = "0.16", default-features = false }
 
 [target.'cfg(target_vendor = "apple")'.dependencies]
 objc2 = "0.6"
+objc2-avf-audio = { version = "0.3", default-features = false, features = [
+    "std",
+    "AVSpeechSynthesis",
+] }
 objc2-foundation = { version = "0.3", default-features = false, features = [
     "std",
     "NSArray",
@@ -53,6 +57,12 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
     "NSObjCRuntime",
     "NSRunLoop",
     "NSString",
+] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = { version = "0.3", default-features = false, features = [
+    "std",
+    "NSSpeechSynthesizer",
 ] }
 
 [target.wasm32-unknown-unknown.dependencies]
