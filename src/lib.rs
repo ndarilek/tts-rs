@@ -11,8 +11,6 @@
 //!  * * WebAssembly
 
 use std::collections::HashMap;
-#[cfg(target_os = "macos")]
-use std::ffi::CStr;
 use std::fmt;
 use std::rc::Rc;
 #[cfg(windows)]
@@ -20,14 +18,8 @@ use std::string::FromUtf16Error;
 use std::sync::Mutex;
 use std::{boxed::Box, sync::RwLock};
 
-#[cfg(target_os = "macos")]
-use cocoa_foundation::base::id;
 use dyn_clonable::*;
 use lazy_static::lazy_static;
-#[cfg(target_os = "macos")]
-use libc::c_char;
-#[cfg(target_os = "macos")]
-use objc::{class, msg_send, sel, sel_impl};
 pub use oxilangtag::LanguageTag;
 #[cfg(target_os = "linux")]
 use speech_dispatcher::Error as SpeechDispatcherError;
@@ -315,23 +307,10 @@ impl Tts {
         #[cfg(target_arch = "wasm32")]
         let tts = Tts::new(Backends::Web);
         #[cfg(target_os = "macos")]
-        let tts = unsafe {
-            // Needed because the Rust NSProcessInfo structs report bogus values, and I don't want to pull in a full bindgen stack.
-            let pi: id = msg_send![class!(NSProcessInfo), new];
-            let version: id = msg_send![pi, operatingSystemVersionString];
-            let str: *const c_char = msg_send![version, UTF8String];
-            let str = CStr::from_ptr(str);
-            let str = str.to_string_lossy();
-            let version: Vec<&str> = str.split(' ').collect();
-            let version = version[1];
-            let version_parts: Vec<&str> = version.split('.').collect();
-            let major_version: i8 = version_parts[0].parse().unwrap();
-            let minor_version: i8 = version_parts[1].parse().unwrap();
-            if major_version >= 11 || minor_version >= 14 {
-                Tts::new(Backends::AvFoundation)
-            } else {
-                Tts::new(Backends::AppKit)
-            }
+        let tts = if objc2::available!(macos = 10.14, ..) {
+            Tts::new(Backends::AvFoundation)
+        } else {
+            Tts::new(Backends::AppKit)
         };
         #[cfg(all(target_vendor = "apple", not(target_os = "macos")))]
         let tts = Tts::new(Backends::AvFoundation);

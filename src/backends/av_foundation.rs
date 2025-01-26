@@ -1,14 +1,13 @@
+#![allow(deprecated)] // TODO
 use std::sync::Mutex;
 
-use cocoa_foundation::base::{id, nil, NO};
-use cocoa_foundation::foundation::NSString;
-use core_foundation::array::CFArray;
-use core_foundation::base::TCFType;
-use core_foundation::string::CFString;
 use lazy_static::lazy_static;
 use log::{info, trace};
-use objc::runtime::{Object, Sel};
-use objc::{class, declare::ClassDecl, msg_send, sel, sel_impl};
+use objc2::ffi::id;
+use objc2::rc::Retained;
+use objc2::runtime::{ClassBuilder, Object, Sel};
+use objc2::{class, msg_send, sel};
+use objc2_foundation::{NSArray, NSString};
 use oxilangtag::LanguageTag;
 
 use crate::{Backend, BackendId, Error, Features, Gender, UtteranceId, Voice, CALLBACKS};
@@ -31,9 +30,9 @@ lazy_static! {
 impl AvFoundation {
     pub(crate) fn new() -> Result<Self, Error> {
         info!("Initializing AVFoundation backend");
-        let mut decl = ClassDecl::new("MyNSSpeechSynthesizerDelegate", class!(NSObject))
+        let mut decl = ClassBuilder::new(c"MyNSSpeechSynthesizerDelegate", class!(NSObject))
             .ok_or(Error::OperationFailed)?;
-        decl.add_ivar::<u64>("backend_id");
+        decl.add_ivar::<u64>(c"backend_id");
 
         extern "C" fn speech_synthesizer_did_start_speech_utterance(
             this: &Object,
@@ -110,18 +109,15 @@ impl AvFoundation {
         unsafe {
             decl.add_method(
                 sel!(speechSynthesizer:didStartSpeechUtterance:),
-                speech_synthesizer_did_start_speech_utterance
-                    as extern "C" fn(&Object, Sel, *const Object, id) -> (),
+                speech_synthesizer_did_start_speech_utterance as extern "C" fn(_, _, _, _),
             );
             decl.add_method(
                 sel!(speechSynthesizer:didFinishSpeechUtterance:),
-                speech_synthesizer_did_finish_speech_utterance
-                    as extern "C" fn(&Object, Sel, *const Object, id) -> (),
+                speech_synthesizer_did_finish_speech_utterance as extern "C" fn(_, _, _, _),
             );
             decl.add_method(
                 sel!(speechSynthesizer:didCancelSpeechUtterance:),
-                speech_synthesizer_did_cancel_speech_utterance
-                    as extern "C" fn(&Object, Sel, *const Object, id) -> (),
+                speech_synthesizer_did_cancel_speech_utterance as extern "C" fn(_, _, _, _),
             );
         }
 
@@ -132,10 +128,7 @@ impl AvFoundation {
             trace!("Creating synth");
             let synth: *mut Object = msg_send![class!(AVSpeechSynthesizer), new];
             trace!("Allocated {:?}", synth);
-            delegate_obj
-                .as_mut()
-                .unwrap()
-                .set_ivar("backend_id", *backend_id);
+            *delegate_obj.as_mut().unwrap().get_mut_ivar("backend_id") = *backend_id;
             trace!("Set backend ID in delegate");
             let _: () = msg_send![synth, setDelegate: delegate_obj];
             trace!("Assigned delegate: {:?}", delegate_obj);
@@ -180,12 +173,11 @@ impl Backend for AvFoundation {
         let mut utterance: id;
         unsafe {
             trace!("Allocating utterance string");
-            let mut str = NSString::alloc(nil);
-            str = str.init_str(text);
+            let str = NSString::from_str(text);
             trace!("Allocating utterance");
             utterance = msg_send![class!(AVSpeechUtterance), alloc];
             trace!("Initializing utterance");
-            utterance = msg_send![utterance, initWithString: str];
+            utterance = msg_send![utterance, initWithString: &*str];
             trace!("Setting rate to {}", self.rate);
             let _: () = msg_send![utterance, setRate: self.rate];
             trace!("Setting volume to {}", self.volume);
@@ -193,9 +185,8 @@ impl Backend for AvFoundation {
             trace!("Setting pitch to {}", self.pitch);
             let _: () = msg_send![utterance, setPitchMultiplier: self.pitch];
             if let Some(voice) = &self.voice {
-                let mut vid = NSString::alloc(nil);
-                vid = vid.init_str(&voice.id());
-                let v: id = msg_send![class!(AVSpeechSynthesisVoice), voiceWithIdentifier: vid];
+                let vid = NSString::from_str(&voice.id());
+                let v: id = msg_send![class!(AVSpeechSynthesisVoice), voiceWithIdentifier: &*vid];
                 let _: () = msg_send![utterance, setVoice: v];
             }
             trace!("Enqueuing");
@@ -281,8 +272,8 @@ impl Backend for AvFoundation {
 
     fn is_speaking(&self) -> Result<bool, Error> {
         trace!("is_speaking()");
-        let is_speaking: i8 = unsafe { msg_send![self.synth, isSpeaking] };
-        Ok(is_speaking != NO as i8)
+        let is_speaking: bool = unsafe { msg_send![self.synth, isSpeaking] };
+        Ok(is_speaking)
     }
 
     fn voice(&self) -> Result<Option<Voice>, Error> {
@@ -290,26 +281,20 @@ impl Backend for AvFoundation {
     }
 
     fn voices(&self) -> Result<Vec<Voice>, Error> {
-        let voices: CFArray = unsafe {
-            CFArray::wrap_under_get_rule(msg_send![class!(AVSpeechSynthesisVoice), speechVoices])
-        };
+        let voices: Retained<NSArray> =
+            unsafe { msg_send![class!(AVSpeechSynthesisVoice), speechVoices] };
         let rv = voices
             .iter()
             .map(|v| {
-                let id: CFString = unsafe {
-                    CFString::wrap_under_get_rule(msg_send![*v as *const Object, identifier])
-                };
-                let name: CFString =
-                    unsafe { CFString::wrap_under_get_rule(msg_send![*v as *const Object, name]) };
-                let gender: i64 = unsafe { msg_send![*v as *const Object, gender] };
+                let id: Retained<NSString> = unsafe { msg_send![&v, identifier] };
+                let name: Retained<NSString> = unsafe { msg_send![&v, name] };
+                let gender: i64 = unsafe { msg_send![&v, gender] };
                 let gender = match gender {
                     1 => Some(Gender::Male),
                     2 => Some(Gender::Female),
                     _ => None,
                 };
-                let language: CFString = unsafe {
-                    CFString::wrap_under_get_rule(msg_send![*v as *const Object, language])
-                };
+                let language: Retained<NSString> = unsafe { msg_send![&v, language] };
                 let language = language.to_string();
                 let language = LanguageTag::parse(language).unwrap();
                 Voice {
@@ -332,8 +317,8 @@ impl Backend for AvFoundation {
 impl Drop for AvFoundation {
     fn drop(&mut self) {
         unsafe {
-            let _: Object = msg_send![self.delegate, release];
-            let _: Object = msg_send![self.synth, release];
+            let _: *mut Object = msg_send![self.delegate, release];
+            let _: *mut Object = msg_send![self.synth, release];
         }
     }
 }

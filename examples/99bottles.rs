@@ -1,13 +1,6 @@
 use std::io;
 use std::{thread, time};
 
-#[cfg(target_os = "macos")]
-use cocoa_foundation::base::id;
-#[cfg(target_os = "macos")]
-use cocoa_foundation::foundation::NSRunLoop;
-#[cfg(target_os = "macos")]
-use objc::{msg_send, sel, sel_impl};
-
 use tts::*;
 
 fn main() -> Result<(), Error> {
@@ -29,10 +22,8 @@ fn main() -> Result<(), Error> {
     // It shouldn't be needed in an app or game that almost certainly has one already.
     #[cfg(target_os = "macos")]
     {
-        let run_loop: id = unsafe { NSRunLoop::currentRunLoop() };
-        unsafe {
-            let _: () = msg_send![run_loop, run];
-        }
+        let run_loop = unsafe { objc2_foundation::NSRunLoop::currentRunLoop() };
+        unsafe { run_loop.run() };
     }
     io::stdin().read_line(&mut _input)?;
     Ok(())

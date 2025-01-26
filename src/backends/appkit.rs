@@ -1,9 +1,9 @@
-use cocoa_foundation::base::{id, nil};
-use cocoa_foundation::foundation::NSString;
+#![allow(deprecated)] // TODO
 use log::{info, trace};
-use objc::declare::ClassDecl;
-use objc::runtime::*;
-use objc::*;
+use objc2::ffi::id;
+use objc2::runtime::{ClassBuilder, Object, Sel, BOOL};
+use objc2::{class, msg_send, sel};
+use objc2_foundation::NSString;
 
 use crate::{Backend, BackendId, Error, Features, UtteranceId, Voice};
 
@@ -15,10 +15,10 @@ impl AppKit {
         info!("Initializing AppKit backend");
         unsafe {
             let obj: *mut Object = msg_send![class!(NSSpeechSynthesizer), new];
-            let mut decl = ClassDecl::new("MyNSSpeechSynthesizerDelegate", class!(NSObject))
+            let mut decl = ClassBuilder::new(c"MyNSSpeechSynthesizerDelegate", class!(NSObject))
                 .ok_or(Error::OperationFailed)?;
-            decl.add_ivar::<id>("synth");
-            decl.add_ivar::<id>("strings");
+            decl.add_ivar::<id>(c"synth");
+            decl.add_ivar::<id>(c"strings");
 
             extern "C" fn enqueue_and_speak(this: &Object, _: Sel, string: id) {
                 unsafe {
@@ -34,7 +34,7 @@ impl AppKit {
             }
             decl.add_method(
                 sel!(enqueueAndSpeak:),
-                enqueue_and_speak as extern "C" fn(&Object, Sel, id) -> (),
+                enqueue_and_speak as extern "C" fn(_, _, _),
             );
 
             extern "C" fn speech_synthesizer_did_finish_speaking(
@@ -59,8 +59,7 @@ impl AppKit {
             }
             decl.add_method(
                 sel!(speechSynthesizer:didFinishSpeaking:),
-                speech_synthesizer_did_finish_speaking
-                    as extern "C" fn(&Object, Sel, *const Object, BOOL) -> (),
+                speech_synthesizer_did_finish_speaking as extern "C" fn(_, _, _, _),
             );
 
             extern "C" fn clear_queue(this: &Object, _: Sel) {
@@ -75,23 +74,20 @@ impl AppKit {
                     }
                 }
             }
-            decl.add_method(
-                sel!(clearQueue),
-                clear_queue as extern "C" fn(&Object, Sel) -> (),
-            );
+            decl.add_method(sel!(clearQueue), clear_queue as extern "C" fn(_, _));
 
             let delegate_class = decl.register();
             let delegate_obj: *mut Object = msg_send![delegate_class, new];
-            delegate_obj
+            *delegate_obj
                 .as_mut()
                 .ok_or(Error::OperationFailed)?
-                .set_ivar("synth", obj);
+                .get_mut_ivar("synth") = obj;
             let strings: id = msg_send![class!(NSMutableArray), new];
-            delegate_obj
+            *delegate_obj
                 .as_mut()
                 .ok_or(Error::OperationFailed)?
-                .set_ivar("strings", strings);
-            let _: Object = msg_send![obj, setDelegate: delegate_obj];
+                .get_mut_ivar("strings") = strings;
+            let _: *mut Object = msg_send![obj, setDelegate: delegate_obj];
             Ok(AppKit(obj, delegate_obj))
         }
     }
@@ -118,8 +114,8 @@ impl Backend for AppKit {
             self.stop()?;
         }
         unsafe {
-            let str = NSString::alloc(nil).init_str(text);
-            let _: () = msg_send![self.1, enqueueAndSpeak: str];
+            let str = NSString::from_str(text);
+            let _: () = msg_send![self.1, enqueueAndSpeak: &*str];
         }
         Ok(None)
     }
@@ -203,8 +199,8 @@ impl Backend for AppKit {
     }
 
     fn is_speaking(&self) -> Result<bool, Error> {
-        let is_speaking: i8 = unsafe { msg_send![self.0, isSpeaking] };
-        Ok(is_speaking != NO as i8)
+        let is_speaking: bool = unsafe { msg_send![self.0, isSpeaking] };
+        Ok(is_speaking)
     }
 
     fn voice(&self) -> Result<Option<Voice>, Error> {
@@ -223,8 +219,8 @@ impl Backend for AppKit {
 impl Drop for AppKit {
     fn drop(&mut self) {
         unsafe {
-            let _: Object = msg_send![self.0, release];
-            let _: Object = msg_send![self.1, release];
+            let _: *mut Object = msg_send![self.0, release];
+            let _: *mut Object = msg_send![self.1, release];
         }
     }
 }
