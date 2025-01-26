@@ -20,7 +20,7 @@ use std::string::FromUtf16Error;
 use std::sync::Mutex;
 use std::{boxed::Box, sync::RwLock};
 
-#[cfg(any(target_os = "macos", target_os = "ios"))]
+#[cfg(target_os = "macos")]
 use cocoa_foundation::base::id;
 use dyn_clonable::*;
 use lazy_static::lazy_static;
@@ -109,24 +109,13 @@ impl fmt::Display for BackendId {
     }
 }
 
-// # Note
-//
-// Most trait implementations are blocked by cocoa_foundation::base::id;
-// which is a type alias for objc::runtime::Object, which only implements Debug.
-#[derive(Debug)]
-#[cfg_attr(
-    not(any(target_os = "macos", target_os = "ios")),
-    derive(Clone, Copy, Eq, Hash, PartialEq, PartialOrd, Ord)
-)]
-#[cfg_attr(
-    all(feature = "serde", not(any(target_os = "macos", target_os = "ios"))),
-    derive(serde::Serialize, serde::Deserialize)
-)]
+#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum UtteranceId {
     #[cfg(target_os = "android")]
     Android(u64),
     #[cfg(any(target_os = "macos", target_os = "ios"))]
-    AvFoundation(id),
+    AvFoundation(usize),
     #[cfg(target_os = "linux")]
     SpeechDispatcher(u64),
     #[cfg(target_arch = "wasm32")]
@@ -135,11 +124,6 @@ pub enum UtteranceId {
     WinRt(u64),
 }
 
-// # Note
-//
-// Display is not implemented by cocoa_foundation::base::id;
-// which is a type alias for objc::runtime::Object, which only implements Debug.
-#[cfg(not(any(target_os = "macos", target_os = "ios")))]
 impl fmt::Display for UtteranceId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
@@ -147,6 +131,8 @@ impl fmt::Display for UtteranceId {
             UtteranceId::Android(id) => writeln!(f, "Android({id})"),
             #[cfg(target_os = "linux")]
             UtteranceId::SpeechDispatcher(id) => writeln!(f, "SpeechDispatcher({id})"),
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            UtteranceId::AvFoundation(id) => writeln!(f, "AvFoundation({id})"),
             #[cfg(target_arch = "wasm32")]
             UtteranceId::Web(id) => writeln!(f, "Web({})", id),
             #[cfg(windows)]
@@ -154,10 +140,6 @@ impl fmt::Display for UtteranceId {
         }
     }
 }
-
-unsafe impl Send for UtteranceId {}
-
-unsafe impl Sync for UtteranceId {}
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

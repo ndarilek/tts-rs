@@ -52,7 +52,7 @@ impl AvFoundation {
                 let callbacks = callbacks.get_mut(&backend_id).unwrap();
                 if let Some(callback) = callbacks.utterance_begin.as_mut() {
                     trace!("Calling utterance_begin");
-                    let utterance_id = UtteranceId::AvFoundation(utterance);
+                    let utterance_id = UtteranceId::AvFoundation(utterance as usize);
                     callback(utterance_id);
                     trace!("Called");
                 }
@@ -76,7 +76,7 @@ impl AvFoundation {
                 let callbacks = callbacks.get_mut(&backend_id).unwrap();
                 if let Some(callback) = callbacks.utterance_end.as_mut() {
                     trace!("Calling utterance_end");
-                    let utterance_id = UtteranceId::AvFoundation(utterance);
+                    let utterance_id = UtteranceId::AvFoundation(utterance as usize);
                     callback(utterance_id);
                     trace!("Called");
                 }
@@ -100,7 +100,7 @@ impl AvFoundation {
                 let callbacks = callbacks.get_mut(&backend_id).unwrap();
                 if let Some(callback) = callbacks.utterance_stop.as_mut() {
                     trace!("Calling utterance_stop");
-                    let utterance_id = UtteranceId::AvFoundation(utterance);
+                    let utterance_id = UtteranceId::AvFoundation(utterance as usize);
                     callback(utterance_id);
                     trace!("Called");
                 }
@@ -203,7 +203,7 @@ impl Backend for AvFoundation {
             let _: () = msg_send![self.synth, speakUtterance: utterance];
             trace!("Done queuing");
         }
-        Ok(Some(UtteranceId::AvFoundation(utterance)))
+        Ok(Some(UtteranceId::AvFoundation(utterance as usize)))
     }
 
     fn stop(&mut self) -> Result<(), Error> {
