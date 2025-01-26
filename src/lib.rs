@@ -4,9 +4,9 @@
 //!  *   * Screen readers/SAPI via Tolk (requires `tolk` Cargo feature)
 //!  *   * WinRT
 //!  * * Linux via [Speech Dispatcher](https://freebsoft.org/speechd)
-//!  * * MacOS/iOS
-//!  *   * AppKit on MacOS 10.13 and below
-//!  *   * AVFoundation on MacOS 10.14 and above, and iOS
+//!  * * macOS/iOS/tvOS/watchOS/visionOS
+//!  *   * AppKit on macOS 10.13 and below.
+//!  *   * AVFoundation on macOS 10.14 and above, and iOS/tvOS/watchOS/visionOS.
 //!  * * Android
 //!  * * WebAssembly
 
@@ -44,7 +44,7 @@ pub enum Backends {
     Android,
     #[cfg(target_os = "macos")]
     AppKit,
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    #[cfg(target_vendor = "apple")]
     AvFoundation,
     #[cfg(target_os = "linux")]
     SpeechDispatcher,
@@ -63,7 +63,7 @@ impl fmt::Display for Backends {
             Backends::Android => writeln!(f, "Android"),
             #[cfg(target_os = "macos")]
             Backends::AppKit => writeln!(f, "AppKit"),
-            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            #[cfg(target_vendor = "apple")]
             Backends::AvFoundation => writeln!(f, "AVFoundation"),
             #[cfg(target_os = "linux")]
             Backends::SpeechDispatcher => writeln!(f, "Speech Dispatcher"),
@@ -82,7 +82,7 @@ impl fmt::Display for Backends {
 pub enum BackendId {
     #[cfg(target_os = "android")]
     Android(u64),
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    #[cfg(target_vendor = "apple")]
     AvFoundation(u64),
     #[cfg(target_os = "linux")]
     SpeechDispatcher(usize),
@@ -97,7 +97,7 @@ impl fmt::Display for BackendId {
         match self {
             #[cfg(target_os = "android")]
             BackendId::Android(id) => writeln!(f, "Android({id})"),
-            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            #[cfg(target_vendor = "apple")]
             BackendId::AvFoundation(id) => writeln!(f, "AvFoundation({id})"),
             #[cfg(target_os = "linux")]
             BackendId::SpeechDispatcher(id) => writeln!(f, "SpeechDispatcher({id})"),
@@ -114,7 +114,7 @@ impl fmt::Display for BackendId {
 pub enum UtteranceId {
     #[cfg(target_os = "android")]
     Android(u64),
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    #[cfg(target_vendor = "apple")]
     AvFoundation(usize),
     #[cfg(target_os = "linux")]
     SpeechDispatcher(u64),
@@ -131,7 +131,7 @@ impl fmt::Display for UtteranceId {
             UtteranceId::Android(id) => writeln!(f, "Android({id})"),
             #[cfg(target_os = "linux")]
             UtteranceId::SpeechDispatcher(id) => writeln!(f, "SpeechDispatcher({id})"),
-            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            #[cfg(target_vendor = "apple")]
             UtteranceId::AvFoundation(id) => writeln!(f, "AvFoundation({id})"),
             #[cfg(target_arch = "wasm32")]
             UtteranceId::Web(id) => writeln!(f, "Web({})", id),
@@ -279,7 +279,7 @@ impl Tts {
             Backends::AppKit => Ok(Tts(Rc::new(RwLock::new(
                 Box::new(backends::AppKit::new()?),
             )))),
-            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            #[cfg(target_vendor = "apple")]
             Backends::AvFoundation => Ok(Tts(Rc::new(RwLock::new(Box::new(
                 backends::AvFoundation::new()?,
             ))))),
@@ -333,7 +333,7 @@ impl Tts {
                 Tts::new(Backends::AppKit)
             }
         };
-        #[cfg(target_os = "ios")]
+        #[cfg(all(target_vendor = "apple", not(target_os = "macos")))]
         let tts = Tts::new(Backends::AvFoundation);
         #[cfg(target_os = "android")]
         let tts = Tts::new(Backends::Android);

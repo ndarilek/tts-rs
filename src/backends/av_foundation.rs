@@ -1,4 +1,3 @@
-#[cfg(any(target_os = "macos", target_os = "ios"))]
 use std::sync::Mutex;
 
 use cocoa_foundation::base::{id, nil, NO};
