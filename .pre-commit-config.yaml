@@ -1,0 +1,10 @@
+fail_fast: true
+repos:
+  - repo: https://github.com/doublify/pre-commit-rust
+    rev: v1.0
+    hooks:
+      - id: fmt
+        args: [--, --check]
+      - id: cargo-check
+        args: [--bins, --examples]
+      - id: clippy
