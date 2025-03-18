@@ -43,11 +43,27 @@ windows = { version = "0.58", features = [
 [target.'cfg(target_os = "linux")'.dependencies]
 speech-dispatcher = { version = "0.16", default-features = false }
 
-[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
-cocoa-foundation = "0.1"
-core-foundation = "0.9"
-libc = "0.2"
-objc = { version = "0.2", features = ["exception"] }
+[target.'cfg(target_vendor = "apple")'.dependencies]
+objc2 = "0.6"
+objc2-avf-audio = { version = "0.3", default-features = false, features = [
+    "std",
+    "AVSpeechSynthesis",
+] }
+objc2-foundation = { version = "0.3", default-features = false, features = [
+    "std",
+    "NSArray",
+    "NSDate",
+    "NSEnumerator",
+    "NSObjCRuntime",
+    "NSRunLoop",
+    "NSString",
+] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = { version = "0.3", default-features = false, features = [
+    "std",
+    "NSSpeechSynthesizer",
+] }
 
 [target.wasm32-unknown-unknown.dependencies]
 wasm-bindgen = "0.2"

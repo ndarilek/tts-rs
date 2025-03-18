@@ -1,100 +1,91 @@
-#[cfg(target_os = "macos")]
-use cocoa_foundation::base::{id, nil};
-use cocoa_foundation::foundation::NSString;
+// NSSpeechSynthesizer is deprecated, but we can't use AVSpeechSynthesizer
+// on older macOS.
+#![allow(deprecated)]
 use log::{info, trace};
-use objc::declare::ClassDecl;
-use objc::runtime::*;
-use objc::*;
+use objc2::rc::Retained;
+use objc2::{define_class, msg_send, DefinedClass, MainThreadMarker, MainThreadOnly};
+use objc2_app_kit::{NSSpeechSynthesizer, NSSpeechSynthesizerDelegate};
+use objc2_foundation::{NSMutableArray, NSObject, NSObjectProtocol, NSString};
 
 use crate::{Backend, BackendId, Error, Features, UtteranceId, Voice};
 
+#[derive(Debug)]
+struct Ivars {
+    synth: Retained<NSSpeechSynthesizer>,
+    strings: Retained<NSMutableArray<NSString>>,
+}
+
+define_class!(
+    #[derive(Debug)]
+    #[unsafe(super(NSObject))]
+    #[name = "MyNSSpeechSynthesizerDelegate"]
+    #[thread_kind = MainThreadOnly]
+    #[ivars = Ivars]
+    struct Delegate;
+
+    unsafe impl NSObjectProtocol for Delegate {}
+
+    unsafe impl NSSpeechSynthesizerDelegate for Delegate {
+        #[unsafe(method(speechSynthesizer:didFinishSpeaking:))]
+        fn speech_synthesizer_did_finish_speaking(
+            &self,
+            _sender: &NSSpeechSynthesizer,
+            _finished_speaking: bool,
+        ) {
+            let Ivars { strings, synth } = self.ivars();
+            if let Some(_str) = strings.firstObject() {
+                strings.removeObjectAtIndex(0);
+                if let Some(str) = strings.firstObject() {
+                    unsafe { synth.startSpeakingString(&str) };
+                }
+            }
+        }
+    }
+);
+
+impl Delegate {
+    fn enqueue_and_speak(&self, string: &NSString) {
+        let Ivars { strings, synth } = self.ivars();
+        strings.addObject(string);
+        if let Some(str) = strings.firstObject() {
+            unsafe { synth.startSpeakingString(&str) };
+        }
+    }
+
+    fn clear_queue(&self) {
+        let strings = &self.ivars().strings;
+        let mut count = strings.count();
+        while count > 0 {
+            strings.removeObjectAtIndex(0);
+            count = strings.count();
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
-pub(crate) struct AppKit(*mut Object, *mut Object);
+pub(crate) struct AppKit {
+    synth: Retained<NSSpeechSynthesizer>,
+    delegate: Retained<Delegate>,
+}
 
 impl AppKit {
     pub(crate) fn new() -> Result<Self, Error> {
         info!("Initializing AppKit backend");
-        unsafe {
-            let obj: *mut Object = msg_send![class!(NSSpeechSynthesizer), new];
-            let mut decl = ClassDecl::new("MyNSSpeechSynthesizerDelegate", class!(NSObject))
-                .ok_or(Error::OperationFailed)?;
-            decl.add_ivar::<id>("synth");
-            decl.add_ivar::<id>("strings");
+        let synth = unsafe { NSSpeechSynthesizer::new() };
 
-            extern "C" fn enqueue_and_speak(this: &Object, _: Sel, string: id) {
-                unsafe {
-                    let strings: id = *this.get_ivar("strings");
-                    let _: () = msg_send![strings, addObject: string];
-                    let count: u32 = msg_send![strings, count];
-                    if count == 1 {
-                        let str: id = msg_send!(strings, firstObject);
-                        let synth: id = *this.get_ivar("synth");
-                        let _: BOOL = msg_send![synth, startSpeakingString: str];
-                    }
-                }
-            }
-            decl.add_method(
-                sel!(enqueueAndSpeak:),
-                enqueue_and_speak as extern "C" fn(&Object, Sel, id) -> (),
-            );
+        // TODO: It is UB to use NSSpeechSynthesizerDelegate off the main
+        // thread, we should somehow expose the need to be on the main thread.
+        //
+        // Maybe just returning an error?
+        let mtm = unsafe { MainThreadMarker::new_unchecked() };
 
-            extern "C" fn speech_synthesizer_did_finish_speaking(
-                this: &Object,
-                _: Sel,
-                synth: *const Object,
-                _: BOOL,
-            ) {
-                unsafe {
-                    let strings: id = *this.get_ivar("strings");
-                    let count: u32 = msg_send![strings, count];
-                    if count > 0 {
-                        let str: id = msg_send!(strings, firstObject);
-                        let _: () = msg_send![str, release];
-                        let _: () = msg_send!(strings, removeObjectAtIndex:0);
-                        if count > 1 {
-                            let str: id = msg_send!(strings, firstObject);
-                            let _: BOOL = msg_send![synth, startSpeakingString: str];
-                        }
-                    }
-                }
-            }
-            decl.add_method(
-                sel!(speechSynthesizer:didFinishSpeaking:),
-                speech_synthesizer_did_finish_speaking
-                    as extern "C" fn(&Object, Sel, *const Object, BOOL) -> (),
-            );
+        let delegate = Delegate::alloc(mtm).set_ivars(Ivars {
+            synth: synth.clone(),
+            strings: NSMutableArray::new(),
+        });
+        let delegate: Retained<Delegate> = unsafe { msg_send![super(delegate), init] };
 
-            extern "C" fn clear_queue(this: &Object, _: Sel) {
-                unsafe {
-                    let strings: id = *this.get_ivar("strings");
-                    let mut count: u32 = msg_send![strings, count];
-                    while count > 0 {
-                        let str: id = msg_send!(strings, firstObject);
-                        let _: () = msg_send![str, release];
-                        let _: () = msg_send!(strings, removeObjectAtIndex:0);
-                        count = msg_send![strings, count];
-                    }
-                }
-            }
-            decl.add_method(
-                sel!(clearQueue),
-                clear_queue as extern "C" fn(&Object, Sel) -> (),
-            );
-
-            let delegate_class = decl.register();
-            let delegate_obj: *mut Object = msg_send![delegate_class, new];
-            delegate_obj
-                .as_mut()
-                .ok_or(Error::OperationFailed)?
-                .set_ivar("synth", obj);
-            let strings: id = msg_send![class!(NSMutableArray), new];
-            delegate_obj
-                .as_mut()
-                .ok_or(Error::OperationFailed)?
-                .set_ivar("strings", strings);
-            let _: Object = msg_send![obj, setDelegate: delegate_obj];
-            Ok(AppKit(obj, delegate_obj))
-        }
+        Ok(AppKit { synth, delegate })
     }
 }
 
@@ -118,19 +109,15 @@ impl Backend for AppKit {
         if interrupt {
             self.stop()?;
         }
-        unsafe {
-            let str = NSString::alloc(nil).init_str(text);
-            let _: () = msg_send![self.1, enqueueAndSpeak: str];
-        }
+        let str = NSString::from_str(text);
+        self.delegate.enqueue_and_speak(&str);
         Ok(None)
     }
 
     fn stop(&mut self) -> Result<(), Error> {
         trace!("stop()");
-        unsafe {
-            let _: () = msg_send![self.1, clearQueue];
-            let _: () = msg_send![self.0, stopSpeaking];
-        }
+        self.delegate.clear_queue();
+        unsafe { self.synth.stopSpeaking() };
         Ok(())
     }
 
@@ -147,15 +134,13 @@ impl Backend for AppKit {
     }
 
     fn get_rate(&self) -> Result<f32, Error> {
-        let rate: f32 = unsafe { msg_send![self.0, rate] };
+        let rate: f32 = unsafe { self.synth.rate() };
         Ok(rate)
     }
 
     fn set_rate(&mut self, rate: f32) -> Result<(), Error> {
         trace!("set_rate({})", rate);
-        unsafe {
-            let _: () = msg_send![self.0, setRate: rate];
-        }
+        unsafe { self.synth.setRate(rate) };
         Ok(())
     }
 
@@ -192,20 +177,18 @@ impl Backend for AppKit {
     }
 
     fn get_volume(&self) -> Result<f32, Error> {
-        let volume: f32 = unsafe { msg_send![self.0, volume] };
+        let volume = unsafe { self.synth.volume() };
         Ok(volume)
     }
 
     fn set_volume(&mut self, volume: f32) -> Result<(), Error> {
-        unsafe {
-            let _: () = msg_send![self.0, setVolume: volume];
-        }
+        unsafe { self.synth.setVolume(volume) };
         Ok(())
     }
 
     fn is_speaking(&self) -> Result<bool, Error> {
-        let is_speaking: i8 = unsafe { msg_send![self.0, isSpeaking] };
-        Ok(is_speaking != NO as i8)
+        let is_speaking = unsafe { self.synth.isSpeaking() };
+        Ok(is_speaking)
     }
 
     fn voice(&self) -> Result<Option<Voice>, Error> {
@@ -218,14 +201,5 @@ impl Backend for AppKit {
 
     fn set_voice(&mut self, _voice: &Voice) -> Result<(), Error> {
         unimplemented!()
-    }
-}
-
-impl Drop for AppKit {
-    fn drop(&mut self) {
-        unsafe {
-            let _: Object = msg_send![self.0, release];
-            let _: Object = msg_send![self.1, release];
-        }
     }
 }

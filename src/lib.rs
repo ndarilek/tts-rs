@@ -4,15 +4,13 @@
 //!  *   * Screen readers/SAPI via Tolk (requires `tolk` Cargo feature)
 //!  *   * WinRT
 //!  * * Linux via [Speech Dispatcher](https://freebsoft.org/speechd)
-//!  * * MacOS/iOS
-//!  *   * AppKit on MacOS 10.13 and below
-//!  *   * AVFoundation on MacOS 10.14 and above, and iOS
+//!  * * macOS/iOS/tvOS/watchOS/visionOS
+//!  *   * AppKit on macOS 10.13 and below.
+//!  *   * AVFoundation on macOS 10.14 and above, and iOS/tvOS/watchOS/visionOS.
 //!  * * Android
 //!  * * WebAssembly
 
 use std::collections::HashMap;
-#[cfg(target_os = "macos")]
-use std::ffi::CStr;
 use std::fmt;
 use std::rc::Rc;
 #[cfg(windows)]
@@ -20,14 +18,8 @@ use std::string::FromUtf16Error;
 use std::sync::Mutex;
 use std::{boxed::Box, sync::RwLock};
 
-#[cfg(any(target_os = "macos", target_os = "ios"))]
-use cocoa_foundation::base::id;
 use dyn_clonable::*;
 use lazy_static::lazy_static;
-#[cfg(target_os = "macos")]
-use libc::c_char;
-#[cfg(target_os = "macos")]
-use objc::{class, msg_send, sel, sel_impl};
 pub use oxilangtag::LanguageTag;
 #[cfg(target_os = "linux")]
 use speech_dispatcher::Error as SpeechDispatcherError;
@@ -44,7 +36,7 @@ pub enum Backends {
     Android,
     #[cfg(target_os = "macos")]
     AppKit,
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    #[cfg(target_vendor = "apple")]
     AvFoundation,
     #[cfg(target_os = "linux")]
     SpeechDispatcher,
@@ -63,7 +55,7 @@ impl fmt::Display for Backends {
             Backends::Android => writeln!(f, "Android"),
             #[cfg(target_os = "macos")]
             Backends::AppKit => writeln!(f, "AppKit"),
-            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            #[cfg(target_vendor = "apple")]
             Backends::AvFoundation => writeln!(f, "AVFoundation"),
             #[cfg(target_os = "linux")]
             Backends::SpeechDispatcher => writeln!(f, "Speech Dispatcher"),
@@ -82,7 +74,7 @@ impl fmt::Display for Backends {
 pub enum BackendId {
     #[cfg(target_os = "android")]
     Android(u64),
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    #[cfg(target_vendor = "apple")]
     AvFoundation(u64),
     #[cfg(target_os = "linux")]
     SpeechDispatcher(usize),
@@ -97,7 +89,7 @@ impl fmt::Display for BackendId {
         match self {
             #[cfg(target_os = "android")]
             BackendId::Android(id) => writeln!(f, "Android({id})"),
-            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            #[cfg(target_vendor = "apple")]
             BackendId::AvFoundation(id) => writeln!(f, "AvFoundation({id})"),
             #[cfg(target_os = "linux")]
             BackendId::SpeechDispatcher(id) => writeln!(f, "SpeechDispatcher({id})"),
@@ -109,24 +101,13 @@ impl fmt::Display for BackendId {
     }
 }
 
-// # Note
-//
-// Most trait implementations are blocked by cocoa_foundation::base::id;
-// which is a type alias for objc::runtime::Object, which only implements Debug.
-#[derive(Debug)]
-#[cfg_attr(
-    not(any(target_os = "macos", target_os = "ios")),
-    derive(Clone, Copy, Eq, Hash, PartialEq, PartialOrd, Ord)
-)]
-#[cfg_attr(
-    all(feature = "serde", not(any(target_os = "macos", target_os = "ios"))),
-    derive(serde::Serialize, serde::Deserialize)
-)]
+#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum UtteranceId {
     #[cfg(target_os = "android")]
     Android(u64),
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
-    AvFoundation(id),
+    #[cfg(target_vendor = "apple")]
+    AvFoundation(usize),
     #[cfg(target_os = "linux")]
     SpeechDispatcher(u64),
     #[cfg(target_arch = "wasm32")]
@@ -135,11 +116,6 @@ pub enum UtteranceId {
     WinRt(u64),
 }
 
-// # Note
-//
-// Display is not implemented by cocoa_foundation::base::id;
-// which is a type alias for objc::runtime::Object, which only implements Debug.
-#[cfg(not(any(target_os = "macos", target_os = "ios")))]
 impl fmt::Display for UtteranceId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
@@ -147,6 +123,8 @@ impl fmt::Display for UtteranceId {
             UtteranceId::Android(id) => writeln!(f, "Android({id})"),
             #[cfg(target_os = "linux")]
             UtteranceId::SpeechDispatcher(id) => writeln!(f, "SpeechDispatcher({id})"),
+            #[cfg(target_vendor = "apple")]
+            UtteranceId::AvFoundation(id) => writeln!(f, "AvFoundation({id})"),
             #[cfg(target_arch = "wasm32")]
             UtteranceId::Web(id) => writeln!(f, "Web({})", id),
             #[cfg(windows)]
@@ -154,10 +132,6 @@ impl fmt::Display for UtteranceId {
         }
     }
 }
-
-unsafe impl Send for UtteranceId {}
-
-unsafe impl Sync for UtteranceId {}
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -297,7 +271,7 @@ impl Tts {
             Backends::AppKit => Ok(Tts(Rc::new(RwLock::new(
                 Box::new(backends::AppKit::new()?),
             )))),
-            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            #[cfg(target_vendor = "apple")]
             Backends::AvFoundation => Ok(Tts(Rc::new(RwLock::new(Box::new(
                 backends::AvFoundation::new()?,
             ))))),
@@ -333,25 +307,12 @@ impl Tts {
         #[cfg(target_arch = "wasm32")]
         let tts = Tts::new(Backends::Web);
         #[cfg(target_os = "macos")]
-        let tts = unsafe {
-            // Needed because the Rust NSProcessInfo structs report bogus values, and I don't want to pull in a full bindgen stack.
-            let pi: id = msg_send![class!(NSProcessInfo), new];
-            let version: id = msg_send![pi, operatingSystemVersionString];
-            let str: *const c_char = msg_send![version, UTF8String];
-            let str = CStr::from_ptr(str);
-            let str = str.to_string_lossy();
-            let version: Vec<&str> = str.split(' ').collect();
-            let version = version[1];
-            let version_parts: Vec<&str> = version.split('.').collect();
-            let major_version: i8 = version_parts[0].parse().unwrap();
-            let minor_version: i8 = version_parts[1].parse().unwrap();
-            if major_version >= 11 || minor_version >= 14 {
-                Tts::new(Backends::AvFoundation)
-            } else {
-                Tts::new(Backends::AppKit)
-            }
+        let tts = if objc2::available!(macos = 10.14, ..) {
+            Tts::new(Backends::AvFoundation)
+        } else {
+            Tts::new(Backends::AppKit)
         };
-        #[cfg(target_os = "ios")]
+        #[cfg(all(target_vendor = "apple", not(target_os = "macos")))]
         let tts = Tts::new(Backends::AvFoundation);
         #[cfg(target_os = "android")]
         let tts = Tts::new(Backends::Android);
