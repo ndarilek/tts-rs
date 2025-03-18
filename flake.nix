@@ -29,6 +29,7 @@
               rustfmt
               rustPackages.clippy
               mold
+              lld
               pre-commit
             ];
             buildInputs = [
