@@ -12,8 +12,11 @@ use windows::{
     Media::{
         Core::MediaSource,
         Playback::{MediaPlayer, MediaPlayerAudioCategory},
-        SpeechSynthesis::{SpeechSynthesizer, VoiceGender, VoiceInformation},
+        SpeechSynthesis::{
+            SpeechSynthesisStream, SpeechSynthesizer, VoiceGender, VoiceInformation,
+        },
     },
+    Storage::Streams::DataReader,
 };
 
 use crate::{Backend, BackendId, Error, Features, Gender, UtteranceId, Voice, CALLBACKS};
@@ -138,6 +141,20 @@ impl WinRt {
             voice: SpeechSynthesizer::DefaultVoice()?,
         })
     }
+
+    fn create_synthesis_stream(&mut self, text: &str) -> Result<SpeechSynthesisStream, Error> {
+        self.synth.Options()?.SetSpeakingRate(self.rate.into())?;
+        self.synth.Options()?.SetAudioPitch(self.pitch.into())?;
+        self.synth.Options()?.SetAudioVolume(self.volume.into())?;
+
+        self.synth.SetVoice(&self.voice)?;
+        let stream = self
+            .synth
+            .SynthesizeTextToStreamAsync(&text.into())?
+            .get()?;
+
+        Ok(stream)
+    }
 }
 
 impl Backend for WinRt {
@@ -155,6 +172,7 @@ impl Backend for WinRt {
             voice: true,
             get_voice: true,
             utterance_callbacks: true,
+            synthesize: true,
         }
     }
 
@@ -189,18 +207,12 @@ impl Backend for WinRt {
             }
         }
         if no_utterances {
-            self.synth.Options()?.SetSpeakingRate(self.rate.into())?;
-            self.synth.Options()?.SetAudioPitch(self.pitch.into())?;
-            self.synth.Options()?.SetAudioVolume(self.volume.into())?;
-            self.synth.SetVoice(&self.voice)?;
-            let stream = self
-                .synth
-                .SynthesizeTextToStreamAsync(&text.into())?
-                .get()?;
-            let content_type = stream.ContentType()?;
-            let source = MediaSource::CreateFromStream(&stream, &content_type)?;
-            self.player.SetSource(&source)?;
+            let stream = self.create_synthesis_stream(text)?;
+
+            let media_source = MediaSource::CreateFromStream(&stream, &stream.ContentType()?)?;
+            self.player.SetSource(&media_source)?;
             self.player.Play()?;
+
             let mut callbacks = CALLBACKS.lock().unwrap();
             let callbacks = callbacks.get_mut(&self.id).unwrap();
             if let Some(callback) = callbacks.utterance_begin.as_mut() {
@@ -208,6 +220,18 @@ impl Backend for WinRt {
             }
         }
         Ok(Some(utterance_id))
+    }
+
+    fn synthesize(&mut self, text: &str) -> Result<Vec<u8>, Error> {
+        let stream = self.create_synthesis_stream(text)?;
+
+        let size = stream.Size()?;
+        let data_reader = DataReader::CreateDataReader(&stream.GetInputStreamAt(0)?)?;
+        let mut bytes = vec![0; size as usize];
+        data_reader.LoadAsync(size as u32)?;
+        data_reader.ReadBytes(&mut bytes)?;
+
+        Ok(bytes)
     }
 
     fn stop(&mut self) -> std::result::Result<(), Error> {

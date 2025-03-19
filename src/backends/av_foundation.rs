@@ -158,6 +158,7 @@ impl Backend for AvFoundation {
             voice: true,
             get_voice: false,
             utterance_callbacks: true,
+            synthesize: false,
         }
     }
 
@@ -191,6 +192,10 @@ impl Backend for AvFoundation {
         Ok(Some(UtteranceId::AvFoundation(
             &*utterance as *const _ as usize,
         )))
+    }
+
+    fn synthesize(&mut self, text: &str) -> Result<Vec<u8>, Error> {
+        unimplemented!();
     }
 
     fn stop(&mut self) -> Result<(), Error> {

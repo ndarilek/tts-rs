@@ -59,6 +59,7 @@ impl Backend for Web {
             voice: true,
             get_voice: true,
             utterance_callbacks: true,
+            synthesize: false,
         }
     }
 
@@ -119,6 +120,10 @@ impl Backend for Web {
         } else {
             Err(Error::NoneError)
         }
+    }
+
+    fn synthesize(&mut self, text: &str) -> Result<Vec<u8>, Error> {
+        unimplemented!();
     }
 
     fn stop(&mut self) -> Result<(), Error> {
