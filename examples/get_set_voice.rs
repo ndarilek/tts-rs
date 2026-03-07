@@ -50,8 +50,8 @@ fn main() -> Result<(), Error> {
 
     #[cfg(target_os = "macos")]
     {
-        let run_loop = objc2_foundation::NSRunLoop::currentRunLoop() ;
-        let date =  objc2_foundation::NSDate::distantFuture();
+        let run_loop = objc2_foundation::NSRunLoop::currentRunLoop();
+        let date = objc2_foundation::NSDate::distantFuture();
         unsafe { run_loop.runMode_beforeDate(objc2_foundation::NSDefaultRunLoopMode, &date) };
         run_loop.runUntilDate(&date);
     }

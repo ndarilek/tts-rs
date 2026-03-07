@@ -142,10 +142,10 @@ impl AvFoundation {
         Ok(rv)
     }
 
-     fn default_voice(&self) -> Result<Voice, Error> {
-         unsafe { AVSpeechSynthesisVoice::voiceWithLanguage(None) }
-         .map(Voice::from_av_speech_synthesis_voice)
-         .ok_or(Error::OperationFailed)
+    fn default_voice(&self) -> Result<Voice, Error> {
+        unsafe { AVSpeechSynthesisVoice::voiceWithLanguage(None) }
+            .map(Voice::from_av_speech_synthesis_voice)
+            .ok_or(Error::OperationFailed)
     }
 }
 
@@ -295,8 +295,10 @@ impl Backend for AvFoundation {
     }
 
     fn set_voice(&mut self, voice: &Voice) -> Result<(), Error> {
-        let voice = unsafe {AVSpeechSynthesisVoice::voiceWithIdentifier(&NSString::from_str(&voice.id()))}
-            .ok_or(Error::OperationFailed)?;
+        let voice = unsafe {
+            AVSpeechSynthesisVoice::voiceWithIdentifier(&NSString::from_str(&voice.id()))
+        }
+        .ok_or(Error::OperationFailed)?;
         self.voice = Some(voice);
         Ok(())
     }
@@ -304,9 +306,9 @@ impl Backend for AvFoundation {
 
 impl Voice {
     pub fn from_av_speech_synthesis_voice(voice: Retained<AVSpeechSynthesisVoice>) -> Voice {
-        let id = unsafe {voice.identifier()};
-        let name = unsafe {voice.name()};
-        let gender = unsafe {voice.gender()};
+        let id = unsafe { voice.identifier() };
+        let name = unsafe { voice.name() };
+        let gender = unsafe { voice.gender() };
         let gender = match gender {
             AVSpeechSynthesisVoiceGender::Male => Some(Gender::Male),
             AVSpeechSynthesisVoiceGender::Female => Some(Gender::Female),
@@ -315,7 +317,7 @@ impl Voice {
 
         // Apple documents that the language is a BCP 47 language tag, which is compatible with the LanguageTag crate
         // https://developer.apple.com/documentation/avfaudio/avspeechsynthesisvoice/language
-        let language = unsafe {voice.language()}.to_string();
+        let language = unsafe { voice.language() }.to_string();
         let language = LanguageTag::parse_and_normalize(&language).unwrap();
         Voice {
             id: id.to_string(),
