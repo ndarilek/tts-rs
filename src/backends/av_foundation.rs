@@ -6,9 +6,9 @@ use std::{
     },
 };
 
-use objc2::rc::Retained;
-use objc2::runtime::ProtocolObject;
-use objc2::{AllocAnyThread, DefinedClass, define_class, msg_send};
+use objc2::{
+    AllocAnyThread, DefinedClass, define_class, msg_send, rc::Retained, runtime::ProtocolObject,
+};
 use objc2_avf_audio::{
     AVSpeechBoundary, AVSpeechSynthesisVoice, AVSpeechSynthesisVoiceGender, AVSpeechSynthesizer,
     AVSpeechSynthesizerDelegate, AVSpeechUtterance,
