@@ -10,14 +10,15 @@
 //!  * * Android
 //!  * * WebAssembly
 
-use std::fmt;
-use std::rc::Rc;
-#[cfg(windows)]
-use std::string::FromUtf16Error;
 use std::{
     boxed::Box,
+    fmt,
+    rc::Rc,
     sync::{Arc, Mutex, RwLock},
 };
+
+#[cfg(windows)]
+use std::string::FromUtf16Error;
 
 use dyn_clonable::*;
 pub use oxilangtag::LanguageTag;

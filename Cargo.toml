@@ -7,7 +7,7 @@ description = "High-level Text-To-Speech (TTS) interface"
 documentation = "https://docs.rs/tts"
 license = "MIT"
 exclude = ["*.cfg", "*.yml"]
-edition = "2021"
+edition = "2024"
 
 [lib]
 crate-type = ["lib", "cdylib", "staticlib"]

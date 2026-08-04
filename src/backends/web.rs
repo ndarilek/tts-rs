@@ -1,13 +1,13 @@
 #[cfg(target_arch = "wasm32")]
 use std::sync::{
-    atomic::{AtomicU64, Ordering},
     Arc, Mutex,
+    atomic::{AtomicU64, Ordering},
 };
 
 use log::{info, trace};
 use oxilangtag::LanguageTag;
-use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
+use wasm_bindgen::prelude::*;
 use web_sys::{
     SpeechSynthesisErrorCode, SpeechSynthesisErrorEvent, SpeechSynthesisEvent,
     SpeechSynthesisUtterance, SpeechSynthesisVoice,

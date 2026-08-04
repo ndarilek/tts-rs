@@ -3,7 +3,7 @@
 #![allow(deprecated)]
 use log::{info, trace};
 use objc2::rc::Retained;
-use objc2::{define_class, msg_send, DefinedClass, MainThreadMarker, MainThreadOnly};
+use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send};
 use objc2_app_kit::{NSSpeechSynthesizer, NSSpeechSynthesizerDelegate};
 use objc2_foundation::{NSMutableArray, NSObject, NSObjectProtocol, NSString};
 

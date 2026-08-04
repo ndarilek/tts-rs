@@ -1,12 +1,12 @@
 use std::sync::{
-    atomic::{AtomicU64, Ordering},
     Arc, Mutex,
+    atomic::{AtomicU64, Ordering},
 };
 
 use log::{info, trace};
 use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
-use objc2::{define_class, msg_send, AllocAnyThread, DefinedClass};
+use objc2::{AllocAnyThread, DefinedClass, define_class, msg_send};
 use objc2_avf_audio::{
     AVSpeechBoundary, AVSpeechSynthesisVoice, AVSpeechSynthesisVoiceGender, AVSpeechSynthesizer,
     AVSpeechSynthesizerDelegate, AVSpeechUtterance,

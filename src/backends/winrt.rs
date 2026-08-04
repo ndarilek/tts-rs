@@ -2,21 +2,21 @@
 use std::{
     collections::VecDeque,
     sync::{
-        atomic::{AtomicU64, Ordering},
         Arc, Mutex,
+        atomic::{AtomicU64, Ordering},
     },
 };
 
 use log::{info, trace};
 use oxilangtag::LanguageTag;
 use windows::{
-    core::Ref,
     Foundation::TypedEventHandler,
     Media::{
         Core::MediaSource,
         Playback::{MediaPlayer, MediaPlayerAudioCategory},
         SpeechSynthesis::{SpeechSynthesizer, VoiceGender, VoiceInformation},
     },
+    core::Ref,
 };
 
 use crate::{Backend, BackendId, Callbacks, Error, Features, Gender, UtteranceId, Voice};

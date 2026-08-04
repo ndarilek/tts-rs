@@ -1,19 +1,18 @@
 #[cfg(target_os = "android")]
 use std::{
-    ffi::{CStr, CString},
     os::raw::c_void,
     sync::{
-        atomic::{AtomicU64, Ordering},
         Arc, Mutex, OnceLock, RwLock,
+        atomic::{AtomicU64, Ordering},
     },
     thread,
     time::{Duration, Instant},
 };
 
 use jni::{
-    objects::{GlobalRef, JObject, JString},
-    sys::{jfloat, jint, JNI_VERSION_1_6},
     JNIEnv, JavaVM,
+    objects::{GlobalRef, JObject, JString},
+    sys::{JNI_VERSION_1_6, jfloat, jint},
 };
 use log::{error, info};
 
@@ -42,7 +41,7 @@ fn with_callbacks(backend_id: u64, f: impl FnOnce(&mut Callbacks)) {
 }
 
 #[allow(non_snake_case)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "system" fn JNI_OnLoad(vm: JavaVM, _: *mut c_void) -> jint {
     let mut env = vm.get_env().expect("Cannot get reference to the JNIEnv");
     let b = env
@@ -55,7 +54,7 @@ pub extern "system" fn JNI_OnLoad(vm: JavaVM, _: *mut c_void) -> jint {
     JNI_VERSION_1_6
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[allow(non_snake_case)]
 pub unsafe extern "C" fn Java_rs_tts_Bridge_onInit(mut env: JNIEnv, obj: JObject, status: jint) {
     let id = env
@@ -70,7 +69,7 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onInit(mut env: JNIEnv, obj: JObject
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[allow(non_snake_case)]
 pub unsafe extern "C" fn Java_rs_tts_Bridge_onStart(
     mut env: JNIEnv,
@@ -82,19 +81,16 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onStart(
         .expect("Failed to get backend ID")
         .i()
         .expect("Failed to cast to int") as u64;
-    let utterance_id = CString::from(CStr::from_ptr(
-        env.get_string(&utterance_id).unwrap().as_ptr(),
-    ))
-    .into_string()
-    .unwrap();
-    let utterance_id = utterance_id.parse::<u64>().unwrap();
+    let utterance_id = String::from(env.get_string(&utterance_id).unwrap())
+        .parse::<u64>()
+        .unwrap();
     let utterance_id = UtteranceId::Android(utterance_id);
     with_callbacks(backend_id, |callbacks| {
         callbacks.utterance_begin(utterance_id)
     });
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[allow(non_snake_case)]
 pub unsafe extern "C" fn Java_rs_tts_Bridge_onStop(
     mut env: JNIEnv,
@@ -106,19 +102,16 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onStop(
         .expect("Failed to get backend ID")
         .i()
         .expect("Failed to cast to int") as u64;
-    let utterance_id = CString::from(CStr::from_ptr(
-        env.get_string(&utterance_id).unwrap().as_ptr(),
-    ))
-    .into_string()
-    .unwrap();
-    let utterance_id = utterance_id.parse::<u64>().unwrap();
+    let utterance_id = String::from(env.get_string(&utterance_id).unwrap())
+        .parse::<u64>()
+        .unwrap();
     let utterance_id = UtteranceId::Android(utterance_id);
     with_callbacks(backend_id, |callbacks| {
         callbacks.utterance_end(utterance_id)
     });
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[allow(non_snake_case)]
 pub unsafe extern "C" fn Java_rs_tts_Bridge_onDone(
     mut env: JNIEnv,
@@ -130,19 +123,16 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onDone(
         .expect("Failed to get backend ID")
         .i()
         .expect("Failed to cast to int") as u64;
-    let utterance_id = CString::from(CStr::from_ptr(
-        env.get_string(&utterance_id).unwrap().as_ptr(),
-    ))
-    .into_string()
-    .unwrap();
-    let utterance_id = utterance_id.parse::<u64>().unwrap();
+    let utterance_id = String::from(env.get_string(&utterance_id).unwrap())
+        .parse::<u64>()
+        .unwrap();
     let utterance_id = UtteranceId::Android(utterance_id);
     with_callbacks(backend_id, |callbacks| {
         callbacks.utterance_stop(utterance_id)
     });
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[allow(non_snake_case)]
 pub unsafe extern "C" fn Java_rs_tts_Bridge_onError(
     mut env: JNIEnv,
@@ -154,12 +144,9 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onError(
         .expect("Failed to get backend ID")
         .i()
         .expect("Failed to cast to int") as u64;
-    let utterance_id = CString::from(CStr::from_ptr(
-        env.get_string(&utterance_id).unwrap().as_ptr(),
-    ))
-    .into_string()
-    .unwrap();
-    let utterance_id = utterance_id.parse::<u64>().unwrap();
+    let utterance_id = String::from(env.get_string(&utterance_id).unwrap())
+        .parse::<u64>()
+        .unwrap();
     let utterance_id = UtteranceId::Android(utterance_id);
     with_callbacks(backend_id, |callbacks| {
         callbacks.utterance_end(utterance_id)
