@@ -7,9 +7,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-console_log = "1"
-log = "0.4"
 seed = "0.10"
+tracing-wasm = "0.2"
 tts = { path = "../.." }
 uuid = { version = "*", features = ["js"] }
 # Needed because seed doesn't enable this feature

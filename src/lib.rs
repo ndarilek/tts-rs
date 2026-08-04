@@ -23,6 +23,7 @@ use speech_dispatcher::Error as SpeechDispatcherError;
 use thiserror::Error;
 #[cfg(all(windows, feature = "tolk"))]
 use tolk::Tolk;
+use tracing::{Span, field::Empty, instrument};
 
 mod backends;
 
@@ -152,6 +153,7 @@ impl fmt::Display for Features {
 }
 
 impl Features {
+    #[instrument(level = "trace")]
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -258,18 +260,21 @@ struct Callbacks {
 }
 
 impl Callbacks {
+    #[instrument(level = "trace", skip(self))]
     fn utterance_begin(&mut self, utterance_id: UtteranceId) {
         if let Some(callback) = self.begin.as_mut() {
             callback(utterance_id);
         }
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn utterance_end(&mut self, utterance_id: UtteranceId) {
         if let Some(callback) = self.end.as_mut() {
             callback(utterance_id);
         }
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn utterance_stop(&mut self, utterance_id: UtteranceId) {
         if let Some(callback) = self.stop.as_mut() {
             callback(utterance_id);
@@ -307,6 +312,7 @@ impl Tts {
     /// # Errors
     ///
     /// Returns an error if the backend fails to initialize.
+    #[instrument(level = "info", err)]
     pub fn new(backend: Backends) -> Result<Tts, Error> {
         let callbacks = Arc::new(Mutex::new(Callbacks::default()));
         let backend: Box<dyn Backend> = match backend {
@@ -337,6 +343,7 @@ impl Tts {
     ///
     /// Returns an error if the backend fails to initialize.
     #[allow(clippy::should_implement_trait)]
+    #[instrument(level = "info", err)]
     pub fn default() -> Result<Tts, Error> {
         #[cfg(target_os = "linux")]
         let tts = Tts::new(Backends::SpeechDispatcher);
@@ -364,6 +371,7 @@ impl Tts {
     }
 
     /// Returns the features supported by this TTS engine
+    #[instrument(level = "trace", skip(self))]
     #[must_use]
     pub fn supported_features(&self) -> Features {
         self.backend.read().supported_features()
@@ -374,12 +382,15 @@ impl Tts {
     /// # Errors
     ///
     /// Returns an error if the backend fails to synthesize the text.
+    #[instrument(level = "debug", skip(self, text), fields(text = Empty), err, ret)]
     pub fn speak<S: Into<String>>(
         &mut self,
         text: S,
         interrupt: bool,
     ) -> Result<Option<UtteranceId>, Error> {
-        self.backend.write().speak(text.into().as_str(), interrupt)
+        let text = text.into();
+        Span::current().record("text", text.as_str());
+        self.backend.write().speak(&text, interrupt)
     }
 
     /// Stops current speech.
@@ -388,6 +399,7 @@ impl Tts {
     ///
     /// Returns [`Error::UnsupportedFeature`] if the backend cannot stop speech, or another error
     /// if stopping fails.
+    #[instrument(level = "debug", skip(self))]
     pub fn stop(&mut self) -> Result<&Self, Error> {
         let Features { stop, .. } = self.supported_features();
         if stop {
@@ -399,18 +411,21 @@ impl Tts {
     }
 
     /// Returns the minimum rate for this speech synthesizer.
+    #[instrument(level = "trace", skip(self))]
     #[must_use]
     pub fn min_rate(&self) -> f32 {
         self.backend.read().min_rate()
     }
 
     /// Returns the maximum rate for this speech synthesizer.
+    #[instrument(level = "trace", skip(self))]
     #[must_use]
     pub fn max_rate(&self) -> f32 {
         self.backend.read().max_rate()
     }
 
     /// Returns the normal rate for this speech synthesizer.
+    #[instrument(level = "trace", skip(self))]
     #[must_use]
     pub fn normal_rate(&self) -> f32 {
         self.backend.read().normal_rate()
@@ -422,6 +437,7 @@ impl Tts {
     ///
     /// Returns [`Error::UnsupportedFeature`] if the backend cannot report its rate, or another
     /// error if reading it fails.
+    #[instrument(level = "debug", skip(self), err, ret)]
     pub fn get_rate(&self) -> Result<f32, Error> {
         let Features { rate, .. } = self.supported_features();
         if rate {
@@ -438,6 +454,7 @@ impl Tts {
     /// Returns [`Error::UnsupportedFeature`] if the backend cannot change its rate,
     /// [`Error::OutOfRange`] if the rate is outside the backend's supported range, or another
     /// error if setting it fails.
+    #[instrument(level = "debug", skip(self))]
     pub fn set_rate(&mut self, rate: f32) -> Result<&Self, Error> {
         let Features {
             rate: rate_feature, ..
@@ -456,18 +473,21 @@ impl Tts {
     }
 
     /// Returns the minimum pitch for this speech synthesizer.
+    #[instrument(level = "trace", skip(self))]
     #[must_use]
     pub fn min_pitch(&self) -> f32 {
         self.backend.read().min_pitch()
     }
 
     /// Returns the maximum pitch for this speech synthesizer.
+    #[instrument(level = "trace", skip(self))]
     #[must_use]
     pub fn max_pitch(&self) -> f32 {
         self.backend.read().max_pitch()
     }
 
     /// Returns the normal pitch for this speech synthesizer.
+    #[instrument(level = "trace", skip(self))]
     #[must_use]
     pub fn normal_pitch(&self) -> f32 {
         self.backend.read().normal_pitch()
@@ -479,6 +499,7 @@ impl Tts {
     ///
     /// Returns [`Error::UnsupportedFeature`] if the backend cannot report its pitch, or another
     /// error if reading it fails.
+    #[instrument(level = "debug", skip(self), err, ret)]
     pub fn get_pitch(&self) -> Result<f32, Error> {
         let Features { pitch, .. } = self.supported_features();
         if pitch {
@@ -495,6 +516,7 @@ impl Tts {
     /// Returns [`Error::UnsupportedFeature`] if the backend cannot change its pitch,
     /// [`Error::OutOfRange`] if the pitch is outside the backend's supported range, or another
     /// error if setting it fails.
+    #[instrument(level = "debug", skip(self))]
     pub fn set_pitch(&mut self, pitch: f32) -> Result<&Self, Error> {
         let Features {
             pitch: pitch_feature,
@@ -514,18 +536,21 @@ impl Tts {
     }
 
     /// Returns the minimum volume for this speech synthesizer.
+    #[instrument(level = "trace", skip(self))]
     #[must_use]
     pub fn min_volume(&self) -> f32 {
         self.backend.read().min_volume()
     }
 
     /// Returns the maximum volume for this speech synthesizer.
+    #[instrument(level = "trace", skip(self))]
     #[must_use]
     pub fn max_volume(&self) -> f32 {
         self.backend.read().max_volume()
     }
 
     /// Returns the normal volume for this speech synthesizer.
+    #[instrument(level = "trace", skip(self))]
     #[must_use]
     pub fn normal_volume(&self) -> f32 {
         self.backend.read().normal_volume()
@@ -537,6 +562,7 @@ impl Tts {
     ///
     /// Returns [`Error::UnsupportedFeature`] if the backend cannot report its volume, or another
     /// error if reading it fails.
+    #[instrument(level = "debug", skip(self), err, ret)]
     pub fn get_volume(&self) -> Result<f32, Error> {
         let Features { volume, .. } = self.supported_features();
         if volume {
@@ -553,6 +579,7 @@ impl Tts {
     /// Returns [`Error::UnsupportedFeature`] if the backend cannot change its volume,
     /// [`Error::OutOfRange`] if the volume is outside the backend's supported range, or another
     /// error if setting it fails.
+    #[instrument(level = "debug", skip(self))]
     pub fn set_volume(&mut self, volume: f32) -> Result<&Self, Error> {
         let Features {
             volume: volume_feature,
@@ -577,6 +604,7 @@ impl Tts {
     ///
     /// Returns [`Error::UnsupportedFeature`] if the backend cannot report its speaking state, or
     /// another error if reading it fails.
+    #[instrument(level = "trace", skip(self), err, ret)]
     pub fn is_speaking(&self) -> Result<bool, Error> {
         let Features { is_speaking, .. } = self.supported_features();
         if is_speaking {
@@ -592,6 +620,7 @@ impl Tts {
     ///
     /// Returns [`Error::UnsupportedFeature`] if the backend cannot list voices, or another error
     /// if retrieving them fails.
+    #[instrument(level = "debug", skip(self), err)]
     pub fn voices(&self) -> Result<Vec<Voice>, Error> {
         let Features { voice, .. } = self.supported_features();
         if voice {
@@ -607,6 +636,7 @@ impl Tts {
     ///
     /// Returns [`Error::UnsupportedFeature`] if the backend cannot report its current voice, or
     /// another error if reading it fails.
+    #[instrument(level = "debug", skip(self), err, ret)]
     pub fn voice(&self) -> Result<Option<Voice>, Error> {
         let Features { get_voice, .. } = self.supported_features();
         if get_voice {
@@ -622,6 +652,7 @@ impl Tts {
     ///
     /// Returns [`Error::UnsupportedFeature`] if the backend cannot change voices, or another
     /// error if setting the voice fails.
+    #[instrument(level = "debug", skip(self), err)]
     pub fn set_voice(&mut self, voice: &Voice) -> Result<(), Error> {
         let Features {
             voice: voice_feature,
@@ -639,6 +670,12 @@ impl Tts {
     /// # Errors
     ///
     /// Returns [`Error::UnsupportedFeature`] if the backend does not support utterance callbacks.
+    #[instrument(
+        level = "debug",
+        skip(self, callback),
+        fields(registered = callback.is_some()),
+        err
+    )]
     pub fn on_utterance_begin(
         &self,
         callback: Option<Box<dyn FnMut(UtteranceId)>>,
@@ -660,6 +697,12 @@ impl Tts {
     /// # Errors
     ///
     /// Returns [`Error::UnsupportedFeature`] if the backend does not support utterance callbacks.
+    #[instrument(
+        level = "debug",
+        skip(self, callback),
+        fields(registered = callback.is_some()),
+        err
+    )]
     pub fn on_utterance_end(
         &self,
         callback: Option<Box<dyn FnMut(UtteranceId)>>,
@@ -681,6 +724,12 @@ impl Tts {
     /// # Errors
     ///
     /// Returns [`Error::UnsupportedFeature`] if the backend does not support utterance callbacks.
+    #[instrument(
+        level = "debug",
+        skip(self, callback),
+        fields(registered = callback.is_some()),
+        err
+    )]
     pub fn on_utterance_stop(
         &self,
         callback: Option<Box<dyn FnMut(UtteranceId)>>,
@@ -701,6 +750,7 @@ impl Tts {
      * Returns `true` if a screen reader is available to provide speech.
      */
     #[allow(unreachable_code)]
+    #[instrument(level = "debug", ret)]
     #[must_use]
     pub fn screen_reader_available() -> bool {
         #[cfg(target_os = "windows")]
@@ -732,21 +782,25 @@ pub struct Voice {
 }
 
 impl Voice {
+    #[instrument(level = "trace", skip(self))]
     #[must_use]
     pub fn id(&self) -> String {
         self.id.clone()
     }
 
+    #[instrument(level = "trace", skip(self))]
     #[must_use]
     pub fn name(&self) -> String {
         self.name.clone()
     }
 
+    #[instrument(level = "trace", skip(self))]
     #[must_use]
     pub fn gender(&self) -> Option<Gender> {
         self.gender
     }
 
+    #[instrument(level = "trace", skip(self))]
     #[must_use]
     pub fn language(&self) -> LanguageTag<String> {
         self.language.clone()

@@ -1,9 +1,13 @@
 use std::{thread, time};
 
+use tracing_subscriber::{EnvFilter, fmt::format::FmtSpan};
 use tts::{Error, Tts};
 
 fn main() -> Result<(), Error> {
-    env_logger::init();
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
+        .init();
     let mut tts = Tts::default()?;
     let mut phrase = 1;
     loop {

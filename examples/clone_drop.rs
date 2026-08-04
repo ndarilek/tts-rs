@@ -1,9 +1,13 @@
 use std::io;
 
+use tracing_subscriber::{EnvFilter, fmt::format::FmtSpan};
 use tts::{Error, Features, Tts};
 
 fn main() -> Result<(), Error> {
-    env_logger::init();
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
+        .init();
     let tts = Tts::default()?;
     if Tts::screen_reader_available() {
         println!("A screen reader is available on this platform.");

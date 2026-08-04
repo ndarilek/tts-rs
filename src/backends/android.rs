@@ -16,8 +16,8 @@ use jni::{
     objects::{Global, JClass, JObject, JString},
     sys::{self, JNI_VERSION_1_6, jfloat, jint},
 };
-use log::{error, info};
 use parking_lot::{Mutex, RwLock};
+use tracing::{Span, error, field::Empty, info_span, instrument};
 
 use crate::{Backend, BackendId, Callbacks, Error, Features, UtteranceId, Voice};
 
@@ -26,24 +26,29 @@ static NEXT_BACKEND_ID: AtomicU64 = AtomicU64::new(0);
 static PENDING_INITIALIZATIONS: RwLock<Vec<u64>> = RwLock::new(Vec::new());
 static NEXT_UTTERANCE_ID: AtomicU64 = AtomicU64::new(0);
 // The JNI callbacks below only receive a backend ID from Java, so per-instance
-// callbacks must be reachable through a process-wide registry.
-static CALLBACKS: Mutex<Vec<(u64, Arc<Mutex<Callbacks>>)>> = Mutex::new(Vec::new());
+// callbacks must be reachable through a process-wide registry. Each backend's span rides
+// along so JNI callback executions can be connected back to the backend that spawned them.
+type CallbacksEntry = (u64, Span, Arc<Mutex<Callbacks>>);
+static CALLBACKS: Mutex<Vec<CallbacksEntry>> = Mutex::new(Vec::new());
 
 fn with_callbacks(backend_id: u64, f: impl FnOnce(&mut Callbacks)) {
     // Release the registry lock before the user callback runs.
-    let callbacks = CALLBACKS
-        .lock()
-        .iter()
-        .find(|(id, _)| *id == backend_id)
-        .expect("No callbacks registered for backend")
-        .1
-        .clone();
+    let (span, callbacks) = {
+        let registry = CALLBACKS.lock();
+        let (_, span, callbacks) = registry
+            .iter()
+            .find(|(id, _, _)| *id == backend_id)
+            .expect("No callbacks registered for backend");
+        (span.clone(), callbacks.clone())
+    };
+    let _entered = span.enter();
     let mut callbacks = callbacks.lock();
     f(&mut callbacks);
 }
 
 #[allow(non_snake_case)]
 #[unsafe(no_mangle)]
+#[instrument(level = "debug", skip_all)]
 pub extern "system" fn JNI_OnLoad(vm: *mut sys::JavaVM, _: *mut c_void) -> jint {
     let vm = unsafe { JavaVM::from_raw(vm) };
     vm.attach_current_thread(|env| -> jni::errors::Result<()> {
@@ -58,6 +63,7 @@ pub extern "system" fn JNI_OnLoad(vm: *mut sys::JavaVM, _: *mut c_void) -> jint 
 
 #[unsafe(no_mangle)]
 #[allow(non_snake_case)]
+#[instrument(level = "debug", skip(env, obj), fields(backend_id = Empty))]
 pub unsafe extern "C" fn Java_rs_tts_Bridge_onInit(
     mut env: EnvUnowned,
     obj: JObject,
@@ -68,6 +74,7 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onInit(
             .get_field(&obj, jni_str!("backendId"), jni_sig!(int))?
             .i()?;
         let id = u64::try_from(id).expect("Backend ID must be non-negative");
+        Span::current().record("backend_id", id);
         let mut pending = PENDING_INITIALIZATIONS.write();
         pending.retain(|v| *v != id);
         if status != 0 {
@@ -80,6 +87,7 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onInit(
 
 #[unsafe(no_mangle)]
 #[allow(non_snake_case)]
+#[instrument(level = "trace", skip_all)]
 pub unsafe extern "C" fn Java_rs_tts_Bridge_onStart(
     mut env: EnvUnowned,
     obj: JObject,
@@ -102,6 +110,7 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onStart(
 
 #[unsafe(no_mangle)]
 #[allow(non_snake_case)]
+#[instrument(level = "trace", skip_all)]
 pub unsafe extern "C" fn Java_rs_tts_Bridge_onStop(
     mut env: EnvUnowned,
     obj: JObject,
@@ -124,6 +133,7 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onStop(
 
 #[unsafe(no_mangle)]
 #[allow(non_snake_case)]
+#[instrument(level = "trace", skip_all)]
 pub unsafe extern "C" fn Java_rs_tts_Bridge_onDone(
     mut env: EnvUnowned,
     obj: JObject,
@@ -146,6 +156,7 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onDone(
 
 #[unsafe(no_mangle)]
 #[allow(non_snake_case)]
+#[instrument(level = "trace", skip_all)]
 pub unsafe extern "C" fn Java_rs_tts_Bridge_onError(
     mut env: EnvUnowned,
     obj: JObject,
@@ -175,9 +186,9 @@ pub(crate) struct Android {
 }
 
 impl Android {
+    #[instrument(level = "info", skip(callbacks), err)]
     pub(crate) fn new(callbacks: Arc<Mutex<Callbacks>>) -> Result<Self, Error> {
         const MAX_WAIT_TIME: Duration = Duration::from_millis(500);
-        info!("Initializing Android backend");
         let bid = NEXT_BACKEND_ID.fetch_add(1, Ordering::Relaxed);
         let id = BackendId::Android(bid);
         let tts = Self::vm().attach_current_thread(|env| -> Result<_, Error> {
@@ -217,7 +228,9 @@ impl Android {
             }
             thread::sleep(Duration::from_millis(5));
         }
-        CALLBACKS.lock().push((bid, callbacks));
+        CALLBACKS
+            .lock()
+            .push((bid, info_span!("android", backend_id = bid), callbacks));
         Ok(Self {
             id,
             tts: Arc::new(tts),
@@ -226,6 +239,7 @@ impl Android {
         })
     }
 
+    #[instrument(level = "trace")]
     fn vm() -> JavaVM {
         let ctx = ndk_context::android_context();
         unsafe { JavaVM::from_raw(ctx.vm().cast()) }
@@ -233,10 +247,12 @@ impl Android {
 }
 
 impl Backend for Android {
+    #[instrument(level = "trace", skip(self))]
     fn id(&self) -> Option<BackendId> {
         Some(self.id)
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn supported_features(&self) -> Features {
         Features {
             stop: true,
@@ -250,6 +266,7 @@ impl Backend for Android {
         }
     }
 
+    #[instrument(level = "debug", skip(self), err)]
     fn speak(&mut self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error> {
         let uid = NEXT_UTTERANCE_ID.fetch_add(1, Ordering::Relaxed);
         let id = UtteranceId::Android(uid);
@@ -277,6 +294,7 @@ impl Backend for Android {
         }
     }
 
+    #[instrument(level = "debug", skip(self), err)]
     fn stop(&mut self) -> Result<(), Error> {
         let rv = Self::vm().attach_current_thread(|env| -> Result<jint, Error> {
             let rv = env.call_method(self.tts.as_obj(), jni_str!("stop"), jni_sig!("()I"), &[])?;
@@ -289,22 +307,27 @@ impl Backend for Android {
         }
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn min_rate(&self) -> f32 {
         0.1
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn max_rate(&self) -> f32 {
         10.
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn normal_rate(&self) -> f32 {
         1.
     }
 
+    #[instrument(level = "debug", skip(self), err, ret)]
     fn get_rate(&self) -> Result<f32, Error> {
         Ok(self.rate)
     }
 
+    #[instrument(level = "debug", skip(self), err)]
     fn set_rate(&mut self, rate: f32) -> Result<(), Error> {
         let rate = rate as jfloat;
         let rv = Self::vm().attach_current_thread(|env| -> Result<jint, Error> {
@@ -324,22 +347,27 @@ impl Backend for Android {
         }
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn min_pitch(&self) -> f32 {
         0.1
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn max_pitch(&self) -> f32 {
         2.
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn normal_pitch(&self) -> f32 {
         1.
     }
 
+    #[instrument(level = "debug", skip(self), err, ret)]
     fn get_pitch(&self) -> Result<f32, Error> {
         Ok(self.pitch)
     }
 
+    #[instrument(level = "debug", skip(self), err)]
     fn set_pitch(&mut self, pitch: f32) -> Result<(), Error> {
         let pitch = pitch as jfloat;
         let rv = Self::vm().attach_current_thread(|env| -> Result<jint, Error> {
@@ -359,26 +387,32 @@ impl Backend for Android {
         }
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn min_volume(&self) -> f32 {
         todo!()
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn max_volume(&self) -> f32 {
         todo!()
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn normal_volume(&self) -> f32 {
         todo!()
     }
 
+    #[instrument(level = "debug", skip(self), err, ret)]
     fn get_volume(&self) -> Result<f32, Error> {
         todo!()
     }
 
+    #[instrument(level = "debug", skip(self, _volume), err)]
     fn set_volume(&mut self, _volume: f32) -> Result<(), Error> {
         todo!()
     }
 
+    #[instrument(level = "trace", skip(self), err, ret)]
     fn is_speaking(&self) -> Result<bool, Error> {
         Self::vm().attach_current_thread(|env| -> Result<bool, Error> {
             let rv = env.call_method(
@@ -391,14 +425,17 @@ impl Backend for Android {
         })
     }
 
+    #[instrument(level = "debug", skip(self), err, ret)]
     fn voice(&self) -> Result<Option<Voice>, Error> {
         unimplemented!()
     }
 
+    #[instrument(level = "debug", skip(self), err)]
     fn voices(&self) -> Result<Vec<Voice>, Error> {
         unimplemented!()
     }
 
+    #[instrument(level = "debug", skip(self, _voice), err)]
     fn set_voice(&mut self, _voice: &Voice) -> Result<(), Error> {
         unimplemented!()
     }
@@ -407,6 +444,6 @@ impl Backend for Android {
 impl Drop for Android {
     fn drop(&mut self) {
         let BackendId::Android(bid) = self.id;
-        CALLBACKS.lock().retain(|(id, _)| *id != bid);
+        CALLBACKS.lock().retain(|(id, _, _)| *id != bid);
     }
 }

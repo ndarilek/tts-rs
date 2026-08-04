@@ -1,10 +1,10 @@
 #[cfg(target_os = "linux")]
 use std::sync::Arc;
 
-use log::{info, trace};
 use oxilangtag::LanguageTag;
 use parking_lot::Mutex;
 use speech_dispatcher::{Connection, Mode, Priority, Punctuation};
+use tracing::{info_span, instrument, trace};
 
 use crate::{Backend, BackendId, Callbacks, Error, Features, UtteranceId, Voice};
 
@@ -15,9 +15,12 @@ pub(crate) struct SpeechDispatcher {
 }
 
 impl SpeechDispatcher {
+    #[instrument(level = "info", skip(callbacks), err)]
     pub(crate) fn new(callbacks: &Arc<Mutex<Callbacks>>) -> std::result::Result<Self, Error> {
-        info!("Initializing SpeechDispatcher backend");
         let connection = Connection::open("tts", "tts", "tts", Mode::Threaded)?;
+        // Speech Dispatcher notifications arrive on its own thread; entering this span there
+        // connects them back to the backend that registered them.
+        let span = info_span!("speech_dispatcher", client_id = connection.client_id());
         let sd = SpeechDispatcher {
             connection,
             speaking: Arc::new(Mutex::new(false)),
@@ -25,7 +28,9 @@ impl SpeechDispatcher {
         sd.connection.on_begin(Some(Box::new({
             let speaking = sd.speaking.clone();
             let callbacks = callbacks.clone();
+            let span = span.clone();
             move |msg_id, _client_id| {
+                let _entered = span.enter();
                 *speaking.lock() = true;
                 callbacks
                     .lock()
@@ -35,7 +40,9 @@ impl SpeechDispatcher {
         sd.connection.on_end(Some(Box::new({
             let speaking = sd.speaking.clone();
             let callbacks = callbacks.clone();
+            let span = span.clone();
             move |msg_id, _client_id| {
+                let _entered = span.enter();
                 *speaking.lock() = false;
                 callbacks
                     .lock()
@@ -45,7 +52,9 @@ impl SpeechDispatcher {
         sd.connection.on_cancel(Some(Box::new({
             let speaking = sd.speaking.clone();
             let callbacks = callbacks.clone();
+            let span = span.clone();
             move |msg_id, _client_id| {
+                let _entered = span.enter();
                 *speaking.lock() = false;
                 callbacks
                     .lock()
@@ -54,13 +63,19 @@ impl SpeechDispatcher {
         })));
         sd.connection.on_pause(Some(Box::new({
             let speaking = sd.speaking.clone();
-            move |_msg_id, _client_id| {
+            let span = span.clone();
+            move |msg_id, _client_id| {
+                let _entered = span.enter();
+                trace!(msg_id, "Speech paused");
                 *speaking.lock() = false;
             }
         })));
         sd.connection.on_resume(Some(Box::new({
             let speaking = sd.speaking.clone();
-            move |_msg_id, _client_id| {
+            let span = span.clone();
+            move |msg_id, _client_id| {
+                let _entered = span.enter();
+                trace!(msg_id, "Speech resumed");
                 *speaking.lock() = true;
             }
         })));
@@ -69,10 +84,12 @@ impl SpeechDispatcher {
 }
 
 impl Backend for SpeechDispatcher {
+    #[instrument(level = "trace", skip(self))]
     fn id(&self) -> Option<BackendId> {
         Some(BackendId::SpeechDispatcher(self.connection.client_id()))
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn supported_features(&self) -> Features {
         Features {
             stop: true,
@@ -86,8 +103,8 @@ impl Backend for SpeechDispatcher {
         }
     }
 
+    #[instrument(level = "debug", skip(self), err)]
     fn speak(&mut self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error> {
-        trace!("speak({text}, {interrupt})");
         if interrupt {
             self.stop()?;
         }
@@ -106,88 +123,105 @@ impl Backend for SpeechDispatcher {
         }
     }
 
+    #[instrument(level = "debug", skip(self), err)]
     fn stop(&mut self) -> Result<(), Error> {
-        trace!("stop()");
         self.connection.cancel()?;
         Ok(())
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn min_rate(&self) -> f32 {
         -100.
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn max_rate(&self) -> f32 {
         100.
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn normal_rate(&self) -> f32 {
         0.
     }
 
     // Rates are in [-100, 100], well within both types' exact ranges.
     #[allow(clippy::cast_precision_loss)]
+    #[instrument(level = "debug", skip(self), err, ret)]
     fn get_rate(&self) -> Result<f32, Error> {
         Ok(self.connection.get_voice_rate() as f32)
     }
 
     #[allow(clippy::cast_possible_truncation)]
+    #[instrument(level = "debug", skip(self), err)]
     fn set_rate(&mut self, rate: f32) -> Result<(), Error> {
         self.connection.set_voice_rate(rate as i32)?;
         Ok(())
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn min_pitch(&self) -> f32 {
         -100.
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn max_pitch(&self) -> f32 {
         100.
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn normal_pitch(&self) -> f32 {
         0.
     }
 
     // Pitches are in [-100, 100], well within both types' exact ranges.
     #[allow(clippy::cast_precision_loss)]
+    #[instrument(level = "debug", skip(self), err, ret)]
     fn get_pitch(&self) -> Result<f32, Error> {
         Ok(self.connection.get_voice_pitch() as f32)
     }
 
     #[allow(clippy::cast_possible_truncation)]
+    #[instrument(level = "debug", skip(self), err)]
     fn set_pitch(&mut self, pitch: f32) -> Result<(), Error> {
         self.connection.set_voice_pitch(pitch as i32)?;
         Ok(())
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn min_volume(&self) -> f32 {
         -100.
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn max_volume(&self) -> f32 {
         100.
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn normal_volume(&self) -> f32 {
         100.
     }
 
     // Volumes are in [-100, 100], well within both types' exact ranges.
     #[allow(clippy::cast_precision_loss)]
+    #[instrument(level = "debug", skip(self), err, ret)]
     fn get_volume(&self) -> Result<f32, Error> {
         Ok(self.connection.get_volume() as f32)
     }
 
     #[allow(clippy::cast_possible_truncation)]
+    #[instrument(level = "debug", skip(self), err)]
     fn set_volume(&mut self, volume: f32) -> Result<(), Error> {
         self.connection.set_volume(volume as i32)?;
         Ok(())
     }
 
+    #[instrument(level = "trace", skip(self), err, ret)]
     fn is_speaking(&self) -> Result<bool, Error> {
         Ok(*self.speaking.lock())
     }
 
+    #[instrument(level = "debug", skip(self), err)]
     fn voices(&self) -> Result<Vec<Voice>, Error> {
         let rv = self
             .connection
@@ -204,10 +238,12 @@ impl Backend for SpeechDispatcher {
         Ok(rv)
     }
 
+    #[instrument(level = "debug", skip(self), err)]
     fn voice(&self) -> Result<Option<Voice>, Error> {
         unimplemented!()
     }
 
+    #[instrument(level = "debug", skip(self), err)]
     fn set_voice(&mut self, voice: &Voice) -> Result<(), Error> {
         for v in self.connection.list_synthesis_voices()? {
             if v.name == voice.name {

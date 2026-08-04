@@ -152,6 +152,6 @@ fn view(model: &Model) -> Node<Msg> {
 }
 
 fn main() {
-    console_log::init().expect("Error initializing logger");
+    tracing_wasm::set_as_global_default();
     App::start("app", init, update, view);
 }

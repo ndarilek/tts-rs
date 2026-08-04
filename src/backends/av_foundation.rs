@@ -6,7 +6,6 @@ use std::{
     },
 };
 
-use log::{info, trace};
 use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
 use objc2::{AllocAnyThread, DefinedClass, define_class, msg_send};
@@ -17,12 +16,16 @@ use objc2_avf_audio::{
 use objc2_foundation::{NSObject, NSObjectProtocol, NSString};
 use oxilangtag::LanguageTag;
 use parking_lot::Mutex;
+use tracing::{Span, info_span, instrument, trace};
 
 use crate::{Backend, BackendId, Callbacks, Error, Features, Gender, UtteranceId, Voice};
 
 #[derive(Debug)]
 struct Ivars {
     callbacks: Arc<Mutex<Callbacks>>,
+    // Delegate methods fire on AVFoundation's own threads; entering this span there connects
+    // them back to the backend that created the synthesizer.
+    span: Span,
 }
 
 define_class!(
@@ -41,10 +44,11 @@ define_class!(
             _synthesizer: &AVSpeechSynthesizer,
             utterance: &AVSpeechUtterance,
         ) {
-            trace!("speech_synthesizer_did_start_speech_utterance");
+            let ivars = self.ivars();
+            let _entered = ivars.span.enter();
             let utterance_id = UtteranceId::AvFoundation(ptr::from_ref(utterance) as usize);
-            self.ivars().callbacks.lock().utterance_begin(utterance_id);
-            trace!("Done speech_synthesizer_did_start_speech_utterance");
+            trace!(?utterance_id, "Utterance started");
+            ivars.callbacks.lock().utterance_begin(utterance_id);
         }
 
         #[unsafe(method(speechSynthesizer:didFinishSpeechUtterance:))]
@@ -53,10 +57,11 @@ define_class!(
             _synthesizer: &AVSpeechSynthesizer,
             utterance: &AVSpeechUtterance,
         ) {
-            trace!("speech_synthesizer_did_finish_speech_utterance");
+            let ivars = self.ivars();
+            let _entered = ivars.span.enter();
             let utterance_id = UtteranceId::AvFoundation(ptr::from_ref(utterance) as usize);
-            self.ivars().callbacks.lock().utterance_end(utterance_id);
-            trace!("Done speech_synthesizer_did_finish_speech_utterance");
+            trace!(?utterance_id, "Utterance finished");
+            ivars.callbacks.lock().utterance_end(utterance_id);
         }
 
         #[unsafe(method(speechSynthesizer:didCancelSpeechUtterance:))]
@@ -65,10 +70,11 @@ define_class!(
             _synthesizer: &AVSpeechSynthesizer,
             utterance: &AVSpeechUtterance,
         ) {
-            trace!("speech_synthesizer_did_cancel_speech_utterance");
+            let ivars = self.ivars();
+            let _entered = ivars.span.enter();
             let utterance_id = UtteranceId::AvFoundation(ptr::from_ref(utterance) as usize);
-            self.ivars().callbacks.lock().utterance_stop(utterance_id);
-            trace!("Done speech_synthesizer_did_cancel_speech_utterance");
+            trace!(?utterance_id, "Utterance canceled");
+            ivars.callbacks.lock().utterance_stop(utterance_id);
         }
     }
 );
@@ -90,19 +96,17 @@ static NEXT_BACKEND_ID: AtomicU64 = AtomicU64::new(0);
 impl AvFoundation {
     // Construction can't fail here, but backend constructors share a fallible signature.
     #[allow(clippy::unnecessary_wraps)]
+    #[instrument(level = "info", skip(callbacks), err)]
     pub(crate) fn new(callbacks: Arc<Mutex<Callbacks>>) -> Result<Self, Error> {
-        info!("Initializing AVFoundation backend");
-
-        trace!("Creating synth");
+        let id = BackendId::AvFoundation(NEXT_BACKEND_ID.fetch_add(1, Ordering::Relaxed));
+        let span = info_span!("av_foundation", backend_id = ?id);
         let synth = unsafe { AVSpeechSynthesizer::new() };
-        trace!("Creating delegate");
-        let delegate = Delegate::alloc().set_ivars(Ivars { callbacks });
+        let delegate = Delegate::alloc().set_ivars(Ivars { callbacks, span });
         let delegate: Retained<Delegate> = unsafe { msg_send![super(delegate), init] };
-        trace!("Assigning delegate");
         unsafe { synth.setDelegate(Some(ProtocolObject::from_ref(&*delegate))) };
 
         Ok(AvFoundation {
-            id: BackendId::AvFoundation(NEXT_BACKEND_ID.fetch_add(1, Ordering::Relaxed)),
+            id,
             _delegate: delegate,
             synth,
             rate: 0.5,
@@ -114,10 +118,12 @@ impl AvFoundation {
 }
 
 impl Backend for AvFoundation {
+    #[instrument(level = "trace", skip(self))]
     fn id(&self) -> Option<BackendId> {
         Some(self.id)
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn supported_features(&self) -> Features {
         Features {
             stop: true,
@@ -131,22 +137,22 @@ impl Backend for AvFoundation {
         }
     }
 
+    #[instrument(
+        level = "debug",
+        skip(self),
+        fields(rate = self.rate, volume = self.volume, pitch = self.pitch),
+        err
+    )]
     fn speak(&mut self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error> {
-        trace!("speak({text}, {interrupt})");
         if interrupt && self.is_speaking()? {
             self.stop()?;
         }
         let utterance;
         unsafe {
-            trace!("Creating utterance string");
             let str = NSString::from_str(text);
-            trace!("Creating utterance");
             utterance = AVSpeechUtterance::initWithString(AVSpeechUtterance::alloc(), &str);
-            trace!("Setting rate to {}", self.rate);
             utterance.setRate(self.rate);
-            trace!("Setting volume to {}", self.volume);
             utterance.setVolume(self.volume);
-            trace!("Setting pitch to {}", self.pitch);
             utterance.setPitchMultiplier(self.pitch);
             if let Some(voice) = &self.voice {
                 let vid = NSString::from_str(&voice.id());
@@ -154,17 +160,15 @@ impl Backend for AvFoundation {
                     .ok_or(Error::OperationFailed)?;
                 utterance.setVoice(Some(&v));
             }
-            trace!("Enqueuing");
             self.synth.speakUtterance(&utterance);
-            trace!("Done queuing");
         }
         Ok(Some(UtteranceId::AvFoundation(
             ptr::from_ref(&*utterance) as usize
         )))
     }
 
+    #[instrument(level = "debug", skip(self), err)]
     fn stop(&mut self) -> Result<(), Error> {
-        trace!("stop()");
         unsafe {
             self.synth
                 .stopSpeakingAtBoundary(AVSpeechBoundary::Immediate);
@@ -172,82 +176,96 @@ impl Backend for AvFoundation {
         Ok(())
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn min_rate(&self) -> f32 {
         0.1
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn max_rate(&self) -> f32 {
         2.
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn normal_rate(&self) -> f32 {
         0.5
     }
 
+    #[instrument(level = "debug", skip(self), err, ret)]
     fn get_rate(&self) -> Result<f32, Error> {
         Ok(self.rate)
     }
 
+    #[instrument(level = "debug", skip(self), err)]
     fn set_rate(&mut self, rate: f32) -> Result<(), Error> {
-        trace!("set_rate({rate})");
         self.rate = rate;
         Ok(())
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn min_pitch(&self) -> f32 {
         0.5
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn max_pitch(&self) -> f32 {
         2.0
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn normal_pitch(&self) -> f32 {
         1.0
     }
 
+    #[instrument(level = "debug", skip(self), err, ret)]
     fn get_pitch(&self) -> Result<f32, Error> {
         Ok(self.pitch)
     }
 
+    #[instrument(level = "debug", skip(self), err)]
     fn set_pitch(&mut self, pitch: f32) -> Result<(), Error> {
-        trace!("set_pitch({pitch})");
         self.pitch = pitch;
         Ok(())
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn min_volume(&self) -> f32 {
         0.
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn max_volume(&self) -> f32 {
         1.
     }
 
+    #[instrument(level = "trace", skip(self))]
     fn normal_volume(&self) -> f32 {
         1.
     }
 
+    #[instrument(level = "debug", skip(self), err, ret)]
     fn get_volume(&self) -> Result<f32, Error> {
         Ok(self.volume)
     }
 
+    #[instrument(level = "debug", skip(self), err)]
     fn set_volume(&mut self, volume: f32) -> Result<(), Error> {
-        trace!("set_volume({volume})");
         self.volume = volume;
         Ok(())
     }
 
+    #[instrument(level = "trace", skip(self), err, ret)]
     fn is_speaking(&self) -> Result<bool, Error> {
-        trace!("is_speaking()");
         let is_speaking = unsafe { self.synth.isSpeaking() };
         Ok(is_speaking)
     }
 
+    #[instrument(level = "debug", skip(self), err, ret)]
     fn voice(&self) -> Result<Option<Voice>, Error> {
         unimplemented!()
     }
 
+    #[instrument(level = "debug", skip(self), err)]
     fn voices(&self) -> Result<Vec<Voice>, Error> {
         let voices = unsafe { AVSpeechSynthesisVoice::speechVoices() };
         let rv = voices
@@ -275,6 +293,7 @@ impl Backend for AvFoundation {
         Ok(rv)
     }
 
+    #[instrument(level = "debug", skip(self), err)]
     fn set_voice(&mut self, voice: &Voice) -> Result<(), Error> {
         self.voice = Some(voice.clone());
         Ok(())
