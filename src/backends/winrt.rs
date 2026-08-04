@@ -8,6 +8,7 @@ use lazy_static::lazy_static;
 use log::{info, trace};
 use oxilangtag::LanguageTag;
 use windows::{
+    core::Ref,
     Foundation::TypedEventHandler,
     Media::{
         Core::MediaSource,
@@ -84,8 +85,8 @@ impl WinRt {
         drop(backend_to_speech_synthesizer);
         let bid_clone = bid;
         player.MediaEnded(&TypedEventHandler::new(
-            move |sender: &Option<MediaPlayer>, _args| {
-                if let Some(sender) = sender {
+            move |sender: Ref<MediaPlayer>, _args| {
+                if let Some(sender) = sender.as_ref() {
                     let backend_to_media_player = BACKEND_TO_MEDIA_PLAYER.lock().unwrap();
                     let id = backend_to_media_player.iter().find(|v| v.1 == sender);
                     if let Some((id, _)) = id {
