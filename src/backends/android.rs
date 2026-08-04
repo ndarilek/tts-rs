@@ -10,16 +10,18 @@ use std::{
 };
 
 use jni::{
-    JNIEnv, JavaVM,
-    objects::{GlobalRef, JObject, JString},
-    sys::{JNI_VERSION_1_6, jfloat, jint},
+    EnvUnowned, JavaVM,
+    errors::ThrowRuntimeExAndDefault,
+    jni_sig, jni_str,
+    objects::{Global, JClass, JObject, JString},
+    sys::{self, JNI_VERSION_1_6, jfloat, jint},
 };
 use log::{error, info};
 use parking_lot::{Mutex, RwLock};
 
 use crate::{Backend, BackendId, Callbacks, Error, Features, UtteranceId, Voice};
 
-static BRIDGE: OnceLock<GlobalRef> = OnceLock::new();
+static BRIDGE: OnceLock<Global<JClass<'static>>> = OnceLock::new();
 static NEXT_BACKEND_ID: AtomicU64 = AtomicU64::new(0);
 static PENDING_INITIALIZATIONS: RwLock<Vec<u64>> = RwLock::new(Vec::new());
 static NEXT_UTTERANCE_ID: AtomicU64 = AtomicU64::new(0);
@@ -42,126 +44,132 @@ fn with_callbacks(backend_id: u64, f: impl FnOnce(&mut Callbacks)) {
 
 #[allow(non_snake_case)]
 #[unsafe(no_mangle)]
-pub extern "system" fn JNI_OnLoad(vm: JavaVM, _: *mut c_void) -> jint {
-    let mut env = vm.get_env().expect("Cannot get reference to the JNIEnv");
-    let b = env
-        .find_class("rs/tts/Bridge")
-        .expect("Failed to find `Bridge`");
-    let b = env
-        .new_global_ref(b)
-        .expect("Failed to create `Bridge` `GlobalRef`");
-    BRIDGE.set(b).expect("`Bridge` already initialized");
+pub extern "system" fn JNI_OnLoad(vm: *mut sys::JavaVM, _: *mut c_void) -> jint {
+    let vm = unsafe { JavaVM::from_raw(vm) };
+    vm.attach_current_thread(|env| -> jni::errors::Result<()> {
+        let b = env.find_class(jni_str!("rs/tts/Bridge"))?;
+        let b = env.new_global_ref(&b)?;
+        BRIDGE.set(b).expect("`Bridge` already initialized");
+        Ok(())
+    })
+    .expect("Failed to initialize `Bridge`");
     JNI_VERSION_1_6
 }
 
 #[unsafe(no_mangle)]
 #[allow(non_snake_case)]
-pub unsafe extern "C" fn Java_rs_tts_Bridge_onInit(mut env: JNIEnv, obj: JObject, status: jint) {
-    let id = env
-        .get_field(obj, "backendId", "I")
-        .expect("Failed to get backend ID")
-        .i()
-        .expect("Failed to cast to int");
-    let id = u64::try_from(id).expect("Backend ID must be non-negative");
-    let mut pending = PENDING_INITIALIZATIONS.write();
-    pending.retain(|v| *v != id);
-    if status != 0 {
-        error!("Failed to initialize TTS engine");
-    }
+pub unsafe extern "C" fn Java_rs_tts_Bridge_onInit(
+    mut env: EnvUnowned,
+    obj: JObject,
+    status: jint,
+) {
+    env.with_env(|env| -> jni::errors::Result<()> {
+        let id = env
+            .get_field(&obj, jni_str!("backendId"), jni_sig!(int))?
+            .i()?;
+        let id = u64::try_from(id).expect("Backend ID must be non-negative");
+        let mut pending = PENDING_INITIALIZATIONS.write();
+        pending.retain(|v| *v != id);
+        if status != 0 {
+            error!("Failed to initialize TTS engine");
+        }
+        Ok(())
+    })
+    .resolve::<ThrowRuntimeExAndDefault>();
 }
 
 #[unsafe(no_mangle)]
 #[allow(non_snake_case)]
 pub unsafe extern "C" fn Java_rs_tts_Bridge_onStart(
-    mut env: JNIEnv,
+    mut env: EnvUnowned,
     obj: JObject,
     utterance_id: JString,
 ) {
-    let backend_id = env
-        .get_field(obj, "backendId", "I")
-        .expect("Failed to get backend ID")
-        .i()
-        .expect("Failed to cast to int");
-    let backend_id = u64::try_from(backend_id).expect("Backend ID must be non-negative");
-    let utterance_id = String::from(env.get_string(&utterance_id).unwrap())
-        .parse::<u64>()
-        .unwrap();
-    let utterance_id = UtteranceId::Android(utterance_id);
-    with_callbacks(backend_id, |callbacks| {
-        callbacks.utterance_begin(utterance_id);
-    });
+    env.with_env(|env| -> jni::errors::Result<()> {
+        let backend_id = env
+            .get_field(&obj, jni_str!("backendId"), jni_sig!(int))?
+            .i()?;
+        let backend_id = u64::try_from(backend_id).expect("Backend ID must be non-negative");
+        let utterance_id = utterance_id.to_string().parse::<u64>().unwrap();
+        let utterance_id = UtteranceId::Android(utterance_id);
+        with_callbacks(backend_id, |callbacks| {
+            callbacks.utterance_begin(utterance_id);
+        });
+        Ok(())
+    })
+    .resolve::<ThrowRuntimeExAndDefault>();
 }
 
 #[unsafe(no_mangle)]
 #[allow(non_snake_case)]
 pub unsafe extern "C" fn Java_rs_tts_Bridge_onStop(
-    mut env: JNIEnv,
+    mut env: EnvUnowned,
     obj: JObject,
     utterance_id: JString,
 ) {
-    let backend_id = env
-        .get_field(obj, "backendId", "I")
-        .expect("Failed to get backend ID")
-        .i()
-        .expect("Failed to cast to int");
-    let backend_id = u64::try_from(backend_id).expect("Backend ID must be non-negative");
-    let utterance_id = String::from(env.get_string(&utterance_id).unwrap())
-        .parse::<u64>()
-        .unwrap();
-    let utterance_id = UtteranceId::Android(utterance_id);
-    with_callbacks(backend_id, |callbacks| {
-        callbacks.utterance_end(utterance_id);
-    });
+    env.with_env(|env| -> jni::errors::Result<()> {
+        let backend_id = env
+            .get_field(&obj, jni_str!("backendId"), jni_sig!(int))?
+            .i()?;
+        let backend_id = u64::try_from(backend_id).expect("Backend ID must be non-negative");
+        let utterance_id = utterance_id.to_string().parse::<u64>().unwrap();
+        let utterance_id = UtteranceId::Android(utterance_id);
+        with_callbacks(backend_id, |callbacks| {
+            callbacks.utterance_end(utterance_id);
+        });
+        Ok(())
+    })
+    .resolve::<ThrowRuntimeExAndDefault>();
 }
 
 #[unsafe(no_mangle)]
 #[allow(non_snake_case)]
 pub unsafe extern "C" fn Java_rs_tts_Bridge_onDone(
-    mut env: JNIEnv,
+    mut env: EnvUnowned,
     obj: JObject,
     utterance_id: JString,
 ) {
-    let backend_id = env
-        .get_field(obj, "backendId", "I")
-        .expect("Failed to get backend ID")
-        .i()
-        .expect("Failed to cast to int");
-    let backend_id = u64::try_from(backend_id).expect("Backend ID must be non-negative");
-    let utterance_id = String::from(env.get_string(&utterance_id).unwrap())
-        .parse::<u64>()
-        .unwrap();
-    let utterance_id = UtteranceId::Android(utterance_id);
-    with_callbacks(backend_id, |callbacks| {
-        callbacks.utterance_stop(utterance_id);
-    });
+    env.with_env(|env| -> jni::errors::Result<()> {
+        let backend_id = env
+            .get_field(&obj, jni_str!("backendId"), jni_sig!(int))?
+            .i()?;
+        let backend_id = u64::try_from(backend_id).expect("Backend ID must be non-negative");
+        let utterance_id = utterance_id.to_string().parse::<u64>().unwrap();
+        let utterance_id = UtteranceId::Android(utterance_id);
+        with_callbacks(backend_id, |callbacks| {
+            callbacks.utterance_stop(utterance_id);
+        });
+        Ok(())
+    })
+    .resolve::<ThrowRuntimeExAndDefault>();
 }
 
 #[unsafe(no_mangle)]
 #[allow(non_snake_case)]
 pub unsafe extern "C" fn Java_rs_tts_Bridge_onError(
-    mut env: JNIEnv,
+    mut env: EnvUnowned,
     obj: JObject,
     utterance_id: JString,
 ) {
-    let backend_id = env
-        .get_field(obj, "backendId", "I")
-        .expect("Failed to get backend ID")
-        .i()
-        .expect("Failed to cast to int");
-    let backend_id = u64::try_from(backend_id).expect("Backend ID must be non-negative");
-    let utterance_id = String::from(env.get_string(&utterance_id).unwrap())
-        .parse::<u64>()
-        .unwrap();
-    let utterance_id = UtteranceId::Android(utterance_id);
-    with_callbacks(backend_id, |callbacks| {
-        callbacks.utterance_end(utterance_id);
-    });
+    env.with_env(|env| -> jni::errors::Result<()> {
+        let backend_id = env
+            .get_field(&obj, jni_str!("backendId"), jni_sig!(int))?
+            .i()?;
+        let backend_id = u64::try_from(backend_id).expect("Backend ID must be non-negative");
+        let utterance_id = utterance_id.to_string().parse::<u64>().unwrap();
+        let utterance_id = UtteranceId::Android(utterance_id);
+        with_callbacks(backend_id, |callbacks| {
+            callbacks.utterance_end(utterance_id);
+        });
+        Ok(())
+    })
+    .resolve::<ThrowRuntimeExAndDefault>();
 }
 
 #[derive(Clone)]
 pub(crate) struct Android {
     id: BackendId,
-    tts: GlobalRef,
+    tts: Arc<Global<JObject<'static>>>,
     rate: f32,
     pitch: f32,
 }
@@ -172,26 +180,28 @@ impl Android {
         info!("Initializing Android backend");
         let bid = NEXT_BACKEND_ID.fetch_add(1, Ordering::Relaxed);
         let id = BackendId::Android(bid);
-        let ctx = ndk_context::android_context();
-        let vm = unsafe { jni::JavaVM::from_raw(ctx.vm().cast()) }?;
-        let context = unsafe { JObject::from_raw(ctx.context().cast()) };
-        let mut env = vm.attach_current_thread_permanently()?;
-        let bridge = BRIDGE.get().ok_or(Error::NoneError)?;
-        let bid_jint = jint::try_from(bid).map_err(|_| Error::OperationFailed)?;
-        let bridge = env.new_object(bridge, "(I)V", &[bid_jint.into()])?;
-        let tts = env.new_object(
-            "android/speech/tts/TextToSpeech",
-            "(Landroid/content/Context;Landroid/speech/tts/TextToSpeech$OnInitListener;)V",
-            &[(&context).into(), (&bridge).into()],
-        )?;
-        env.call_method(
-            &tts,
-            "setOnUtteranceProgressListener",
-            "(Landroid/speech/tts/UtteranceProgressListener;)I",
-            &[(&bridge).into()],
-        )?;
-        PENDING_INITIALIZATIONS.write().push(bid);
-        let tts = env.new_global_ref(tts)?;
+        let tts = Self::vm().attach_current_thread(|env| -> Result<_, Error> {
+            let ctx = ndk_context::android_context();
+            let context = unsafe { JObject::from_raw(env, ctx.context().cast()) };
+            let bridge = BRIDGE.get().ok_or(Error::NoneError)?;
+            let bid_jint = jint::try_from(bid).map_err(|_| Error::OperationFailed)?;
+            let bridge = env.new_object(bridge, jni_sig!("(I)V"), &[bid_jint.into()])?;
+            let tts = env.new_object(
+                jni_str!("android/speech/tts/TextToSpeech"),
+                jni_sig!(
+                    "(Landroid/content/Context;Landroid/speech/tts/TextToSpeech$OnInitListener;)V"
+                ),
+                &[(&context).into(), (&bridge).into()],
+            )?;
+            env.call_method(
+                &tts,
+                jni_str!("setOnUtteranceProgressListener"),
+                jni_sig!("(Landroid/speech/tts/UtteranceProgressListener;)I"),
+                &[(&bridge).into()],
+            )?;
+            PENDING_INITIALIZATIONS.write().push(bid);
+            Ok(env.new_global_ref(&tts)?)
+        })?;
         // This hack makes my brain bleed.
         let start = Instant::now();
         // Wait a max of 500ms for initialization, then return an error to avoid hanging.
@@ -210,15 +220,15 @@ impl Android {
         CALLBACKS.lock().push((bid, callbacks));
         Ok(Self {
             id,
-            tts,
+            tts: Arc::new(tts),
             rate: 1.,
             pitch: 1.,
         })
     }
 
-    fn vm() -> Result<JavaVM, jni::errors::Error> {
+    fn vm() -> JavaVM {
         let ctx = ndk_context::android_context();
-        unsafe { jni::JavaVM::from_raw(ctx.vm().cast()) }
+        unsafe { JavaVM::from_raw(ctx.vm().cast()) }
     }
 }
 
@@ -241,26 +251,25 @@ impl Backend for Android {
     }
 
     fn speak(&mut self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error> {
-        let vm = Self::vm()?;
-        let mut env = vm.get_env()?;
-        let tts = self.tts.as_obj();
-        let text = env.new_string(text)?;
-        let queue_mode = jint::from(!interrupt);
         let uid = NEXT_UTTERANCE_ID.fetch_add(1, Ordering::Relaxed);
         let id = UtteranceId::Android(uid);
-        let uid = env.new_string(uid.to_string())?;
-        let rv = env.call_method(
-            tts,
-            "speak",
-            "(Ljava/lang/CharSequence;ILandroid/os/Bundle;Ljava/lang/String;)I",
-            &[
-                (&text).into(),
-                queue_mode.into(),
-                (&JObject::null()).into(),
-                (&uid).into(),
-            ],
-        )?;
-        let rv = rv.i()?;
+        let rv = Self::vm().attach_current_thread(|env| -> Result<jint, Error> {
+            let text = env.new_string(text)?;
+            let queue_mode = jint::from(!interrupt);
+            let uid = env.new_string(uid.to_string())?;
+            let rv = env.call_method(
+                self.tts.as_obj(),
+                jni_str!("speak"),
+                jni_sig!("(Ljava/lang/CharSequence;ILandroid/os/Bundle;Ljava/lang/String;)I"),
+                &[
+                    (&text).into(),
+                    queue_mode.into(),
+                    (&JObject::null()).into(),
+                    (&uid).into(),
+                ],
+            )?;
+            Ok(rv.i()?)
+        })?;
         if rv == 0 {
             Ok(Some(id))
         } else {
@@ -269,11 +278,10 @@ impl Backend for Android {
     }
 
     fn stop(&mut self) -> Result<(), Error> {
-        let vm = Self::vm()?;
-        let mut env = vm.get_env()?;
-        let tts = self.tts.as_obj();
-        let rv = env.call_method(tts, "stop", "()I", &[])?;
-        let rv = rv.i()?;
+        let rv = Self::vm().attach_current_thread(|env| -> Result<jint, Error> {
+            let rv = env.call_method(self.tts.as_obj(), jni_str!("stop"), jni_sig!("()I"), &[])?;
+            Ok(rv.i()?)
+        })?;
         if rv == 0 {
             Ok(())
         } else {
@@ -298,12 +306,16 @@ impl Backend for Android {
     }
 
     fn set_rate(&mut self, rate: f32) -> Result<(), Error> {
-        let vm = Self::vm()?;
-        let mut env = vm.get_env()?;
-        let tts = self.tts.as_obj();
         let rate = rate as jfloat;
-        let rv = env.call_method(tts, "setSpeechRate", "(F)I", &[rate.into()])?;
-        let rv = rv.i()?;
+        let rv = Self::vm().attach_current_thread(|env| -> Result<jint, Error> {
+            let rv = env.call_method(
+                self.tts.as_obj(),
+                jni_str!("setSpeechRate"),
+                jni_sig!("(F)I"),
+                &[rate.into()],
+            )?;
+            Ok(rv.i()?)
+        })?;
         if rv == 0 {
             self.rate = rate;
             Ok(())
@@ -329,12 +341,16 @@ impl Backend for Android {
     }
 
     fn set_pitch(&mut self, pitch: f32) -> Result<(), Error> {
-        let vm = Self::vm()?;
-        let mut env = vm.get_env()?;
-        let tts = self.tts.as_obj();
         let pitch = pitch as jfloat;
-        let rv = env.call_method(tts, "setPitch", "(F)I", &[pitch.into()])?;
-        let rv = rv.i()?;
+        let rv = Self::vm().attach_current_thread(|env| -> Result<jint, Error> {
+            let rv = env.call_method(
+                self.tts.as_obj(),
+                jni_str!("setPitch"),
+                jni_sig!("(F)I"),
+                &[pitch.into()],
+            )?;
+            Ok(rv.i()?)
+        })?;
         if rv == 0 {
             self.pitch = pitch;
             Ok(())
@@ -364,12 +380,15 @@ impl Backend for Android {
     }
 
     fn is_speaking(&self) -> Result<bool, Error> {
-        let vm = Self::vm()?;
-        let mut env = vm.get_env()?;
-        let tts = self.tts.as_obj();
-        let rv = env.call_method(tts, "isSpeaking", "()Z", &[])?;
-        let rv = rv.z()?;
-        Ok(rv)
+        Self::vm().attach_current_thread(|env| -> Result<bool, Error> {
+            let rv = env.call_method(
+                self.tts.as_obj(),
+                jni_str!("isSpeaking"),
+                jni_sig!("()Z"),
+                &[],
+            )?;
+            Ok(rv.z()?)
+        })
     }
 
     fn voice(&self) -> Result<Option<Voice>, Error> {

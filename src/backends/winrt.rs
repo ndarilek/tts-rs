@@ -53,7 +53,7 @@ impl Utterance {
         synth.SetVoice(&self.voice)?;
         let stream = synth
             .SynthesizeTextToStreamAsync(&self.text.as_str().into())?
-            .get()?;
+            .join()?;
         let content_type = stream.ContentType()?;
         let source = MediaSource::CreateFromStream(&stream, &content_type)?;
         player.SetSource(&source)?;

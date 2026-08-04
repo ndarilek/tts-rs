@@ -24,14 +24,14 @@ oxilangtag = "0.1"
 log = "0.4"
 parking_lot = "0.12"
 serde = { version = "1", optional = true, features = ["derive"] }
-thiserror = "1"
+thiserror = "2"
 
 [dev-dependencies]
 env_logger = "0.11"
 
 [target.'cfg(windows)'.dependencies]
 tolk = { version = "0.5", optional = true }
-windows = { version = "0.61", features = [
+windows = { version = "0.62", features = [
     "Foundation",
     "Foundation_Collections",
     "Media_Core",
@@ -79,7 +79,7 @@ web-sys = { version = "0.3", features = [
 ] }
 
 [target.'cfg(target_os="android")'.dependencies]
-jni = "0.21"
+jni = "0.22"
 ndk-context = "0.1"
 
 [package.metadata.docs.rs]
