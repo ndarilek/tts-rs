@@ -4,13 +4,11 @@
 //!  *   * Screen readers/SAPI via Tolk (requires `tolk` Cargo feature)
 //!  *   * `WinRT`
 //!  * * Linux via [Speech Dispatcher](https://freebsoft.org/speechd)
-//!  * * macOS/iOS/tvOS/watchOS/visionOS
-//!  *   * `AppKit` on macOS 10.13 and below.
-//!  *   * `AVFoundation` on macOS 10.14 and above, and iOS/tvOS/watchOS/visionOS.
+//!  * * macOS/iOS/tvOS/watchOS/visionOS via `AVFoundation` (macOS 10.14 and above)
 //!  * * Android
 //!  * * WebAssembly
 
-use std::{boxed::Box, fmt, rc::Rc, sync::Arc};
+use std::{boxed::Box, fmt, sync::Arc};
 
 #[cfg(windows)]
 use std::string::FromUtf16Error;
@@ -32,8 +30,6 @@ mod backends;
 pub enum Backends {
     #[cfg(target_os = "android")]
     Android,
-    #[cfg(target_os = "macos")]
-    AppKit,
     #[cfg(target_vendor = "apple")]
     AvFoundation,
     #[cfg(target_os = "linux")]
@@ -51,8 +47,6 @@ impl fmt::Display for Backends {
         match self {
             #[cfg(target_os = "android")]
             Backends::Android => writeln!(f, "Android"),
-            #[cfg(target_os = "macos")]
-            Backends::AppKit => writeln!(f, "AppKit"),
             #[cfg(target_vendor = "apple")]
             Backends::AvFoundation => writeln!(f, "AVFoundation"),
             #[cfg(target_os = "linux")]
@@ -260,11 +254,19 @@ pub trait Backend: Clone {
     fn set_voice(&mut self, voice: &Voice) -> Result<(), Error>;
 }
 
+/// An utterance lifecycle callback. Backends invoke these from their own event threads, so
+/// callbacks must be [`Send`] everywhere except single-threaded wasm.
+#[cfg(not(target_arch = "wasm32"))]
+pub type UtteranceCallback = Box<dyn FnMut(UtteranceId) + Send>;
+/// An utterance lifecycle callback.
+#[cfg(target_arch = "wasm32")]
+pub type UtteranceCallback = Box<dyn FnMut(UtteranceId)>;
+
 #[derive(Default)]
 struct Callbacks {
-    begin: Option<Box<dyn FnMut(UtteranceId)>>,
-    end: Option<Box<dyn FnMut(UtteranceId)>>,
-    stop: Option<Box<dyn FnMut(UtteranceId)>>,
+    begin: Option<UtteranceCallback>,
+    end: Option<UtteranceCallback>,
+    stop: Option<UtteranceCallback>,
 }
 
 impl Callbacks {
@@ -300,19 +302,18 @@ impl fmt::Debug for Callbacks {
     }
 }
 
-unsafe impl Send for Callbacks {}
-
-unsafe impl Sync for Callbacks {}
+/// Backends run on arbitrary threads, so they must be genuinely thread-safe everywhere except
+/// single-threaded wasm, where JS values can never be [`Send`].
+#[cfg(not(target_arch = "wasm32"))]
+type BoxedBackend = Box<dyn Backend + Send + Sync>;
+#[cfg(target_arch = "wasm32")]
+type BoxedBackend = Box<dyn Backend>;
 
 #[derive(Clone)]
 pub struct Tts {
-    backend: Rc<RwLock<Box<dyn Backend>>>,
+    backend: Arc<RwLock<BoxedBackend>>,
     callbacks: Arc<Mutex<Callbacks>>,
 }
-
-unsafe impl Send for Tts {}
-
-unsafe impl Sync for Tts {}
 
 impl Tts {
     /// Create a new `TTS` instance with the specified backend.
@@ -320,10 +321,13 @@ impl Tts {
     /// # Errors
     ///
     /// Returns an error if the backend fails to initialize.
+    // Wasm is single-threaded, so backends and callbacks there are not Send; the Arc-based
+    // plumbing is shared with the threaded targets.
+    #[cfg_attr(target_arch = "wasm32", allow(clippy::arc_with_non_send_sync))]
     #[instrument(level = "info", err)]
     pub fn new(backend: Backends) -> Result<Tts, Error> {
         let callbacks = Arc::new(Mutex::new(Callbacks::default()));
-        let backend: Box<dyn Backend> = match backend {
+        let backend: BoxedBackend = match backend {
             #[cfg(target_os = "linux")]
             Backends::SpeechDispatcher => Box::new(backends::SpeechDispatcher::new(&callbacks)?),
             #[cfg(target_arch = "wasm32")]
@@ -332,15 +336,13 @@ impl Tts {
             Backends::Tolk => Box::new(backends::Tolk::new().ok_or(Error::NoneError)?),
             #[cfg(windows)]
             Backends::WinRt => Box::new(backends::WinRt::new(callbacks.clone())?),
-            #[cfg(target_os = "macos")]
-            Backends::AppKit => Box::new(backends::AppKit::new()?),
             #[cfg(target_vendor = "apple")]
             Backends::AvFoundation => Box::new(backends::AvFoundation::new(callbacks.clone())?),
             #[cfg(target_os = "android")]
             Backends::Android => Box::new(backends::Android::new(callbacks.clone())?),
         };
         Ok(Tts {
-            backend: Rc::new(RwLock::new(backend)),
+            backend: Arc::new(RwLock::new(backend)),
             callbacks,
         })
     }
@@ -365,13 +367,7 @@ impl Tts {
         let tts = Tts::new(Backends::WinRt);
         #[cfg(target_arch = "wasm32")]
         let tts = Tts::new(Backends::Web);
-        #[cfg(target_os = "macos")]
-        let tts = if objc2::available!(macos = 10.14, ..) {
-            Tts::new(Backends::AvFoundation)
-        } else {
-            Tts::new(Backends::AppKit)
-        };
-        #[cfg(all(target_vendor = "apple", not(target_os = "macos")))]
+        #[cfg(target_vendor = "apple")]
         let tts = Tts::new(Backends::AvFoundation);
         #[cfg(target_os = "android")]
         let tts = Tts::new(Backends::Android);
@@ -684,10 +680,7 @@ impl Tts {
         fields(registered = callback.is_some()),
         err
     )]
-    pub fn on_utterance_begin(
-        &self,
-        callback: Option<Box<dyn FnMut(UtteranceId)>>,
-    ) -> Result<(), Error> {
+    pub fn on_utterance_begin(&self, callback: Option<UtteranceCallback>) -> Result<(), Error> {
         let Features {
             utterance_callbacks,
             ..
@@ -711,10 +704,7 @@ impl Tts {
         fields(registered = callback.is_some()),
         err
     )]
-    pub fn on_utterance_end(
-        &self,
-        callback: Option<Box<dyn FnMut(UtteranceId)>>,
-    ) -> Result<(), Error> {
+    pub fn on_utterance_end(&self, callback: Option<UtteranceCallback>) -> Result<(), Error> {
         let Features {
             utterance_callbacks,
             ..
@@ -738,10 +728,7 @@ impl Tts {
         fields(registered = callback.is_some()),
         err
     )]
-    pub fn on_utterance_stop(
-        &self,
-        callback: Option<Box<dyn FnMut(UtteranceId)>>,
-    ) -> Result<(), Error> {
+    pub fn on_utterance_stop(&self, callback: Option<UtteranceCallback>) -> Result<(), Error> {
         let Features {
             utterance_callbacks,
             ..

@@ -6,9 +6,7 @@ This library provides a high-level Text-To-Speech (TTS) interface supporting var
   * Screen readers/SAPI via Tolk (requires `tolk` Cargo feature)
   * WinRT
 * Linux via [Speech Dispatcher](https://freebsoft.org/speechd)
-* macOS/iOS/tvOS/watchOS/visionOS.
-  * AppKit on macOS 10.13 and below.
-  * AVFoundation on macOS 10.14 and above, and iOS/tvOS/watchOS/visionOS.
+* macOS/iOS/tvOS/watchOS/visionOS via AVFoundation (macOS 10.14 and above)
 * Android
 * WebAssembly
 

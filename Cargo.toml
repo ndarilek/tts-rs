@@ -1,6 +1,6 @@
 [package]
 name = "tts"
-version = "0.26.3"
+version = "0.27.0"
 authors = ["Nolan Darilek <nolan@thewordnerd.info>"]
 repository = "https://github.com/ndarilek/tts-rs"
 description = "High-level Text-To-Speech (TTS) interface"
@@ -53,12 +53,6 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
     "NSObjCRuntime",
     "NSRunLoop",
     "NSString",
-] }
-
-[target.'cfg(target_os = "macos")'.dependencies]
-objc2-app-kit = { version = "0.3", default-features = false, features = [
-    "std",
-    "NSSpeechSynthesizer",
 ] }
 
 [target.wasm32-unknown-unknown.dependencies]

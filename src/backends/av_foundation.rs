@@ -3,7 +3,9 @@ use std::{
     sync::{
         Arc,
         atomic::{AtomicU64, Ordering},
+        mpsc::{Receiver, Sender, channel},
     },
+    thread,
 };
 
 use objc2::{
@@ -79,12 +81,102 @@ define_class!(
     }
 );
 
+/// Requests handled by the synthesizer thread. Each carries a reply sender so callers can block
+/// until the synthesizer has acted.
+enum Command {
+    Speak {
+        text: String,
+        interrupt: bool,
+        rate: f32,
+        volume: f32,
+        pitch: f32,
+        voice_id: Option<String>,
+        /// Replies with the utterance's address, which identifies it in delegate callbacks.
+        reply: Sender<Result<usize, Error>>,
+    },
+    Stop {
+        reply: Sender<()>,
+    },
+    IsSpeaking {
+        reply: Sender<bool>,
+    },
+}
+
+// `Retained<AVSpeechSynthesizer>` is not `Send`, so a dedicated thread owns the synthesizer and
+// its delegate for their entire lifetime; the backend only holds a channel to it.
+fn run_synthesizer(callbacks: Arc<Mutex<Callbacks>>, span: Span, commands: Receiver<Command>) {
+    let synth = unsafe { AVSpeechSynthesizer::new() };
+    let delegate = Delegate::alloc().set_ivars(Ivars { callbacks, span });
+    let delegate: Retained<Delegate> = unsafe { msg_send![super(delegate), init] };
+    unsafe { synth.setDelegate(Some(ProtocolObject::from_ref(&*delegate))) };
+
+    // The iterator ends when every backend clone has dropped its sender.
+    for command in commands {
+        let _entered = delegate.ivars().span.enter();
+        match command {
+            Command::Speak {
+                text,
+                interrupt,
+                rate,
+                volume,
+                pitch,
+                voice_id,
+                reply,
+            } => {
+                let _ = reply.send(speak_utterance(
+                    &synth,
+                    &text,
+                    interrupt,
+                    rate,
+                    volume,
+                    pitch,
+                    voice_id.as_deref(),
+                ));
+            }
+            Command::Stop { reply } => {
+                unsafe { synth.stopSpeakingAtBoundary(AVSpeechBoundary::Immediate) };
+                let _ = reply.send(());
+            }
+            Command::IsSpeaking { reply } => {
+                let _ = reply.send(unsafe { synth.isSpeaking() });
+            }
+        }
+    }
+}
+
+fn speak_utterance(
+    synth: &AVSpeechSynthesizer,
+    text: &str,
+    interrupt: bool,
+    rate: f32,
+    volume: f32,
+    pitch: f32,
+    voice_id: Option<&str>,
+) -> Result<usize, Error> {
+    unsafe {
+        if interrupt && synth.isSpeaking() {
+            synth.stopSpeakingAtBoundary(AVSpeechBoundary::Immediate);
+        }
+        let text = NSString::from_str(text);
+        let utterance = AVSpeechUtterance::initWithString(AVSpeechUtterance::alloc(), &text);
+        utterance.setRate(rate);
+        utterance.setVolume(volume);
+        utterance.setPitchMultiplier(pitch);
+        if let Some(voice_id) = voice_id {
+            let voice_id = NSString::from_str(voice_id);
+            let voice = AVSpeechSynthesisVoice::voiceWithIdentifier(&voice_id)
+                .ok_or(Error::OperationFailed)?;
+            utterance.setVoice(Some(&voice));
+        }
+        synth.speakUtterance(&utterance);
+        Ok(ptr::from_ref(&*utterance) as usize)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct AvFoundation {
     id: BackendId,
-    /// Kept around to avoid deallocting before we're done.
-    _delegate: Retained<Delegate>,
-    synth: Retained<AVSpeechSynthesizer>,
+    commands: Sender<Command>,
     rate: f32,
     volume: f32,
     pitch: f32,
@@ -94,26 +186,32 @@ pub(crate) struct AvFoundation {
 static NEXT_BACKEND_ID: AtomicU64 = AtomicU64::new(0);
 
 impl AvFoundation {
-    // Construction can't fail here, but backend constructors share a fallible signature.
-    #[allow(clippy::unnecessary_wraps)]
     #[instrument(level = "info", skip(callbacks), err)]
     pub(crate) fn new(callbacks: Arc<Mutex<Callbacks>>) -> Result<Self, Error> {
         let id = BackendId::AvFoundation(NEXT_BACKEND_ID.fetch_add(1, Ordering::Relaxed));
         let span = info_span!("av_foundation", backend_id = ?id);
-        let synth = unsafe { AVSpeechSynthesizer::new() };
-        let delegate = Delegate::alloc().set_ivars(Ivars { callbacks, span });
-        let delegate: Retained<Delegate> = unsafe { msg_send![super(delegate), init] };
-        unsafe { synth.setDelegate(Some(ProtocolObject::from_ref(&*delegate))) };
+        let (commands, receiver) = channel();
+        thread::Builder::new()
+            .name("tts-av-foundation".into())
+            .spawn(move || run_synthesizer(callbacks, span, receiver))?;
 
         Ok(AvFoundation {
             id,
-            _delegate: delegate,
-            synth,
+            commands,
             rate: 0.5,
             volume: 1.,
             pitch: 1.,
             voice: None,
         })
+    }
+
+    /// Sends a command and blocks on its reply, erroring if the synthesizer thread is gone.
+    fn request<T>(&self, build: impl FnOnce(Sender<T>) -> Command) -> Result<T, Error> {
+        let (reply, response) = channel();
+        self.commands
+            .send(build(reply))
+            .map_err(|_| Error::OperationFailed)?;
+        response.recv().map_err(|_| Error::OperationFailed)
     }
 }
 
@@ -144,36 +242,21 @@ impl Backend for AvFoundation {
         err
     )]
     fn speak(&mut self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error> {
-        if interrupt && self.is_speaking()? {
-            self.stop()?;
-        }
-        let utterance;
-        unsafe {
-            let str = NSString::from_str(text);
-            utterance = AVSpeechUtterance::initWithString(AVSpeechUtterance::alloc(), &str);
-            utterance.setRate(self.rate);
-            utterance.setVolume(self.volume);
-            utterance.setPitchMultiplier(self.pitch);
-            if let Some(voice) = &self.voice {
-                let vid = NSString::from_str(&voice.id());
-                let v = AVSpeechSynthesisVoice::voiceWithIdentifier(&vid)
-                    .ok_or(Error::OperationFailed)?;
-                utterance.setVoice(Some(&v));
-            }
-            self.synth.speakUtterance(&utterance);
-        }
-        Ok(Some(UtteranceId::AvFoundation(
-            ptr::from_ref(&*utterance) as usize
-        )))
+        let address = self.request(|reply| Command::Speak {
+            text: text.to_string(),
+            interrupt,
+            rate: self.rate,
+            volume: self.volume,
+            pitch: self.pitch,
+            voice_id: self.voice.as_ref().map(Voice::id),
+            reply,
+        })??;
+        Ok(Some(UtteranceId::AvFoundation(address)))
     }
 
     #[instrument(level = "debug", skip(self), err)]
     fn stop(&mut self) -> Result<(), Error> {
-        unsafe {
-            self.synth
-                .stopSpeakingAtBoundary(AVSpeechBoundary::Immediate);
-        }
-        Ok(())
+        self.request(|reply| Command::Stop { reply })
     }
 
     #[instrument(level = "trace", skip(self))]
@@ -256,8 +339,7 @@ impl Backend for AvFoundation {
 
     #[instrument(level = "trace", skip(self), err, ret)]
     fn is_speaking(&self) -> Result<bool, Error> {
-        let is_speaking = unsafe { self.synth.isSpeaking() };
-        Ok(is_speaking)
+        self.request(|reply| Command::IsSpeaking { reply })
     }
 
     #[instrument(level = "debug", skip(self), err, ret)]
