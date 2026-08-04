@@ -2,7 +2,7 @@
 use std::{
     os::raw::c_void,
     sync::{
-        Arc, Mutex, OnceLock, RwLock,
+        Arc, OnceLock,
         atomic::{AtomicU64, Ordering},
     },
     thread,
@@ -15,6 +15,7 @@ use jni::{
     sys::{JNI_VERSION_1_6, jfloat, jint},
 };
 use log::{error, info};
+use parking_lot::{Mutex, RwLock};
 
 use crate::{Backend, BackendId, Callbacks, Error, Features, UtteranceId, Voice};
 
@@ -30,13 +31,12 @@ fn with_callbacks(backend_id: u64, f: impl FnOnce(&mut Callbacks)) {
     // Release the registry lock before the user callback runs.
     let callbacks = CALLBACKS
         .lock()
-        .unwrap()
         .iter()
         .find(|(id, _)| *id == backend_id)
         .expect("No callbacks registered for backend")
         .1
         .clone();
-    let mut callbacks = callbacks.lock().unwrap();
+    let mut callbacks = callbacks.lock();
     f(&mut callbacks);
 }
 
@@ -61,8 +61,9 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onInit(mut env: JNIEnv, obj: JObject
         .get_field(obj, "backendId", "I")
         .expect("Failed to get backend ID")
         .i()
-        .expect("Failed to cast to int") as u64;
-    let mut pending = PENDING_INITIALIZATIONS.write().unwrap();
+        .expect("Failed to cast to int");
+    let id = u64::try_from(id).expect("Backend ID must be non-negative");
+    let mut pending = PENDING_INITIALIZATIONS.write();
     pending.retain(|v| *v != id);
     if status != 0 {
         error!("Failed to initialize TTS engine");
@@ -80,13 +81,14 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onStart(
         .get_field(obj, "backendId", "I")
         .expect("Failed to get backend ID")
         .i()
-        .expect("Failed to cast to int") as u64;
+        .expect("Failed to cast to int");
+    let backend_id = u64::try_from(backend_id).expect("Backend ID must be non-negative");
     let utterance_id = String::from(env.get_string(&utterance_id).unwrap())
         .parse::<u64>()
         .unwrap();
     let utterance_id = UtteranceId::Android(utterance_id);
     with_callbacks(backend_id, |callbacks| {
-        callbacks.utterance_begin(utterance_id)
+        callbacks.utterance_begin(utterance_id);
     });
 }
 
@@ -101,13 +103,14 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onStop(
         .get_field(obj, "backendId", "I")
         .expect("Failed to get backend ID")
         .i()
-        .expect("Failed to cast to int") as u64;
+        .expect("Failed to cast to int");
+    let backend_id = u64::try_from(backend_id).expect("Backend ID must be non-negative");
     let utterance_id = String::from(env.get_string(&utterance_id).unwrap())
         .parse::<u64>()
         .unwrap();
     let utterance_id = UtteranceId::Android(utterance_id);
     with_callbacks(backend_id, |callbacks| {
-        callbacks.utterance_end(utterance_id)
+        callbacks.utterance_end(utterance_id);
     });
 }
 
@@ -122,13 +125,14 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onDone(
         .get_field(obj, "backendId", "I")
         .expect("Failed to get backend ID")
         .i()
-        .expect("Failed to cast to int") as u64;
+        .expect("Failed to cast to int");
+    let backend_id = u64::try_from(backend_id).expect("Backend ID must be non-negative");
     let utterance_id = String::from(env.get_string(&utterance_id).unwrap())
         .parse::<u64>()
         .unwrap();
     let utterance_id = UtteranceId::Android(utterance_id);
     with_callbacks(backend_id, |callbacks| {
-        callbacks.utterance_stop(utterance_id)
+        callbacks.utterance_stop(utterance_id);
     });
 }
 
@@ -143,13 +147,14 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onError(
         .get_field(obj, "backendId", "I")
         .expect("Failed to get backend ID")
         .i()
-        .expect("Failed to cast to int") as u64;
+        .expect("Failed to cast to int");
+    let backend_id = u64::try_from(backend_id).expect("Backend ID must be non-negative");
     let utterance_id = String::from(env.get_string(&utterance_id).unwrap())
         .parse::<u64>()
         .unwrap();
     let utterance_id = UtteranceId::Android(utterance_id);
     with_callbacks(backend_id, |callbacks| {
-        callbacks.utterance_end(utterance_id)
+        callbacks.utterance_end(utterance_id);
     });
 }
 
@@ -163,6 +168,7 @@ pub(crate) struct Android {
 
 impl Android {
     pub(crate) fn new(callbacks: Arc<Mutex<Callbacks>>) -> Result<Self, Error> {
+        const MAX_WAIT_TIME: Duration = Duration::from_millis(500);
         info!("Initializing Android backend");
         let bid = NEXT_BACKEND_ID.fetch_add(1, Ordering::Relaxed);
         let id = BackendId::Android(bid);
@@ -171,7 +177,8 @@ impl Android {
         let context = unsafe { JObject::from_raw(ctx.context().cast()) };
         let mut env = vm.attach_current_thread_permanently()?;
         let bridge = BRIDGE.get().ok_or(Error::NoneError)?;
-        let bridge = env.new_object(bridge, "(I)V", &[(bid as jint).into()])?;
+        let bid_jint = jint::try_from(bid).map_err(|_| Error::OperationFailed)?;
+        let bridge = env.new_object(bridge, "(I)V", &[bid_jint.into()])?;
         let tts = env.new_object(
             "android/speech/tts/TextToSpeech",
             "(Landroid/content/Context;Landroid/speech/tts/TextToSpeech$OnInitListener;)V",
@@ -183,15 +190,14 @@ impl Android {
             "(Landroid/speech/tts/UtteranceProgressListener;)I",
             &[(&bridge).into()],
         )?;
-        PENDING_INITIALIZATIONS.write().unwrap().push(bid);
+        PENDING_INITIALIZATIONS.write().push(bid);
         let tts = env.new_global_ref(tts)?;
         // This hack makes my brain bleed.
-        const MAX_WAIT_TIME: Duration = Duration::from_millis(500);
         let start = Instant::now();
         // Wait a max of 500ms for initialization, then return an error to avoid hanging.
         loop {
             {
-                let pending = PENDING_INITIALIZATIONS.read().unwrap();
+                let pending = PENDING_INITIALIZATIONS.read();
                 if !pending.contains(&bid) {
                     break;
                 }
@@ -201,7 +207,7 @@ impl Android {
             }
             thread::sleep(Duration::from_millis(5));
         }
-        CALLBACKS.lock().unwrap().push((bid, callbacks));
+        CALLBACKS.lock().push((bid, callbacks));
         Ok(Self {
             id,
             tts,
@@ -239,7 +245,7 @@ impl Backend for Android {
         let mut env = vm.get_env()?;
         let tts = self.tts.as_obj();
         let text = env.new_string(text)?;
-        let queue_mode = if interrupt { 0 } else { 1 };
+        let queue_mode = jint::from(!interrupt);
         let uid = NEXT_UTTERANCE_ID.fetch_add(1, Ordering::Relaxed);
         let id = UtteranceId::Android(uid);
         let uid = env.new_string(uid.to_string())?;
@@ -382,6 +388,6 @@ impl Backend for Android {
 impl Drop for Android {
     fn drop(&mut self) {
         let BackendId::Android(bid) = self.id;
-        CALLBACKS.lock().unwrap().retain(|(id, _)| *id != bid);
+        CALLBACKS.lock().retain(|(id, _)| *id != bid);
     }
 }

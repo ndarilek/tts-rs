@@ -2,13 +2,14 @@
 use std::{
     collections::VecDeque,
     sync::{
-        Arc, Mutex,
+        Arc,
         atomic::{AtomicU64, Ordering},
     },
 };
 
 use log::{info, trace};
 use oxilangtag::LanguageTag;
+use parking_lot::Mutex;
 use windows::{
     Foundation::TypedEventHandler,
     Media::{
@@ -98,8 +99,8 @@ impl WinRt {
         tts.player.MediaEnded(&TypedEventHandler::new(
             move |player: Ref<MediaPlayer>, _args| {
                 if let Some(player) = player.as_ref() {
-                    let mut utterances = utterances.lock().unwrap();
-                    let mut callbacks = callbacks.lock().unwrap();
+                    let mut utterances = utterances.lock();
+                    let mut callbacks = callbacks.lock();
                     if let Some(utterance) = utterances.pop_front() {
                         callbacks.utterance_end(utterance.id);
                         if let Some(utterance) = utterances.front() {
@@ -149,9 +150,9 @@ impl Backend for WinRt {
             voice: self.voice.clone(),
         };
         let utterance_id = utterance.id;
-        let mut utterances = self.utterances.lock().unwrap();
+        let mut utterances = self.utterances.lock();
         if utterances.is_empty() {
-            let mut callbacks = self.callbacks.lock().unwrap();
+            let mut callbacks = self.callbacks.lock();
             utterance.speak(&self.synth, &self.player, &mut callbacks)?;
         }
         utterances.push_back(utterance);
@@ -160,11 +161,11 @@ impl Backend for WinRt {
 
     fn stop(&mut self) -> std::result::Result<(), Error> {
         trace!("stop()");
-        let mut utterances = self.utterances.lock().unwrap();
+        let mut utterances = self.utterances.lock();
         if utterances.is_empty() {
             return Ok(());
         }
-        let mut callbacks = self.callbacks.lock().unwrap();
+        let mut callbacks = self.callbacks.lock();
         for utterance in utterances.iter() {
             callbacks.utterance_stop(utterance.id);
         }
@@ -185,6 +186,8 @@ impl Backend for WinRt {
         1.
     }
 
+    // WinRT reports f64, but this crate's API is f32.
+    #[allow(clippy::cast_possible_truncation)]
     fn get_rate(&self) -> std::result::Result<f32, Error> {
         let rate = self.synth.Options()?.SpeakingRate()?;
         Ok(rate as f32)
@@ -207,6 +210,8 @@ impl Backend for WinRt {
         1.
     }
 
+    // WinRT reports f64, but this crate's API is f32.
+    #[allow(clippy::cast_possible_truncation)]
     fn get_pitch(&self) -> std::result::Result<f32, Error> {
         let pitch = self.synth.Options()?.AudioPitch()?;
         Ok(pitch as f32)
@@ -229,6 +234,8 @@ impl Backend for WinRt {
         1.
     }
 
+    // WinRT reports f64, but this crate's API is f32.
+    #[allow(clippy::cast_possible_truncation)]
     fn get_volume(&self) -> std::result::Result<f32, Error> {
         let volume = self.synth.Options()?.AudioVolume()?;
         Ok(volume as f32)
@@ -240,7 +247,7 @@ impl Backend for WinRt {
     }
 
     fn is_speaking(&self) -> std::result::Result<bool, Error> {
-        Ok(!self.utterances.lock().unwrap().is_empty())
+        Ok(!self.utterances.lock().is_empty())
     }
 
     fn voice(&self) -> Result<Option<Voice>, Error> {

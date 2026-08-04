@@ -1,6 +1,6 @@
 use std::io;
 
-use tts::*;
+use tts::{Error, Features, Tts};
 
 fn main() -> Result<(), Error> {
     env_logger::init();
@@ -16,13 +16,13 @@ fn main() -> Result<(), Error> {
     } = tts.supported_features();
     if utterance_callbacks {
         tts.on_utterance_begin(Some(Box::new(|utterance| {
-            println!("Started speaking {:?}", utterance)
+            println!("Started speaking {utterance:?}");
         })))?;
         tts.on_utterance_end(Some(Box::new(|utterance| {
-            println!("Finished speaking {:?}", utterance)
+            println!("Finished speaking {utterance:?}");
         })))?;
         tts.on_utterance_stop(Some(Box::new(|utterance| {
-            println!("Stopped speaking {:?}", utterance)
+            println!("Stopped speaking {utterance:?}");
         })))?;
     }
     let Features { is_speaking, .. } = tts.supported_features();
@@ -33,7 +33,7 @@ fn main() -> Result<(), Error> {
     let Features { rate, .. } = tts.supported_features();
     if rate {
         let original_rate = tts.get_rate()?;
-        tts.speak(format!("Current rate: {}", original_rate), false)?;
+        tts.speak(format!("Current rate: {original_rate}"), false)?;
         tts.set_rate(tts.max_rate())?;
         tts.speak("This is very fast.", false)?;
         tts.set_rate(tts.min_rate())?;
@@ -69,7 +69,7 @@ fn main() -> Result<(), Error> {
         let voices = tts.voices()?;
         println!("Available voices:\n===");
         for v in &voices {
-            println!("{:?}", v);
+            println!("{v:?}");
         }
         let Features { get_voice, .. } = tts.supported_features();
         let original_voice = if get_voice { tts.voice()? } else { None };
@@ -82,14 +82,14 @@ fn main() -> Result<(), Error> {
         }
     }
     tts.speak("Goodbye.", false)?;
-    let mut _input = String::new();
+    let mut input = String::new();
     // The below is only needed to make the example run on MacOS because there is no NSRunLoop in this context.
     // It shouldn't be needed in an app or game that almost certainly has one already.
     #[cfg(target_os = "macos")]
     {
-        let run_loop = unsafe { objc2_foundation::NSRunLoop::currentRunLoop() };
-        unsafe { run_loop.run() };
+        let run_loop = objc2_foundation::NSRunLoop::currentRunLoop();
+        run_loop.run();
     }
-    io::stdin().read_line(&mut _input)?;
+    io::stdin().read_line(&mut input)?;
     Ok(())
 }

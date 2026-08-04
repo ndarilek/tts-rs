@@ -36,7 +36,7 @@ define_class!(
             if let Some(_str) = strings.firstObject() {
                 strings.removeObjectAtIndex(0);
                 if let Some(str) = strings.firstObject() {
-                    unsafe { synth.startSpeakingString(&str) };
+                    synth.startSpeakingString(&str);
                 }
             }
         }
@@ -48,7 +48,7 @@ impl Delegate {
         let Ivars { strings, synth } = self.ivars();
         strings.addObject(string);
         if let Some(str) = strings.firstObject() {
-            unsafe { synth.startSpeakingString(&str) };
+            synth.startSpeakingString(&str);
         }
     }
 
@@ -69,9 +69,11 @@ pub(crate) struct AppKit {
 }
 
 impl AppKit {
+    // Construction can't fail here, but backend constructors share a fallible signature.
+    #[allow(clippy::unnecessary_wraps)]
     pub(crate) fn new() -> Result<Self, Error> {
         info!("Initializing AppKit backend");
-        let synth = unsafe { NSSpeechSynthesizer::new() };
+        let synth = NSSpeechSynthesizer::new();
 
         // TODO: It is UB to use NSSpeechSynthesizerDelegate off the main
         // thread, we should somehow expose the need to be on the main thread.
@@ -105,7 +107,7 @@ impl Backend for AppKit {
     }
 
     fn speak(&mut self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error> {
-        trace!("speak({}, {})", text, interrupt);
+        trace!("speak({text}, {interrupt})");
         if interrupt {
             self.stop()?;
         }
@@ -117,7 +119,7 @@ impl Backend for AppKit {
     fn stop(&mut self) -> Result<(), Error> {
         trace!("stop()");
         self.delegate.clear_queue();
-        unsafe { self.synth.stopSpeaking() };
+        self.synth.stopSpeaking();
         Ok(())
     }
 
@@ -134,13 +136,13 @@ impl Backend for AppKit {
     }
 
     fn get_rate(&self) -> Result<f32, Error> {
-        let rate: f32 = unsafe { self.synth.rate() };
+        let rate: f32 = self.synth.rate();
         Ok(rate)
     }
 
     fn set_rate(&mut self, rate: f32) -> Result<(), Error> {
-        trace!("set_rate({})", rate);
-        unsafe { self.synth.setRate(rate) };
+        trace!("set_rate({rate})");
+        self.synth.setRate(rate);
         Ok(())
     }
 
@@ -177,17 +179,17 @@ impl Backend for AppKit {
     }
 
     fn get_volume(&self) -> Result<f32, Error> {
-        let volume = unsafe { self.synth.volume() };
+        let volume = self.synth.volume();
         Ok(volume)
     }
 
     fn set_volume(&mut self, volume: f32) -> Result<(), Error> {
-        unsafe { self.synth.setVolume(volume) };
+        self.synth.setVolume(volume);
         Ok(())
     }
 
     fn is_speaking(&self) -> Result<bool, Error> {
-        let is_speaking = unsafe { self.synth.isSpeaking() };
+        let is_speaking = self.synth.isSpeaking();
         Ok(is_speaking)
     }
 

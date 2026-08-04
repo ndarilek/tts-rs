@@ -1,11 +1,12 @@
 #[cfg(target_arch = "wasm32")]
 use std::sync::{
-    Arc, Mutex,
+    Arc,
     atomic::{AtomicU64, Ordering},
 };
 
 use log::{info, trace};
 use oxilangtag::LanguageTag;
+use parking_lot::Mutex;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 use web_sys::{
@@ -29,6 +30,8 @@ static NEXT_BACKEND_ID: AtomicU64 = AtomicU64::new(0);
 static NEXT_UTTERANCE_ID: AtomicU64 = AtomicU64::new(0);
 
 impl Web {
+    // Construction can't fail here, but backend constructors share a fallible signature.
+    #[allow(clippy::unnecessary_wraps)]
     pub fn new(callbacks: Arc<Mutex<Callbacks>>) -> Result<Self, Error> {
         info!("Initializing Web backend");
         Ok(Web {
@@ -61,7 +64,7 @@ impl Backend for Web {
     }
 
     fn speak(&mut self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error> {
-        trace!("speak({}, {})", text, interrupt);
+        trace!("speak({text}, {interrupt})");
         let utterance = SpeechSynthesisUtterance::new_with_text(text).unwrap();
         utterance.set_rate(self.rate);
         utterance.set_pitch(self.pitch);
@@ -73,14 +76,14 @@ impl Backend for Web {
         let callback = Closure::wrap(Box::new({
             let callbacks = self.callbacks.clone();
             move |_evt: SpeechSynthesisEvent| {
-                callbacks.lock().unwrap().utterance_begin(utterance_id);
+                callbacks.lock().utterance_begin(utterance_id);
             }
         }) as Box<dyn Fn(_)>);
         utterance.set_onstart(Some(callback.as_ref().unchecked_ref()));
         let callback = Closure::wrap(Box::new({
             let callbacks = self.callbacks.clone();
             move |_evt: SpeechSynthesisEvent| {
-                callbacks.lock().unwrap().utterance_end(utterance_id);
+                callbacks.lock().utterance_end(utterance_id);
             }
         }) as Box<dyn Fn(_)>);
         utterance.set_onend(Some(callback.as_ref().unchecked_ref()));
@@ -88,7 +91,7 @@ impl Backend for Web {
             let callbacks = self.callbacks.clone();
             move |evt: SpeechSynthesisErrorEvent| {
                 if evt.error() == SpeechSynthesisErrorCode::Canceled {
-                    callbacks.lock().unwrap().utterance_stop(utterance_id);
+                    callbacks.lock().utterance_stop(utterance_id);
                 }
             }
         }) as Box<dyn Fn(_)>);

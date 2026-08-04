@@ -22,6 +22,7 @@ default = ["speech_dispatcher_0_11"]
 dyn-clonable = "0.9"
 oxilangtag = "0.1"
 log = "0.4"
+parking_lot = "0.12"
 serde = { version = "1", optional = true, features = ["derive"] }
 thiserror = "1"
 
@@ -84,3 +85,9 @@ ndk-context = "0.1"
 [package.metadata.docs.rs]
 no-default-features = true
 features = ["speech_dispatcher_0_11"]
+
+[lints.rust]
+warnings = "deny"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }

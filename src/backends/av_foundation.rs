@@ -1,6 +1,9 @@
-use std::sync::{
-    Arc, Mutex,
-    atomic::{AtomicU64, Ordering},
+use std::{
+    ptr,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
 };
 
 use log::{info, trace};
@@ -13,6 +16,7 @@ use objc2_avf_audio::{
 };
 use objc2_foundation::{NSObject, NSObjectProtocol, NSString};
 use oxilangtag::LanguageTag;
+use parking_lot::Mutex;
 
 use crate::{Backend, BackendId, Callbacks, Error, Features, Gender, UtteranceId, Voice};
 
@@ -38,12 +42,8 @@ define_class!(
             utterance: &AVSpeechUtterance,
         ) {
             trace!("speech_synthesizer_did_start_speech_utterance");
-            let utterance_id = UtteranceId::AvFoundation(utterance as *const _ as usize);
-            self.ivars()
-                .callbacks
-                .lock()
-                .unwrap()
-                .utterance_begin(utterance_id);
+            let utterance_id = UtteranceId::AvFoundation(ptr::from_ref(utterance) as usize);
+            self.ivars().callbacks.lock().utterance_begin(utterance_id);
             trace!("Done speech_synthesizer_did_start_speech_utterance");
         }
 
@@ -54,12 +54,8 @@ define_class!(
             utterance: &AVSpeechUtterance,
         ) {
             trace!("speech_synthesizer_did_finish_speech_utterance");
-            let utterance_id = UtteranceId::AvFoundation(utterance as *const _ as usize);
-            self.ivars()
-                .callbacks
-                .lock()
-                .unwrap()
-                .utterance_end(utterance_id);
+            let utterance_id = UtteranceId::AvFoundation(ptr::from_ref(utterance) as usize);
+            self.ivars().callbacks.lock().utterance_end(utterance_id);
             trace!("Done speech_synthesizer_did_finish_speech_utterance");
         }
 
@@ -70,12 +66,8 @@ define_class!(
             utterance: &AVSpeechUtterance,
         ) {
             trace!("speech_synthesizer_did_cancel_speech_utterance");
-            let utterance_id = UtteranceId::AvFoundation(utterance as *const _ as usize);
-            self.ivars()
-                .callbacks
-                .lock()
-                .unwrap()
-                .utterance_stop(utterance_id);
+            let utterance_id = UtteranceId::AvFoundation(ptr::from_ref(utterance) as usize);
+            self.ivars().callbacks.lock().utterance_stop(utterance_id);
             trace!("Done speech_synthesizer_did_cancel_speech_utterance");
         }
     }
@@ -96,6 +88,8 @@ pub(crate) struct AvFoundation {
 static NEXT_BACKEND_ID: AtomicU64 = AtomicU64::new(0);
 
 impl AvFoundation {
+    // Construction can't fail here, but backend constructors share a fallible signature.
+    #[allow(clippy::unnecessary_wraps)]
     pub(crate) fn new(callbacks: Arc<Mutex<Callbacks>>) -> Result<Self, Error> {
         info!("Initializing AVFoundation backend");
 
@@ -138,7 +132,7 @@ impl Backend for AvFoundation {
     }
 
     fn speak(&mut self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error> {
-        trace!("speak({}, {})", text, interrupt);
+        trace!("speak({text}, {interrupt})");
         if interrupt && self.is_speaking()? {
             self.stop()?;
         }
@@ -165,7 +159,7 @@ impl Backend for AvFoundation {
             trace!("Done queuing");
         }
         Ok(Some(UtteranceId::AvFoundation(
-            &*utterance as *const _ as usize,
+            ptr::from_ref(&*utterance) as usize
         )))
     }
 
@@ -195,7 +189,7 @@ impl Backend for AvFoundation {
     }
 
     fn set_rate(&mut self, rate: f32) -> Result<(), Error> {
-        trace!("set_rate({})", rate);
+        trace!("set_rate({rate})");
         self.rate = rate;
         Ok(())
     }
@@ -217,7 +211,7 @@ impl Backend for AvFoundation {
     }
 
     fn set_pitch(&mut self, pitch: f32) -> Result<(), Error> {
-        trace!("set_pitch({})", pitch);
+        trace!("set_pitch({pitch})");
         self.pitch = pitch;
         Ok(())
     }
@@ -239,7 +233,7 @@ impl Backend for AvFoundation {
     }
 
     fn set_volume(&mut self, volume: f32) -> Result<(), Error> {
-        trace!("set_volume({})", volume);
+        trace!("set_volume({volume})");
         self.volume = volume;
         Ok(())
     }
