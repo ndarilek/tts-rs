@@ -19,7 +19,7 @@ use dyn_clonable::clonable;
 pub use oxilangtag::LanguageTag;
 use parking_lot::{Mutex, RwLock};
 #[cfg(target_os = "linux")]
-use speech_dispatcher::Error as SpeechDispatcherError;
+use ssip_client_async::ClientError as SpeechDispatcherError;
 use thiserror::Error;
 #[cfg(all(windows, feature = "tolk"))]
 use tolk::Tolk;
@@ -173,7 +173,7 @@ pub enum Error {
     JavaScriptError(wasm_bindgen::JsValue),
     #[cfg(target_os = "linux")]
     #[error("Speech Dispatcher error: {0}")]
-    SpeechDispatcher(#[from] SpeechDispatcherError),
+    SpeechDispatcher(SpeechDispatcherError),
     #[cfg(windows)]
     #[error("WinRT error")]
     WinRt(windows::core::Error),
@@ -187,6 +187,14 @@ pub enum Error {
     #[cfg(target_os = "android")]
     #[error("JNI error: [0])]")]
     JNI(#[from] jni::errors::Error),
+}
+
+// `ClientError` lacks `std::error::Error`, ruling out `#[from]`.
+#[cfg(target_os = "linux")]
+impl From<SpeechDispatcherError> for Error {
+    fn from(error: SpeechDispatcherError) -> Self {
+        Self::SpeechDispatcher(error)
+    }
 }
 
 #[clonable]

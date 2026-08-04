@@ -12,12 +12,6 @@ edition = "2024"
 [lib]
 crate-type = ["lib", "cdylib", "staticlib"]
 
-[features]
-speech_dispatcher_0_9 = ["speech-dispatcher/0_9"]
-speech_dispatcher_0_10 = ["speech-dispatcher/0_10"]
-speech_dispatcher_0_11 = ["speech-dispatcher/0_11"]
-default = ["speech_dispatcher_0_11"]
-
 [dependencies]
 dyn-clonable = "0.9"
 oxilangtag = "0.1"
@@ -41,7 +35,9 @@ windows = { version = "0.62", features = [
 ] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-speech-dispatcher = { version = "0.16", default-features = false }
+ssip-client-async = "0.19"
+# The backend relies on 0.5.0's Priority wire mapping.
+ssip = "=0.5.0"
 
 [target.'cfg(target_vendor = "apple")'.dependencies]
 objc2 = "0.6"
@@ -81,10 +77,6 @@ web-sys = { version = "0.3", features = [
 [target.'cfg(target_os="android")'.dependencies]
 jni = "0.22"
 ndk-context = "0.1"
-
-[package.metadata.docs.rs]
-no-default-features = true
-features = ["speech_dispatcher_0_11"]
 
 [lints.rust]
 warnings = "deny"
