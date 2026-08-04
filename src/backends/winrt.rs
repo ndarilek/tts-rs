@@ -1,10 +1,12 @@
 #[cfg(windows)]
 use std::{
-    collections::{HashMap, VecDeque},
-    sync::Mutex,
+    collections::VecDeque,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, Mutex,
+    },
 };
 
-use lazy_static::lazy_static;
 use log::{info, trace};
 use oxilangtag::LanguageTag;
 use windows::{
@@ -17,7 +19,7 @@ use windows::{
     },
 };
 
-use crate::{Backend, BackendId, Error, Features, Gender, UtteranceId, Voice, CALLBACKS};
+use crate::{Backend, BackendId, Callbacks, Error, Features, Gender, UtteranceId, Voice};
 
 impl From<windows::core::Error> for Error {
     fn from(e: windows::core::Error) -> Self {
@@ -25,16 +27,8 @@ impl From<windows::core::Error> for Error {
     }
 }
 
-#[derive(Clone)]
-pub struct WinRt {
-    id: BackendId,
-    synth: SpeechSynthesizer,
-    player: MediaPlayer,
-    rate: f32,
-    pitch: f32,
-    volume: f32,
-    voice: VoiceInformation,
-}
+static NEXT_BACKEND_ID: AtomicU64 = AtomicU64::new(0);
+static NEXT_UTTERANCE_ID: AtomicU64 = AtomicU64::new(0);
 
 struct Utterance {
     id: UtteranceId,
@@ -45,99 +39,78 @@ struct Utterance {
     voice: VoiceInformation,
 }
 
-lazy_static! {
-    static ref NEXT_BACKEND_ID: Mutex<u64> = Mutex::new(0);
-    static ref NEXT_UTTERANCE_ID: Mutex<u64> = Mutex::new(0);
-    static ref BACKEND_TO_SPEECH_SYNTHESIZER: Mutex<HashMap<BackendId, SpeechSynthesizer>> = {
-        let v: HashMap<BackendId, SpeechSynthesizer> = HashMap::new();
-        Mutex::new(v)
-    };
-    static ref BACKEND_TO_MEDIA_PLAYER: Mutex<HashMap<BackendId, MediaPlayer>> = {
-        let v: HashMap<BackendId, MediaPlayer> = HashMap::new();
-        Mutex::new(v)
-    };
-    static ref UTTERANCES: Mutex<HashMap<BackendId, VecDeque<Utterance>>> = {
-        let utterances: HashMap<BackendId, VecDeque<Utterance>> = HashMap::new();
-        Mutex::new(utterances)
-    };
+impl Utterance {
+    fn speak(
+        &self,
+        synth: &SpeechSynthesizer,
+        player: &MediaPlayer,
+        callbacks: &mut Callbacks,
+    ) -> std::result::Result<(), windows::core::Error> {
+        synth.Options()?.SetSpeakingRate(self.rate.into())?;
+        synth.Options()?.SetAudioPitch(self.pitch.into())?;
+        synth.Options()?.SetAudioVolume(self.volume.into())?;
+        synth.SetVoice(&self.voice)?;
+        let stream = synth
+            .SynthesizeTextToStreamAsync(&self.text.as_str().into())?
+            .get()?;
+        let content_type = stream.ContentType()?;
+        let source = MediaSource::CreateFromStream(&stream, &content_type)?;
+        player.SetSource(&source)?;
+        player.Play()?;
+        callbacks.utterance_begin(self.id);
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
+pub struct WinRt {
+    id: BackendId,
+    synth: SpeechSynthesizer,
+    player: MediaPlayer,
+    utterances: Arc<Mutex<VecDeque<Utterance>>>,
+    callbacks: Arc<Mutex<Callbacks>>,
+    rate: f32,
+    pitch: f32,
+    volume: f32,
+    voice: VoiceInformation,
 }
 
 impl WinRt {
-    pub fn new() -> std::result::Result<Self, Error> {
+    pub fn new(callbacks: Arc<Mutex<Callbacks>>) -> std::result::Result<Self, Error> {
         info!("Initializing WinRT backend");
-        let synth = SpeechSynthesizer::new()?;
         let player = MediaPlayer::new()?;
         player.SetRealTimePlayback(true)?;
         player.SetAudioCategory(MediaPlayerAudioCategory::Speech)?;
-        let mut backend_id = NEXT_BACKEND_ID.lock().unwrap();
-        let bid = BackendId::WinRt(*backend_id);
-        *backend_id += 1;
-        drop(backend_id);
-        {
-            let mut utterances = UTTERANCES.lock().unwrap();
-            utterances.insert(bid, VecDeque::new());
-        }
-        let mut backend_to_media_player = BACKEND_TO_MEDIA_PLAYER.lock().unwrap();
-        backend_to_media_player.insert(bid, player.clone());
-        drop(backend_to_media_player);
-        let mut backend_to_speech_synthesizer = BACKEND_TO_SPEECH_SYNTHESIZER.lock().unwrap();
-        backend_to_speech_synthesizer.insert(bid, synth.clone());
-        drop(backend_to_speech_synthesizer);
-        let bid_clone = bid;
-        player.MediaEnded(&TypedEventHandler::new(
-            move |sender: Ref<MediaPlayer>, _args| {
-                if let Some(sender) = sender.as_ref() {
-                    let backend_to_media_player = BACKEND_TO_MEDIA_PLAYER.lock().unwrap();
-                    let id = backend_to_media_player.iter().find(|v| v.1 == sender);
-                    if let Some((id, _)) = id {
-                        let mut utterances = UTTERANCES.lock().unwrap();
-                        if let Some(utterances) = utterances.get_mut(id) {
-                            if let Some(utterance) = utterances.pop_front() {
-                                let mut callbacks = CALLBACKS.lock().unwrap();
-                                let callbacks = callbacks.get_mut(id).unwrap();
-                                if let Some(callback) = callbacks.utterance_end.as_mut() {
-                                    callback(utterance.id);
-                                }
-                                if let Some(utterance) = utterances.front() {
-                                    let backend_to_speech_synthesizer =
-                                        BACKEND_TO_SPEECH_SYNTHESIZER.lock().unwrap();
-                                    let id = backend_to_speech_synthesizer
-                                        .iter()
-                                        .find(|v| *v.0 == bid_clone);
-                                    if let Some((_, tts)) = id {
-                                        tts.Options()?.SetSpeakingRate(utterance.rate.into())?;
-                                        tts.Options()?.SetAudioPitch(utterance.pitch.into())?;
-                                        tts.Options()?.SetAudioVolume(utterance.volume.into())?;
-                                        tts.SetVoice(&utterance.voice)?;
-                                        let text = &utterance.text;
-                                        let stream =
-                                            tts.SynthesizeTextToStreamAsync(&text.into())?.get()?;
-                                        let content_type = stream.ContentType()?;
-                                        let source =
-                                            MediaSource::CreateFromStream(&stream, &content_type)?;
-                                        sender.SetSource(&source)?;
-                                        sender.Play()?;
-                                        if let Some(callback) = callbacks.utterance_begin.as_mut() {
-                                            callback(utterance.id);
-                                        }
-                                    }
-                                }
-                            }
+        let tts = Self {
+            id: BackendId::WinRt(NEXT_BACKEND_ID.fetch_add(1, Ordering::Relaxed)),
+            synth: SpeechSynthesizer::new()?,
+            player,
+            utterances: Arc::new(Mutex::new(VecDeque::new())),
+            callbacks,
+            rate: 1.,
+            pitch: 1.,
+            volume: 1.,
+            voice: SpeechSynthesizer::DefaultVoice()?,
+        };
+        let synth = tts.synth.clone();
+        let utterances = tts.utterances.clone();
+        let callbacks = tts.callbacks.clone();
+        tts.player.MediaEnded(&TypedEventHandler::new(
+            move |player: Ref<MediaPlayer>, _args| {
+                if let Some(player) = player.as_ref() {
+                    let mut utterances = utterances.lock().unwrap();
+                    let mut callbacks = callbacks.lock().unwrap();
+                    if let Some(utterance) = utterances.pop_front() {
+                        callbacks.utterance_end(utterance.id);
+                        if let Some(utterance) = utterances.front() {
+                            utterance.speak(&synth, player, &mut callbacks)?;
                         }
                     }
                 }
                 Ok(())
             },
         ))?;
-        Ok(Self {
-            id: bid,
-            synth,
-            player,
-            rate: 1.,
-            pitch: 1.,
-            volume: 1.,
-            voice: SpeechSynthesizer::DefaultVoice()?,
-        })
+        Ok(tts)
     }
 }
 
@@ -167,68 +140,35 @@ impl Backend for WinRt {
         if interrupt && self.is_speaking()? {
             self.stop()?;
         }
-        let utterance_id = {
-            let mut uid = NEXT_UTTERANCE_ID.lock().unwrap();
-            let utterance_id = UtteranceId::WinRt(*uid);
-            *uid += 1;
-            utterance_id
+        let utterance = Utterance {
+            id: UtteranceId::WinRt(NEXT_UTTERANCE_ID.fetch_add(1, Ordering::Relaxed)),
+            text: text.into(),
+            rate: self.rate,
+            pitch: self.pitch,
+            volume: self.volume,
+            voice: self.voice.clone(),
         };
-        let mut no_utterances = false;
-        {
-            let mut utterances = UTTERANCES.lock().unwrap();
-            if let Some(utterances) = utterances.get_mut(&self.id) {
-                no_utterances = utterances.is_empty();
-                let utterance = Utterance {
-                    id: utterance_id,
-                    text: text.into(),
-                    rate: self.rate,
-                    pitch: self.pitch,
-                    volume: self.volume,
-                    voice: self.voice.clone(),
-                };
-                utterances.push_back(utterance);
-            }
+        let utterance_id = utterance.id;
+        let mut utterances = self.utterances.lock().unwrap();
+        if utterances.is_empty() {
+            let mut callbacks = self.callbacks.lock().unwrap();
+            utterance.speak(&self.synth, &self.player, &mut callbacks)?;
         }
-        if no_utterances {
-            self.synth.Options()?.SetSpeakingRate(self.rate.into())?;
-            self.synth.Options()?.SetAudioPitch(self.pitch.into())?;
-            self.synth.Options()?.SetAudioVolume(self.volume.into())?;
-            self.synth.SetVoice(&self.voice)?;
-            let stream = self
-                .synth
-                .SynthesizeTextToStreamAsync(&text.into())?
-                .get()?;
-            let content_type = stream.ContentType()?;
-            let source = MediaSource::CreateFromStream(&stream, &content_type)?;
-            self.player.SetSource(&source)?;
-            self.player.Play()?;
-            let mut callbacks = CALLBACKS.lock().unwrap();
-            let callbacks = callbacks.get_mut(&self.id).unwrap();
-            if let Some(callback) = callbacks.utterance_begin.as_mut() {
-                callback(utterance_id);
-            }
-        }
+        utterances.push_back(utterance);
         Ok(Some(utterance_id))
     }
 
     fn stop(&mut self) -> std::result::Result<(), Error> {
         trace!("stop()");
-        if !self.is_speaking()? {
+        let mut utterances = self.utterances.lock().unwrap();
+        if utterances.is_empty() {
             return Ok(());
         }
-        let mut utterances = UTTERANCES.lock().unwrap();
-        if let Some(utterances) = utterances.get(&self.id) {
-            let mut callbacks = CALLBACKS.lock().unwrap();
-            let callbacks = callbacks.get_mut(&self.id).unwrap();
-            if let Some(callback) = callbacks.utterance_stop.as_mut() {
-                for utterance in utterances {
-                    callback(utterance.id);
-                }
-            }
+        let mut callbacks = self.callbacks.lock().unwrap();
+        for utterance in utterances.iter() {
+            callbacks.utterance_stop(utterance.id);
         }
-        if let Some(utterances) = utterances.get_mut(&self.id) {
-            utterances.clear();
-        }
+        utterances.clear();
         self.player.Pause()?;
         Ok(())
     }
@@ -300,9 +240,7 @@ impl Backend for WinRt {
     }
 
     fn is_speaking(&self) -> std::result::Result<bool, Error> {
-        let utterances = UTTERANCES.lock().unwrap();
-        let utterances = utterances.get(&self.id).unwrap();
-        Ok(!utterances.is_empty())
+        Ok(!self.utterances.lock().unwrap().is_empty())
     }
 
     fn voice(&self) -> Result<Option<Voice>, Error> {
@@ -328,18 +266,6 @@ impl Backend for WinRt {
             }
         }
         Err(Error::OperationFailed)
-    }
-}
-
-impl Drop for WinRt {
-    fn drop(&mut self) {
-        let id = self.id;
-        let mut backend_to_media_player = BACKEND_TO_MEDIA_PLAYER.lock().unwrap();
-        backend_to_media_player.remove(&id);
-        let mut backend_to_speech_synthesizer = BACKEND_TO_SPEECH_SYNTHESIZER.lock().unwrap();
-        backend_to_speech_synthesizer.remove(&id);
-        let mut utterances = UTTERANCES.lock().unwrap();
-        utterances.remove(&id);
     }
 }
 

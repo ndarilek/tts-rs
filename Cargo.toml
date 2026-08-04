@@ -21,7 +21,6 @@ default = ["speech_dispatcher_0_11"]
 [dependencies]
 dyn-clonable = "0.9"
 oxilangtag = "0.1"
-lazy_static = "1"
 log = "0.4"
 serde = { version = "1", optional = true, features = ["derive"] }
 thiserror = "1"

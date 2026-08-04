@@ -1,70 +1,70 @@
 #[cfg(target_os = "linux")]
-use std::{collections::HashMap, sync::Mutex};
+use std::sync::{Arc, Mutex};
 
-use lazy_static::*;
 use log::{info, trace};
 use oxilangtag::LanguageTag;
 use speech_dispatcher::*;
 
-use crate::{Backend, BackendId, Error, Features, UtteranceId, Voice, CALLBACKS};
+use crate::{Backend, BackendId, Callbacks, Error, Features, UtteranceId, Voice};
 
 #[derive(Clone, Debug)]
-pub(crate) struct SpeechDispatcher(Connection);
-
-lazy_static! {
-    static ref SPEAKING: Mutex<HashMap<usize, bool>> = {
-        let m: HashMap<usize, bool> = HashMap::new();
-        Mutex::new(m)
-    };
+pub(crate) struct SpeechDispatcher {
+    connection: Connection,
+    speaking: Arc<Mutex<bool>>,
 }
 
 impl SpeechDispatcher {
-    pub(crate) fn new() -> std::result::Result<Self, Error> {
+    pub(crate) fn new(callbacks: Arc<Mutex<Callbacks>>) -> std::result::Result<Self, Error> {
         info!("Initializing SpeechDispatcher backend");
         let connection = speech_dispatcher::Connection::open("tts", "tts", "tts", Mode::Threaded)?;
-        let sd = SpeechDispatcher(connection);
-        let mut speaking = SPEAKING.lock().unwrap();
-        speaking.insert(sd.0.client_id(), false);
-        sd.0.on_begin(Some(Box::new(|msg_id, client_id| {
-            let mut speaking = SPEAKING.lock().unwrap();
-            speaking.insert(client_id, true);
-            let mut callbacks = CALLBACKS.lock().unwrap();
-            let backend_id = BackendId::SpeechDispatcher(client_id);
-            let cb = callbacks.get_mut(&backend_id).unwrap();
-            let utterance_id = UtteranceId::SpeechDispatcher(msg_id as u64);
-            if let Some(f) = cb.utterance_begin.as_mut() {
-                f(utterance_id);
+        let sd = SpeechDispatcher {
+            connection,
+            speaking: Arc::new(Mutex::new(false)),
+        };
+        sd.connection.on_begin(Some(Box::new({
+            let speaking = sd.speaking.clone();
+            let callbacks = callbacks.clone();
+            move |msg_id, _client_id| {
+                *speaking.lock().unwrap() = true;
+                callbacks
+                    .lock()
+                    .unwrap()
+                    .utterance_begin(UtteranceId::SpeechDispatcher(msg_id as u64));
             }
         })));
-        sd.0.on_end(Some(Box::new(|msg_id, client_id| {
-            let mut speaking = SPEAKING.lock().unwrap();
-            speaking.insert(client_id, false);
-            let mut callbacks = CALLBACKS.lock().unwrap();
-            let backend_id = BackendId::SpeechDispatcher(client_id);
-            let cb = callbacks.get_mut(&backend_id).unwrap();
-            let utterance_id = UtteranceId::SpeechDispatcher(msg_id as u64);
-            if let Some(f) = cb.utterance_end.as_mut() {
-                f(utterance_id);
+        sd.connection.on_end(Some(Box::new({
+            let speaking = sd.speaking.clone();
+            let callbacks = callbacks.clone();
+            move |msg_id, _client_id| {
+                *speaking.lock().unwrap() = false;
+                callbacks
+                    .lock()
+                    .unwrap()
+                    .utterance_end(UtteranceId::SpeechDispatcher(msg_id as u64));
             }
         })));
-        sd.0.on_cancel(Some(Box::new(|msg_id, client_id| {
-            let mut speaking = SPEAKING.lock().unwrap();
-            speaking.insert(client_id, false);
-            let mut callbacks = CALLBACKS.lock().unwrap();
-            let backend_id = BackendId::SpeechDispatcher(client_id);
-            let cb = callbacks.get_mut(&backend_id).unwrap();
-            let utterance_id = UtteranceId::SpeechDispatcher(msg_id as u64);
-            if let Some(f) = cb.utterance_stop.as_mut() {
-                f(utterance_id);
+        sd.connection.on_cancel(Some(Box::new({
+            let speaking = sd.speaking.clone();
+            let callbacks = callbacks.clone();
+            move |msg_id, _client_id| {
+                *speaking.lock().unwrap() = false;
+                callbacks
+                    .lock()
+                    .unwrap()
+                    .utterance_stop(UtteranceId::SpeechDispatcher(msg_id as u64));
             }
         })));
-        sd.0.on_pause(Some(Box::new(|_msg_id, client_id| {
-            let mut speaking = SPEAKING.lock().unwrap();
-            speaking.insert(client_id, false);
+        sd.connection.on_pause(Some(Box::new({
+            let speaking = sd.speaking.clone();
+            move |_msg_id, _client_id| {
+                *speaking.lock().unwrap() = false;
+            }
         })));
-        sd.0.on_resume(Some(Box::new(|_msg_id, client_id| {
-            let mut speaking = SPEAKING.lock().unwrap();
-            speaking.insert(client_id, true);
+        sd.connection.on_resume(Some(Box::new({
+            let speaking = sd.speaking.clone();
+            move |_msg_id, _client_id| {
+                *speaking.lock().unwrap() = true;
+            }
         })));
         Ok(sd)
     }
@@ -72,7 +72,7 @@ impl SpeechDispatcher {
 
 impl Backend for SpeechDispatcher {
     fn id(&self) -> Option<BackendId> {
-        Some(BackendId::SpeechDispatcher(self.0.client_id()))
+        Some(BackendId::SpeechDispatcher(self.connection.client_id()))
     }
 
     fn supported_features(&self) -> Features {
@@ -95,11 +95,11 @@ impl Backend for SpeechDispatcher {
         }
         let single_char = text.to_string().capacity() == 1;
         if single_char {
-            self.0.set_punctuation(Punctuation::All)?;
+            self.connection.set_punctuation(Punctuation::All)?;
         }
-        let id = self.0.say(Priority::Important, text);
+        let id = self.connection.say(Priority::Important, text);
         if single_char {
-            self.0.set_punctuation(Punctuation::None)?;
+            self.connection.set_punctuation(Punctuation::None)?;
         }
         if let Some(id) = id {
             Ok(Some(UtteranceId::SpeechDispatcher(id)))
@@ -110,7 +110,7 @@ impl Backend for SpeechDispatcher {
 
     fn stop(&mut self) -> Result<(), Error> {
         trace!("stop()");
-        self.0.cancel()?;
+        self.connection.cancel()?;
         Ok(())
     }
 
@@ -127,11 +127,11 @@ impl Backend for SpeechDispatcher {
     }
 
     fn get_rate(&self) -> Result<f32, Error> {
-        Ok(self.0.get_voice_rate() as f32)
+        Ok(self.connection.get_voice_rate() as f32)
     }
 
     fn set_rate(&mut self, rate: f32) -> Result<(), Error> {
-        self.0.set_voice_rate(rate as i32)?;
+        self.connection.set_voice_rate(rate as i32)?;
         Ok(())
     }
 
@@ -148,11 +148,11 @@ impl Backend for SpeechDispatcher {
     }
 
     fn get_pitch(&self) -> Result<f32, Error> {
-        Ok(self.0.get_voice_pitch() as f32)
+        Ok(self.connection.get_voice_pitch() as f32)
     }
 
     fn set_pitch(&mut self, pitch: f32) -> Result<(), Error> {
-        self.0.set_voice_pitch(pitch as i32)?;
+        self.connection.set_voice_pitch(pitch as i32)?;
         Ok(())
     }
 
@@ -169,23 +169,21 @@ impl Backend for SpeechDispatcher {
     }
 
     fn get_volume(&self) -> Result<f32, Error> {
-        Ok(self.0.get_volume() as f32)
+        Ok(self.connection.get_volume() as f32)
     }
 
     fn set_volume(&mut self, volume: f32) -> Result<(), Error> {
-        self.0.set_volume(volume as i32)?;
+        self.connection.set_volume(volume as i32)?;
         Ok(())
     }
 
     fn is_speaking(&self) -> Result<bool, Error> {
-        let speaking = SPEAKING.lock().unwrap();
-        let is_speaking = speaking.get(&self.0.client_id()).unwrap();
-        Ok(*is_speaking)
+        Ok(*self.speaking.lock().unwrap())
     }
 
     fn voices(&self) -> Result<Vec<Voice>, Error> {
         let rv = self
-            .0
+            .connection
             .list_synthesis_voices()?
             .iter()
             .filter(|v| LanguageTag::parse(v.language.clone()).is_ok())
@@ -204,19 +202,12 @@ impl Backend for SpeechDispatcher {
     }
 
     fn set_voice(&mut self, voice: &Voice) -> Result<(), Error> {
-        for v in self.0.list_synthesis_voices()? {
+        for v in self.connection.list_synthesis_voices()? {
             if v.name == voice.name {
-                self.0.set_synthesis_voice(&v)?;
+                self.connection.set_synthesis_voice(&v)?;
                 return Ok(());
             }
         }
         Err(Error::OperationFailed)
-    }
-}
-
-impl Drop for SpeechDispatcher {
-    fn drop(&mut self) {
-        let mut speaking = SPEAKING.lock().unwrap();
-        speaking.remove(&self.0.client_id());
     }
 }
