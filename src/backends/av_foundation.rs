@@ -1,30 +1,41 @@
 use std::{
-    ptr,
+    collections::HashSet,
+    io::Cursor,
+    ptr::{self, NonNull},
+    slice,
     sync::{
         Arc,
         atomic::{AtomicU64, Ordering},
         mpsc::{Receiver, Sender, channel},
     },
     thread,
+    time::Duration,
 };
 
+use block2::RcBlock;
+use hound::{SampleFormat, WavSpec, WavWriter};
 use objc2::{
     AllocAnyThread, DefinedClass, define_class, msg_send, rc::Retained, runtime::ProtocolObject,
+    sel,
 };
 use objc2_avf_audio::{
-    AVSpeechBoundary, AVSpeechSynthesisVoice, AVSpeechSynthesisVoiceGender, AVSpeechSynthesizer,
-    AVSpeechSynthesizerDelegate, AVSpeechUtterance,
+    AVAudioBuffer, AVAudioCommonFormat, AVAudioPCMBuffer, AVSpeechBoundary, AVSpeechSynthesisVoice,
+    AVSpeechSynthesisVoiceGender, AVSpeechSynthesizer, AVSpeechSynthesizerDelegate,
+    AVSpeechUtterance,
 };
 use objc2_foundation::{NSObject, NSObjectProtocol, NSString};
 use oxilangtag::LanguageTag;
 use parking_lot::Mutex;
 use tracing::{Span, info_span, instrument, trace};
 
-use crate::{Backend, Callbacks, Error, Features, Gender, UtteranceId, Voice};
+use crate::{Backend, Callbacks, Error, Features, Gender, SynthesizedAudio, UtteranceId, Voice};
 
 #[derive(Debug)]
 struct Ivars {
     callbacks: Arc<Mutex<Callbacks>>,
+    /// Addresses of utterances being written to audio; their delegate events belong to
+    /// `synthesize`, not to speech.
+    syntheses: Arc<Mutex<HashSet<usize>>>,
     // Delegate methods fire on AVFoundation's own threads; entering this span there connects
     // them back to the backend that created the synthesizer.
     span: Span,
@@ -48,8 +59,12 @@ define_class!(
         ) {
             let ivars = self.ivars();
             let _entered = ivars.span.enter();
-            let utterance_id = UtteranceId::AvFoundation(ptr::from_ref(utterance) as usize);
+            let address = ptr::from_ref(utterance) as usize;
+            let utterance_id = UtteranceId::AvFoundation(address);
             trace!(?utterance_id, "Utterance started");
+            if ivars.syntheses.lock().contains(&address) {
+                return;
+            }
             ivars.callbacks.lock().utterance_begin(utterance_id);
         }
 
@@ -61,8 +76,12 @@ define_class!(
         ) {
             let ivars = self.ivars();
             let _entered = ivars.span.enter();
-            let utterance_id = UtteranceId::AvFoundation(ptr::from_ref(utterance) as usize);
+            let address = ptr::from_ref(utterance) as usize;
+            let utterance_id = UtteranceId::AvFoundation(address);
             trace!(?utterance_id, "Utterance finished");
+            if ivars.syntheses.lock().remove(&address) {
+                return;
+            }
             ivars.callbacks.lock().utterance_end(utterance_id);
         }
 
@@ -74,8 +93,12 @@ define_class!(
         ) {
             let ivars = self.ivars();
             let _entered = ivars.span.enter();
-            let utterance_id = UtteranceId::AvFoundation(ptr::from_ref(utterance) as usize);
+            let address = ptr::from_ref(utterance) as usize;
+            let utterance_id = UtteranceId::AvFoundation(address);
             trace!(?utterance_id, "Utterance canceled");
+            if ivars.syntheses.lock().remove(&address) {
+                return;
+            }
             ivars.callbacks.lock().utterance_stop(utterance_id);
         }
     }
@@ -94,6 +117,14 @@ enum Command {
         /// Replies with the utterance's address, which identifies it in delegate callbacks.
         reply: Sender<Result<usize, Error>>,
     },
+    Synthesize {
+        text: String,
+        rate: f32,
+        volume: f32,
+        pitch: f32,
+        voice_id: Option<String>,
+        reply: Sender<Result<SynthesizedAudio, Error>>,
+    },
     Stop {
         reply: Sender<()>,
     },
@@ -106,7 +137,11 @@ enum Command {
 // its delegate for their entire lifetime; the backend only holds a channel to it.
 fn run_synthesizer(callbacks: Arc<Mutex<Callbacks>>, span: Span, commands: Receiver<Command>) {
     let synth = unsafe { AVSpeechSynthesizer::new() };
-    let delegate = Delegate::alloc().set_ivars(Ivars { callbacks, span });
+    let delegate = Delegate::alloc().set_ivars(Ivars {
+        callbacks,
+        syntheses: Arc::new(Mutex::new(HashSet::new())),
+        span,
+    });
     let delegate: Retained<Delegate> = unsafe { msg_send![super(delegate), init] };
     unsafe { synth.setDelegate(Some(ProtocolObject::from_ref(&*delegate))) };
 
@@ -133,6 +168,24 @@ fn run_synthesizer(callbacks: Arc<Mutex<Callbacks>>, span: Span, commands: Recei
                     voice_id.as_deref(),
                 ));
             }
+            Command::Synthesize {
+                text,
+                rate,
+                volume,
+                pitch,
+                voice_id,
+                reply,
+            } => {
+                let _ = reply.send(synthesize_utterance(
+                    &synth,
+                    &delegate,
+                    &text,
+                    rate,
+                    volume,
+                    pitch,
+                    voice_id.as_deref(),
+                ));
+            }
             Command::Stop { reply } => {
                 unsafe { synth.stopSpeakingAtBoundary(AVSpeechBoundary::Immediate) };
                 let _ = reply.send(());
@@ -141,6 +194,29 @@ fn run_synthesizer(callbacks: Arc<Mutex<Callbacks>>, span: Span, commands: Recei
                 let _ = reply.send(unsafe { synth.isSpeaking() });
             }
         }
+    }
+}
+
+fn build_utterance(
+    text: &str,
+    rate: f32,
+    volume: f32,
+    pitch: f32,
+    voice_id: Option<&str>,
+) -> Result<Retained<AVSpeechUtterance>, Error> {
+    unsafe {
+        let text = NSString::from_str(text);
+        let utterance = AVSpeechUtterance::initWithString(AVSpeechUtterance::alloc(), &text);
+        utterance.setRate(rate);
+        utterance.setVolume(volume);
+        utterance.setPitchMultiplier(pitch);
+        if let Some(voice_id) = voice_id {
+            let ns_voice_id = NSString::from_str(voice_id);
+            let voice = AVSpeechSynthesisVoice::voiceWithIdentifier(&ns_voice_id)
+                .ok_or_else(|| Error::VoiceNotFound(voice_id.to_string()))?;
+            utterance.setVoice(Some(&voice));
+        }
+        Ok(utterance)
     }
 }
 
@@ -157,20 +233,177 @@ fn speak_utterance(
         if interrupt && synth.isSpeaking() {
             synth.stopSpeakingAtBoundary(AVSpeechBoundary::Immediate);
         }
-        let text = NSString::from_str(text);
-        let utterance = AVSpeechUtterance::initWithString(AVSpeechUtterance::alloc(), &text);
-        utterance.setRate(rate);
-        utterance.setVolume(volume);
-        utterance.setPitchMultiplier(pitch);
-        if let Some(voice_id) = voice_id {
-            let ns_voice_id = NSString::from_str(voice_id);
-            let voice = AVSpeechSynthesisVoice::voiceWithIdentifier(&ns_voice_id)
-                .ok_or_else(|| Error::VoiceNotFound(voice_id.to_string()))?;
-            utterance.setVoice(Some(&voice));
-        }
-        synth.speakUtterance(&utterance);
-        Ok(ptr::from_ref(&*utterance) as usize)
     }
+    let utterance = build_utterance(text, rate, volume, pitch, voice_id)?;
+    unsafe { synth.speakUtterance(&utterance) };
+    Ok(ptr::from_ref(&*utterance) as usize)
+}
+
+/// One buffer's worth of synthesized audio, in the engine's native sample type.
+enum Chunk {
+    F32(WavSpec, Vec<f32>),
+    I16(WavSpec, Vec<i16>),
+    /// The zero-length buffer that ends a write.
+    Done,
+    Unsupported,
+}
+
+/// Copies samples out interleaved. `data` points to one pointer per channel; each channel's
+/// samples are `stride` elements apart, per the `AVAudioPCMBuffer` channel-data layout.
+unsafe fn gather<T: Copy>(
+    data: *mut NonNull<T>,
+    channels: usize,
+    frames: usize,
+    stride: usize,
+) -> Vec<T> {
+    unsafe {
+        let pointers = slice::from_raw_parts(data, channels);
+        let mut samples = Vec::with_capacity(frames * channels);
+        for frame in 0..frames {
+            for pointer in pointers {
+                samples.push(*pointer.as_ptr().add(frame * stride));
+            }
+        }
+        samples
+    }
+}
+
+// Sample rates are small positive integers reported as f64.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+fn extract_chunk(buffer: &AVAudioBuffer) -> Chunk {
+    let Some(pcm) = buffer.downcast_ref::<AVAudioPCMBuffer>() else {
+        return Chunk::Unsupported;
+    };
+    unsafe {
+        let frames = pcm.frameLength() as usize;
+        if frames == 0 {
+            return Chunk::Done;
+        }
+        let format = pcm.format();
+        let Ok(channels) = u16::try_from(format.channelCount()) else {
+            return Chunk::Unsupported;
+        };
+        let sample_rate = format.sampleRate() as u32;
+        let stride = pcm.stride();
+        match format.commonFormat() {
+            AVAudioCommonFormat::PCMFormatFloat32 => {
+                let data = pcm.floatChannelData();
+                if data.is_null() {
+                    return Chunk::Unsupported;
+                }
+                let spec = WavSpec {
+                    channels,
+                    sample_rate,
+                    bits_per_sample: 32,
+                    sample_format: SampleFormat::Float,
+                };
+                Chunk::F32(spec, gather(data, channels.into(), frames, stride))
+            }
+            AVAudioCommonFormat::PCMFormatInt16 => {
+                let data = pcm.int16ChannelData();
+                if data.is_null() {
+                    return Chunk::Unsupported;
+                }
+                let spec = WavSpec {
+                    channels,
+                    sample_rate,
+                    bits_per_sample: 16,
+                    sample_format: SampleFormat::Int,
+                };
+                Chunk::I16(spec, gather(data, channels.into(), frames, stride))
+            }
+            _ => Chunk::Unsupported,
+        }
+    }
+}
+
+fn to_wav(chunk: &Chunk) -> Result<SynthesizedAudio, Error> {
+    let mut cursor = Cursor::new(Vec::new());
+    match chunk {
+        Chunk::F32(spec, samples) => {
+            let mut writer = WavWriter::new(&mut cursor, *spec)?;
+            for sample in samples {
+                writer.write_sample(*sample)?;
+            }
+            writer.finalize()?;
+        }
+        Chunk::I16(spec, samples) => {
+            let mut writer = WavWriter::new(&mut cursor, *spec)?;
+            for sample in samples {
+                writer.write_sample(*sample)?;
+            }
+            writer.finalize()?;
+        }
+        Chunk::Done | Chunk::Unsupported => {
+            return Err(Error::OperationFailed("synthesis produced no audio"));
+        }
+    }
+    SynthesizedAudio::from_wav(cursor.into_inner())
+}
+
+/// Bounds the wait between buffers so a stalled write can't hang the synthesizer thread.
+const SYNTHESIS_CHUNK_TIMEOUT: Duration = Duration::from_secs(30);
+
+fn assemble(chunks: &Receiver<Chunk>) -> Result<SynthesizedAudio, Error> {
+    let mut audio: Option<Chunk> = None;
+    loop {
+        let chunk = chunks
+            .recv_timeout(SYNTHESIS_CHUNK_TIMEOUT)
+            .map_err(|_| Error::OperationFailed("synthesis timed out"))?;
+        match (&mut audio, chunk) {
+            (_, Chunk::Unsupported) => {
+                return Err(Error::OperationFailed("unsupported synthesis audio format"));
+            }
+            (None, Chunk::Done) => {
+                return Err(Error::OperationFailed("synthesis produced no audio"));
+            }
+            (Some(chunk), Chunk::Done) => return to_wav(chunk),
+            (None, chunk) => audio = Some(chunk),
+            (Some(Chunk::F32(_, samples)), Chunk::F32(_, mut more)) => samples.append(&mut more),
+            (Some(Chunk::I16(_, samples)), Chunk::I16(_, mut more)) => samples.append(&mut more),
+            _ => {
+                return Err(Error::OperationFailed(
+                    "inconsistent synthesis audio format",
+                ));
+            }
+        }
+    }
+}
+
+fn synthesize_utterance(
+    synth: &AVSpeechSynthesizer,
+    delegate: &Delegate,
+    text: &str,
+    rate: f32,
+    volume: f32,
+    pitch: f32,
+    voice_id: Option<&str>,
+) -> Result<SynthesizedAudio, Error> {
+    // `writeUtterance:toBufferCallback:` is unavailable before macOS 10.15, where calling it
+    // would crash with an unrecognized selector.
+    if !synth.respondsToSelector(sel!(writeUtterance:toBufferCallback:)) {
+        return Err(Error::UnsupportedFeature);
+    }
+    let ivars = delegate.ivars();
+    let utterance = build_utterance(text, rate, volume, pitch, voice_id)?;
+    let address = ptr::from_ref(&*utterance) as usize;
+    let id = UtteranceId::AvFoundation(address);
+    ivars.syntheses.lock().insert(address);
+    ivars.callbacks.lock().synthesis_begin(id);
+    let (chunks, assembled) = channel();
+    let block = RcBlock::new(move |buffer: NonNull<AVAudioBuffer>| {
+        let chunk = extract_chunk(unsafe { buffer.as_ref() });
+        let _ = chunks.send(chunk);
+    });
+    unsafe { synth.writeUtterance_toBufferCallback(&utterance, RcBlock::as_ptr(&block)) };
+    let result = assemble(&assembled);
+    if result.is_err() {
+        // No delegate completion event will clear the entry, so clear it here.
+        ivars.syntheses.lock().remove(&address);
+    }
+    let audio = result?;
+    ivars.callbacks.lock().synthesis_complete(id);
+    Ok(audio)
 }
 
 #[derive(Clone, Debug)]
@@ -225,8 +458,9 @@ impl Backend for AvFoundation {
             volume: true,
             is_speaking: true,
             voice: true,
-            get_voice: false,
             utterance_callbacks: true,
+            synthesis: true,
+            ..Default::default()
         }
     }
 
@@ -247,6 +481,23 @@ impl Backend for AvFoundation {
             reply,
         })??;
         Ok(Some(UtteranceId::AvFoundation(address)))
+    }
+
+    #[instrument(
+        level = "debug",
+        skip(self),
+        fields(rate = self.rate, volume = self.volume, pitch = self.pitch),
+        err
+    )]
+    fn synthesize(&mut self, text: &str) -> Result<SynthesizedAudio, Error> {
+        self.request(|reply| Command::Synthesize {
+            text: text.to_string(),
+            rate: self.rate,
+            volume: self.volume,
+            pitch: self.pitch,
+            voice_id: self.voice.as_ref().map(|v| v.id().to_string()),
+            reply,
+        })?
     }
 
     #[instrument(level = "debug", skip(self), err)]

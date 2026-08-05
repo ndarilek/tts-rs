@@ -14,6 +14,7 @@ crate-type = ["lib", "cdylib", "staticlib"]
 
 [dependencies]
 dyn-clonable = "0.9"
+hound = "3.5"
 oxilangtag = "0.1"
 parking_lot = "0.12"
 serde = { version = "1", optional = true, features = ["derive"] }
@@ -40,9 +41,14 @@ ssip-client-async = "0.19"
 ssip = "=0.5.0"
 
 [target.'cfg(target_vendor = "apple")'.dependencies]
+block2 = "0.6"
 objc2 = "0.6"
 objc2-avf-audio = { version = "0.3", default-features = false, features = [
     "std",
+    "block2",
+    "AVAudioBuffer",
+    "AVAudioFormat",
+    "AVAudioTypes",
     "AVSpeechSynthesis",
 ] }
 objc2-foundation = { version = "0.3", default-features = false, features = [
@@ -71,6 +77,7 @@ web-sys = { version = "0.3", features = [
 [target.'cfg(target_os="android")'.dependencies]
 jni = "0.22"
 ndk-context = "0.1"
+tempfile = "3"
 
 [lints.rust]
 warnings = "deny"

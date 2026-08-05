@@ -1,9 +1,11 @@
 #[cfg(target_os = "android")]
 use std::{
+    fs,
     os::raw::c_void,
     sync::{
         Arc, OnceLock,
         atomic::{AtomicU64, Ordering},
+        mpsc::{Sender, channel},
     },
     thread,
     time::{Duration, Instant},
@@ -19,7 +21,7 @@ use jni::{
 use parking_lot::{Mutex, RwLock};
 use tracing::{Span, error, field::Empty, info_span, instrument};
 
-use crate::{Backend, Callbacks, Error, Features, UtteranceId, Voice};
+use crate::{Backend, Callbacks, Error, Features, SynthesizedAudio, UtteranceId, Voice};
 
 static BRIDGE: OnceLock<Global<JClass<'static>>> = OnceLock::new();
 static NEXT_BACKEND_ID: AtomicU64 = AtomicU64::new(0);
@@ -30,6 +32,22 @@ static NEXT_UTTERANCE_ID: AtomicU64 = AtomicU64::new(0);
 // along so JNI callback executions can be connected back to the backend that spawned them.
 type CallbacksEntry = (u64, Span, Arc<Mutex<Callbacks>>);
 static CALLBACKS: Mutex<Vec<CallbacksEntry>> = Mutex::new(Vec::new());
+/// In-flight `synthesize` calls by utterance ID; their progress events complete the blocked
+/// synthesizing thread instead of reaching user callbacks.
+type SynthesisEntry = (u64, Sender<Result<(), Error>>);
+static SYNTHESES: Mutex<Vec<SynthesisEntry>> = Mutex::new(Vec::new());
+
+fn is_synthesis(utterance_id: u64) -> bool {
+    SYNTHESES.lock().iter().any(|(id, _)| *id == utterance_id)
+}
+
+fn take_synthesis(utterance_id: u64) -> Option<Sender<Result<(), Error>>> {
+    let mut syntheses = SYNTHESES.lock();
+    syntheses
+        .iter()
+        .position(|(id, _)| *id == utterance_id)
+        .map(|index| syntheses.remove(index).1)
+}
 
 fn with_callbacks(backend_id: u64, f: impl FnOnce(&mut Callbacks)) {
     // Release the registry lock before the user callback runs.
@@ -99,6 +117,9 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onStart(
             .i()?;
         let backend_id = u64::try_from(backend_id).expect("Backend ID must be non-negative");
         let utterance_id = utterance_id.to_string().parse::<u64>().unwrap();
+        if is_synthesis(utterance_id) {
+            return Ok(());
+        }
         let utterance_id = UtteranceId::Android(utterance_id);
         with_callbacks(backend_id, |callbacks| {
             callbacks.utterance_begin(utterance_id);
@@ -122,6 +143,10 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onStop(
             .i()?;
         let backend_id = u64::try_from(backend_id).expect("Backend ID must be non-negative");
         let utterance_id = utterance_id.to_string().parse::<u64>().unwrap();
+        if let Some(done) = take_synthesis(utterance_id) {
+            let _ = done.send(Err(Error::OperationFailed("synthesis stopped")));
+            return Ok(());
+        }
         let utterance_id = UtteranceId::Android(utterance_id);
         with_callbacks(backend_id, |callbacks| {
             callbacks.utterance_end(utterance_id);
@@ -145,6 +170,10 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onDone(
             .i()?;
         let backend_id = u64::try_from(backend_id).expect("Backend ID must be non-negative");
         let utterance_id = utterance_id.to_string().parse::<u64>().unwrap();
+        if let Some(done) = take_synthesis(utterance_id) {
+            let _ = done.send(Ok(()));
+            return Ok(());
+        }
         let utterance_id = UtteranceId::Android(utterance_id);
         with_callbacks(backend_id, |callbacks| {
             callbacks.utterance_stop(utterance_id);
@@ -168,6 +197,10 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onError(
             .i()?;
         let backend_id = u64::try_from(backend_id).expect("Backend ID must be non-negative");
         let utterance_id = utterance_id.to_string().parse::<u64>().unwrap();
+        if let Some(done) = take_synthesis(utterance_id) {
+            let _ = done.send(Err(Error::OperationFailed("synthesis")));
+            return Ok(());
+        }
         let utterance_id = UtteranceId::Android(utterance_id);
         with_callbacks(backend_id, |callbacks| {
             callbacks.utterance_end(utterance_id);
@@ -257,11 +290,10 @@ impl Backend for Android {
             stop: true,
             rate: true,
             pitch: true,
-            volume: false,
             is_speaking: true,
             utterance_callbacks: true,
-            voice: false,
-            get_voice: false,
+            synthesis: true,
+            ..Default::default()
         }
     }
 
@@ -291,6 +323,95 @@ impl Backend for Android {
         } else {
             Err(Error::OperationFailed("speak"))
         }
+    }
+
+    #[instrument(level = "debug", skip(self), err)]
+    fn synthesize(&mut self, text: &str) -> Result<SynthesizedAudio, Error> {
+        let uid = NEXT_UTTERANCE_ID.fetch_add(1, Ordering::Relaxed);
+        let id = UtteranceId::Android(uid);
+        // The engine can only synthesize to a file, so stage a temporary one in the app's cache
+        // directory: dropping it deletes it on every exit path, and the OS evicts anything a
+        // hard kill leaves behind.
+        let cache_dir = Self::vm().attach_current_thread(|env| -> Result<String, Error> {
+            let ctx = ndk_context::android_context();
+            let context = unsafe { JObject::from_raw(env, ctx.context().cast()) };
+            let cache_dir = env
+                .call_method(
+                    &context,
+                    jni_str!("getCacheDir"),
+                    jni_sig!("()Ljava/io/File;"),
+                    &[],
+                )?
+                .l()?;
+            let cache_dir = env
+                .call_method(
+                    &cache_dir,
+                    jni_str!("getAbsolutePath"),
+                    jni_sig!("()Ljava/lang/String;"),
+                    &[],
+                )?
+                .l()?;
+            let cache_dir = env.cast_local::<JString>(cache_dir)?;
+            Ok(cache_dir.to_string())
+        })?;
+        let file = tempfile::Builder::new()
+            .prefix("tts-synthesis-")
+            .suffix(".wav")
+            .tempfile_in(&cache_dir)?;
+        let path = file
+            .path()
+            .to_str()
+            .ok_or(Error::OperationFailed("synthesis path encoding"))?
+            .to_string();
+        let (done, completion) = channel();
+        SYNTHESES.lock().push((uid, done));
+        with_callbacks(self.id, |callbacks| {
+            callbacks.synthesis_begin(id);
+        });
+        let rv = Self::vm().attach_current_thread(|env| -> Result<jint, Error> {
+            let text = env.new_string(text)?;
+            let jpath = env.new_string(&path)?;
+            let file = env.new_object(
+                jni_str!("java/io/File"),
+                jni_sig!("(Ljava/lang/String;)V"),
+                &[(&jpath).into()],
+            )?;
+            let uid = env.new_string(uid.to_string())?;
+            let rv = env.call_method(
+                self.tts.as_obj(),
+                jni_str!("synthesizeToFile"),
+                jni_sig!(
+                    "(Ljava/lang/CharSequence;Landroid/os/Bundle;Ljava/io/File;Ljava/lang/String;)I"
+                ),
+                &[
+                    (&text).into(),
+                    (&JObject::null()).into(),
+                    (&file).into(),
+                    (&uid).into(),
+                ],
+            )?;
+            Ok(rv.i()?)
+        });
+        match rv {
+            Ok(0) => {}
+            Ok(_) => {
+                take_synthesis(uid);
+                return Err(Error::OperationFailed("synthesizeToFile"));
+            }
+            Err(e) => {
+                take_synthesis(uid);
+                return Err(e);
+            }
+        }
+        completion
+            .recv()
+            .map_err(|_| Error::OperationFailed("synthesis completion"))??;
+        let bytes = fs::read(file.path())?;
+        let audio = SynthesizedAudio::from_wav(bytes)?;
+        with_callbacks(self.id, |callbacks| {
+            callbacks.synthesis_complete(id);
+        });
+        Ok(audio)
     }
 
     #[instrument(level = "debug", skip(self), err)]

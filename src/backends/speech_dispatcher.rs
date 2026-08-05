@@ -21,7 +21,7 @@ use ssip_client_async::{
 };
 use tracing::{info_span, instrument, trace, warn};
 
-use crate::{Backend, Callbacks, Error, Features, UtteranceId, Voice};
+use crate::{Backend, Callbacks, Error, Features, SynthesizedAudio, UtteranceId, Voice};
 
 const POLL_INTERVAL: Duration = Duration::from_millis(10);
 
@@ -403,8 +403,8 @@ impl Backend for SpeechDispatcher {
             volume: true,
             is_speaking: true,
             voice: true,
-            get_voice: false,
             utterance_callbacks: true,
+            ..Default::default()
         }
     }
 
@@ -432,6 +432,11 @@ impl Backend for SpeechDispatcher {
             )?;
         }
         Ok(Some(UtteranceId::SpeechDispatcher(id)))
+    }
+
+    #[instrument(level = "debug", skip(self, _text), err)]
+    fn synthesize(&mut self, _text: &str) -> Result<SynthesizedAudio, Error> {
+        Err(Error::UnsupportedFeature)
     }
 
     #[instrument(level = "debug", skip(self), err)]

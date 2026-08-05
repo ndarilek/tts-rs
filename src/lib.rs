@@ -10,10 +10,13 @@
 
 use std::{boxed::Box, fmt, sync::Arc};
 
+#[cfg(any(windows, target_os = "android", target_vendor = "apple"))]
+use std::io::Cursor;
 #[cfg(windows)]
 use std::string::FromUtf16Error;
 
 use dyn_clonable::clonable;
+pub use hound::{SampleFormat, WavSpec};
 pub use oxilangtag::LanguageTag;
 use parking_lot::{Mutex, RwLock};
 #[cfg(target_os = "linux")]
@@ -95,6 +98,61 @@ impl fmt::Display for UtteranceId {
     }
 }
 
+/// Speech synthesized to memory: a complete WAV file and its parsed format.
+#[derive(Clone)]
+pub struct SynthesizedAudio {
+    spec: WavSpec,
+    bytes: Vec<u8>,
+}
+
+impl SynthesizedAudio {
+    /// Validates that `bytes` is a well-formed WAV file and captures its format.
+    #[cfg(any(windows, target_os = "android", target_vendor = "apple"))]
+    pub(crate) fn from_wav(bytes: Vec<u8>) -> Result<Self, Error> {
+        let spec = hound::WavReader::new(Cursor::new(&bytes))?.spec();
+        Ok(Self { spec, bytes })
+    }
+
+    /// Returns the audio format.
+    #[must_use]
+    pub fn spec(&self) -> WavSpec {
+        self.spec
+    }
+
+    /// Returns the complete WAV file, header included.
+    #[must_use]
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+
+    /// Consumes this audio, returning the complete WAV file, header included.
+    #[must_use]
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.bytes
+    }
+}
+
+impl AsRef<[u8]> for SynthesizedAudio {
+    fn as_ref(&self) -> &[u8] {
+        &self.bytes
+    }
+}
+
+impl From<SynthesizedAudio> for Vec<u8> {
+    fn from(audio: SynthesizedAudio) -> Self {
+        audio.bytes
+    }
+}
+
+impl fmt::Debug for SynthesizedAudio {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        f.debug_struct("SynthesizedAudio")
+            .field("spec", &self.spec)
+            .field("bytes", &self.bytes.len())
+            .finish()
+    }
+}
+
 // Independent capability flags, not modal state, so a bool-heavy struct is appropriate.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, PartialOrd, Ord)]
@@ -105,6 +163,7 @@ pub struct Features {
     pub pitch: bool,
     pub rate: bool,
     pub stop: bool,
+    pub synthesis: bool,
     pub utterance_callbacks: bool,
     pub voice: bool,
     pub get_voice: bool,
@@ -142,6 +201,8 @@ pub enum Error {
     #[cfg(windows)]
     #[error(transparent)]
     UtfStringConversionFailed(#[from] FromUtf16Error),
+    #[error(transparent)]
+    Wav(#[from] hound::Error),
     #[error("Unsupported feature")]
     UnsupportedFeature,
     #[error("Out of range")]
@@ -166,6 +227,10 @@ pub(crate) trait Backend: Clone {
     ///
     /// Returns an error if synthesis fails.
     fn speak(&mut self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error>;
+    /// # Errors
+    ///
+    /// Returns an error if the text cannot be synthesized to audio.
+    fn synthesize(&mut self, text: &str) -> Result<SynthesizedAudio, Error>;
     /// # Errors
     ///
     /// Returns an error if speech cannot be stopped.
@@ -238,6 +303,8 @@ struct Callbacks {
     begin: Option<Box<dyn UtteranceCallback>>,
     end: Option<Box<dyn UtteranceCallback>>,
     stop: Option<Box<dyn UtteranceCallback>>,
+    synthesis_begin: Option<Box<dyn UtteranceCallback>>,
+    synthesis_complete: Option<Box<dyn UtteranceCallback>>,
 }
 
 impl Callbacks {
@@ -261,6 +328,22 @@ impl Callbacks {
             callback(utterance_id);
         }
     }
+
+    #[cfg(any(windows, target_os = "android", target_vendor = "apple"))]
+    #[instrument(level = "trace", skip(self))]
+    fn synthesis_begin(&mut self, utterance_id: UtteranceId) {
+        if let Some(callback) = self.synthesis_begin.as_mut() {
+            callback(utterance_id);
+        }
+    }
+
+    #[cfg(any(windows, target_os = "android", target_vendor = "apple"))]
+    #[instrument(level = "trace", skip(self))]
+    fn synthesis_complete(&mut self, utterance_id: UtteranceId) {
+        if let Some(callback) = self.synthesis_complete.as_mut() {
+            callback(utterance_id);
+        }
+    }
 }
 
 impl fmt::Debug for Callbacks {
@@ -269,6 +352,8 @@ impl fmt::Debug for Callbacks {
             .field("begin", &self.begin.is_some())
             .field("end", &self.end.is_some())
             .field("stop", &self.stop.is_some())
+            .field("synthesis_begin", &self.synthesis_begin.is_some())
+            .field("synthesis_complete", &self.synthesis_complete.is_some())
             .finish()
     }
 }
@@ -362,6 +447,25 @@ impl Tts {
     #[instrument(level = "debug", skip(self), err, ret)]
     pub fn speak(&self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error> {
         self.backend.write().speak(text, interrupt)
+    }
+
+    /// Synthesizes the specified text to audio, returned as a complete WAV file.
+    ///
+    /// Blocks until synthesis finishes, which can take noticeable time for long text; call it
+    /// off any thread that must stay responsive.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::UnsupportedFeature`] if the backend cannot synthesize to audio, or
+    /// another error if synthesis fails.
+    #[instrument(level = "debug", skip(self), err, ret)]
+    pub fn synthesize(&self, text: &str) -> Result<SynthesizedAudio, Error> {
+        let Features { synthesis, .. } = self.supported_features();
+        if synthesis {
+            self.backend.write().synthesize(text)
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
     }
 
     /// Stops current speech.
@@ -696,6 +800,46 @@ impl Tts {
         callbacks.begin = None;
         callbacks.end = None;
         callbacks.stop = None;
+    }
+
+    /// Called when this speech synthesizer begins synthesizing an utterance to audio.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::UnsupportedFeature`] if the backend does not support synthesis.
+    #[instrument(level = "debug", skip(self, callback), err)]
+    pub fn on_synthesis_begin(&self, callback: impl UtteranceCallback) -> Result<(), Error> {
+        let Features { synthesis, .. } = self.supported_features();
+        if synthesis {
+            self.callbacks.lock().synthesis_begin = Some(Box::new(callback));
+            Ok(())
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
+    }
+
+    /// Called when this speech synthesizer finishes synthesizing an utterance to audio.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::UnsupportedFeature`] if the backend does not support synthesis.
+    #[instrument(level = "debug", skip(self, callback), err)]
+    pub fn on_synthesis_complete(&self, callback: impl UtteranceCallback) -> Result<(), Error> {
+        let Features { synthesis, .. } = self.supported_features();
+        if synthesis {
+            self.callbacks.lock().synthesis_complete = Some(Box::new(callback));
+            Ok(())
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
+    }
+
+    /// Clears all registered synthesis callbacks.
+    #[instrument(level = "debug", skip(self))]
+    pub fn clear_synthesis_callbacks(&self) {
+        let mut callbacks = self.callbacks.lock();
+        callbacks.synthesis_begin = None;
+        callbacks.synthesis_complete = None;
     }
 
     /*

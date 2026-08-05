@@ -14,7 +14,7 @@ use web_sys::{
     SpeechSynthesisUtterance, SpeechSynthesisVoice,
 };
 
-use crate::{Backend, Callbacks, Error, Features, UtteranceId, Voice};
+use crate::{Backend, Callbacks, Error, Features, SynthesizedAudio, UtteranceId, Voice};
 
 #[derive(Clone, Debug)]
 pub struct Web {
@@ -60,6 +60,7 @@ impl Backend for Web {
             voice: true,
             get_voice: true,
             utterance_callbacks: true,
+            ..Default::default()
         }
     }
 
@@ -112,6 +113,11 @@ impl Backend for Web {
         } else {
             Err(Error::BackendUnavailable("no window object"))
         }
+    }
+
+    #[instrument(level = "debug", skip(self, _text), err)]
+    fn synthesize(&mut self, _text: &str) -> Result<SynthesizedAudio, Error> {
+        Err(Error::UnsupportedFeature)
     }
 
     #[instrument(level = "debug", skip(self), err)]

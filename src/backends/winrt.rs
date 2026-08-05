@@ -15,12 +15,15 @@ use windows::{
     Media::{
         Core::MediaSource,
         Playback::{MediaPlayer, MediaPlayerAudioCategory},
-        SpeechSynthesis::{SpeechSynthesizer, VoiceGender, VoiceInformation},
+        SpeechSynthesis::{
+            SpeechSynthesisStream, SpeechSynthesizer, VoiceGender, VoiceInformation,
+        },
     },
+    Storage::Streams::DataReader,
     core::Ref,
 };
 
-use crate::{Backend, Callbacks, Error, Features, Gender, UtteranceId, Voice};
+use crate::{Backend, Callbacks, Error, Features, Gender, SynthesizedAudio, UtteranceId, Voice};
 
 static NEXT_BACKEND_ID: AtomicU64 = AtomicU64::new(0);
 static NEXT_UTTERANCE_ID: AtomicU64 = AtomicU64::new(0);
@@ -41,19 +44,33 @@ impl Utterance {
         fields(utterance_id = ?self.id, text = %self.text),
         err
     )]
+    fn synthesize(
+        &self,
+        synth: &SpeechSynthesizer,
+    ) -> std::result::Result<SpeechSynthesisStream, windows::core::Error> {
+        let options = synth.Options()?;
+        options.SetSpeakingRate(self.rate.into())?;
+        options.SetAudioPitch(self.pitch.into())?;
+        options.SetAudioVolume(self.volume.into())?;
+        synth.SetVoice(&self.voice)?;
+        synth
+            .SynthesizeTextToStreamAsync(&self.text.as_str().into())?
+            .join()
+    }
+
+    #[instrument(
+        level = "debug",
+        skip_all,
+        fields(utterance_id = ?self.id, text = %self.text),
+        err
+    )]
     fn speak(
         &self,
         synth: &SpeechSynthesizer,
         player: &MediaPlayer,
         callbacks: &mut Callbacks,
     ) -> std::result::Result<(), windows::core::Error> {
-        synth.Options()?.SetSpeakingRate(self.rate.into())?;
-        synth.Options()?.SetAudioPitch(self.pitch.into())?;
-        synth.Options()?.SetAudioVolume(self.volume.into())?;
-        synth.SetVoice(&self.voice)?;
-        let stream = synth
-            .SynthesizeTextToStreamAsync(&self.text.as_str().into())?
-            .join()?;
+        let stream = self.synthesize(synth)?;
         let content_type = stream.ContentType()?;
         let source = MediaSource::CreateFromStream(&stream, &content_type)?;
         player.SetSource(&source)?;
@@ -131,6 +148,7 @@ impl Backend for WinRt {
             voice: true,
             get_voice: true,
             utterance_callbacks: true,
+            synthesis: true,
         }
     }
 
@@ -159,6 +177,29 @@ impl Backend for WinRt {
         }
         utterances.push_back(utterance);
         Ok(Some(utterance_id))
+    }
+
+    #[instrument(level = "debug", skip(self), err)]
+    fn synthesize(&mut self, text: &str) -> std::result::Result<SynthesizedAudio, Error> {
+        let utterance = Utterance {
+            id: UtteranceId::WinRt(NEXT_UTTERANCE_ID.fetch_add(1, Ordering::Relaxed)),
+            text: text.into(),
+            rate: self.rate,
+            pitch: self.pitch,
+            volume: self.volume,
+            voice: self.voice.clone(),
+        };
+        self.callbacks.lock().synthesis_begin(utterance.id);
+        let stream = utterance.synthesize(&self.synth)?;
+        let size = u32::try_from(stream.Size()?)
+            .map_err(|_| Error::OperationFailed("synthesized audio size"))?;
+        let reader = DataReader::CreateDataReader(&stream.GetInputStreamAt(0)?)?;
+        reader.LoadAsync(size)?.join()?;
+        let mut bytes = vec![0u8; size as usize];
+        reader.ReadBytes(&mut bytes)?;
+        let audio = SynthesizedAudio::from_wav(bytes)?;
+        self.callbacks.lock().synthesis_complete(utterance.id);
+        Ok(audio)
     }
 
     #[instrument(level = "debug", skip(self), err)]
