@@ -1,0 +1,19 @@
+{
+  "features": {
+    "ghcr.io/CASL0/devcontainer-features/android-sdk:1": {
+      "version": "1.0.1",
+      "resolved": "ghcr.io/casl0/devcontainer-features/android-sdk@sha256:4a5033245cf7557bfce4efdf20ac6d32b490e3bab8bfd225f7819ab1026b513e",
+      "integrity": "sha256:4a5033245cf7557bfce4efdf20ac6d32b490e3bab8bfd225f7819ab1026b513e"
+    },
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "1.8.1",
+      "resolved": "ghcr.io/devcontainers/features/java@sha256:8157bab2d8d71e40b2f3128c162fab763e2b11038fdd33784549290a5d386b48",
+      "integrity": "sha256:8157bab2d8d71e40b2f3128c162fab763e2b11038fdd33784549290a5d386b48"
+    },
+    "ghcr.io/devcontainers/features/rust:1": {
+      "version": "1.5.1",
+      "resolved": "ghcr.io/devcontainers/features/rust@sha256:f7afd923fd283db88ca961342ae65ea63a8c95bcf86e42c4c363f43bc4ba26a5",
+      "integrity": "sha256:f7afd923fd283db88ca961342ae65ea63a8c95bcf86e42c4c363f43bc4ba26a5"
+    }
+  }
+}

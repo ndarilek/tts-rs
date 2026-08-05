@@ -1,0 +1,26 @@
+cache = [
+    { inputs = [
+        ".devcontainer/postCreate.sh",
+    ], paths = [
+        "/root/.local",
+        "/root/.android",
+        "/usr/local/android/system-images",
+    ] },
+    { inputs = [
+        "Cargo.lock",
+        "Cargo.toml",
+    ], paths = [
+        "target",
+    ] },
+    { inputs = [
+        "examples/web/Cargo.lock",
+        "examples/web/Cargo.toml",
+    ], paths = [
+        "examples/web/target",
+    ] },
+    { paths = [
+        "/usr/local/cargo/registry",
+    ] },
+]
+
+script = ".radicle/ci.sh"

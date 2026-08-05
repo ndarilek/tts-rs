@@ -1,0 +1,24 @@
+{
+    "image": "debian:13",
+    "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+    "postCreateCommand": ".devcontainer/postCreate.sh",
+    "containerEnv": {
+        "ANDROID_HOME": "/usr/local/android",
+        "LIBGL_ALWAYS_SOFTWARE": "1",
+        "GALLIUM_DRIVER": "llvmpipe"
+    },
+    "remoteEnv": {
+        "PATH": "${containerEnv:PATH}:/root/.local/bin"
+    },
+    "features": {
+        "ghcr.io/devcontainers/features/rust:1": {
+            "targets": "wasm32-unknown-unknown,aarch64-linux-android,x86_64-linux-android,x86_64-pc-windows-msvc"
+        },
+        "ghcr.io/devcontainers/features/java:1": {
+            "version": 21
+        },
+        "ghcr.io/CASL0/devcontainer-features/android-sdk:1": {
+            "installNdk": true
+        }
+    }
+}
