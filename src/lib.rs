@@ -21,12 +21,13 @@ use ssip_client_async::ClientError as SpeechDispatcherError;
 use thiserror::Error;
 #[cfg(all(windows, feature = "tolk"))]
 use tolk::Tolk;
-use tracing::{Span, field::Empty, instrument};
+use tracing::instrument;
 
 mod backends;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum Backends {
     #[cfg(target_os = "android")]
     Android,
@@ -46,55 +47,24 @@ impl fmt::Display for Backends {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
             #[cfg(target_os = "android")]
-            Backends::Android => writeln!(f, "Android"),
+            Backends::Android => write!(f, "Android"),
             #[cfg(target_vendor = "apple")]
-            Backends::AvFoundation => writeln!(f, "AVFoundation"),
+            Backends::AvFoundation => write!(f, "AVFoundation"),
             #[cfg(target_os = "linux")]
-            Backends::SpeechDispatcher => writeln!(f, "Speech Dispatcher"),
+            Backends::SpeechDispatcher => write!(f, "Speech Dispatcher"),
             #[cfg(all(windows, feature = "tolk"))]
-            Backends::Tolk => writeln!(f, "Tolk"),
+            Backends::Tolk => write!(f, "Tolk"),
             #[cfg(target_arch = "wasm32")]
-            Backends::Web => writeln!(f, "Web"),
+            Backends::Web => write!(f, "Web"),
             #[cfg(windows)]
-            Backends::WinRt => writeln!(f, "Windows Runtime"),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum BackendId {
-    #[cfg(target_os = "android")]
-    Android(u64),
-    #[cfg(target_vendor = "apple")]
-    AvFoundation(u64),
-    #[cfg(target_os = "linux")]
-    SpeechDispatcher(usize),
-    #[cfg(target_arch = "wasm32")]
-    Web(u64),
-    #[cfg(windows)]
-    WinRt(u64),
-}
-
-impl fmt::Display for BackendId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        match self {
-            #[cfg(target_os = "android")]
-            BackendId::Android(id) => writeln!(f, "Android({id})"),
-            #[cfg(target_vendor = "apple")]
-            BackendId::AvFoundation(id) => writeln!(f, "AvFoundation({id})"),
-            #[cfg(target_os = "linux")]
-            BackendId::SpeechDispatcher(id) => writeln!(f, "SpeechDispatcher({id})"),
-            #[cfg(target_arch = "wasm32")]
-            BackendId::Web(id) => writeln!(f, "Web({id})"),
-            #[cfg(windows)]
-            BackendId::WinRt(id) => writeln!(f, "WinRT({id})"),
+            Backends::WinRt => write!(f, "Windows Runtime"),
         }
     }
 }
 
 #[derive(Debug, Clone, Copy, Eq, Hash, PartialEq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum UtteranceId {
     #[cfg(target_os = "android")]
     Android(u64),
@@ -112,15 +82,15 @@ impl fmt::Display for UtteranceId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
             #[cfg(target_os = "android")]
-            UtteranceId::Android(id) => writeln!(f, "Android({id})"),
+            UtteranceId::Android(id) => write!(f, "Android({id})"),
             #[cfg(target_os = "linux")]
-            UtteranceId::SpeechDispatcher(id) => writeln!(f, "SpeechDispatcher({id})"),
+            UtteranceId::SpeechDispatcher(id) => write!(f, "SpeechDispatcher({id})"),
             #[cfg(target_vendor = "apple")]
-            UtteranceId::AvFoundation(id) => writeln!(f, "AvFoundation({id})"),
+            UtteranceId::AvFoundation(id) => write!(f, "AvFoundation({id})"),
             #[cfg(target_arch = "wasm32")]
-            UtteranceId::Web(id) => writeln!(f, "Web({id})"),
+            UtteranceId::Web(id) => write!(f, "Web({id})"),
             #[cfg(windows)]
-            UtteranceId::WinRt(id) => writeln!(f, "WinRt({id})"),
+            UtteranceId::WinRt(id) => write!(f, "WinRt({id})"),
         }
     }
 }
@@ -129,6 +99,7 @@ impl fmt::Display for UtteranceId {
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub struct Features {
     pub is_speaking: bool,
     pub pitch: bool,
@@ -142,44 +113,41 @@ pub struct Features {
 
 impl fmt::Display for Features {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        writeln!(f, "{self:#?}")
-    }
-}
-
-impl Features {
-    #[instrument(level = "trace")]
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
+        write!(f, "{self:#?}")
     }
 }
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum Error {
-    #[error("IO error: {0}")]
+    #[error(transparent)]
     Io(#[from] std::io::Error),
-    #[error("Value not received")]
-    NoneError,
-    #[error("Operation failed")]
-    OperationFailed,
+    #[error("backend unavailable: {0}")]
+    BackendUnavailable(&'static str),
+    #[error("{0} failed")]
+    OperationFailed(&'static str),
+    #[error("unexpected response from backend")]
+    UnexpectedResponse,
+    #[error("voice not found: {0}")]
+    VoiceNotFound(String),
     #[cfg(target_arch = "wasm32")]
-    #[error("JavaScript error: [0]")]
+    #[error("JavaScript error: {0:?}")]
     JavaScriptError(wasm_bindgen::JsValue),
     #[cfg(target_os = "linux")]
     #[error("Speech Dispatcher error: {0}")]
     SpeechDispatcher(SpeechDispatcherError),
     #[cfg(windows)]
-    #[error("WinRT error")]
-    WinRt(windows::core::Error),
+    #[error(transparent)]
+    WinRt(#[from] windows::core::Error),
     #[cfg(windows)]
-    #[error("UTF string conversion failed")]
+    #[error(transparent)]
     UtfStringConversionFailed(#[from] FromUtf16Error),
     #[error("Unsupported feature")]
     UnsupportedFeature,
     #[error("Out of range")]
     OutOfRange,
     #[cfg(target_os = "android")]
-    #[error("JNI error: [0])]")]
+    #[error(transparent)]
     JNI(#[from] jni::errors::Error),
 }
 
@@ -192,8 +160,7 @@ impl From<SpeechDispatcherError> for Error {
 }
 
 #[clonable]
-pub trait Backend: Clone {
-    fn id(&self) -> Option<BackendId>;
+pub(crate) trait Backend: Clone {
     fn supported_features(&self) -> Features;
     /// # Errors
     ///
@@ -257,16 +224,20 @@ pub trait Backend: Clone {
 /// An utterance lifecycle callback. Backends invoke these from their own event threads, so
 /// callbacks must be [`Send`] everywhere except single-threaded wasm.
 #[cfg(not(target_arch = "wasm32"))]
-pub type UtteranceCallback = Box<dyn FnMut(UtteranceId) + Send>;
+pub trait UtteranceCallback: FnMut(UtteranceId) + Send + 'static {}
+#[cfg(not(target_arch = "wasm32"))]
+impl<T: FnMut(UtteranceId) + Send + 'static> UtteranceCallback for T {}
 /// An utterance lifecycle callback.
 #[cfg(target_arch = "wasm32")]
-pub type UtteranceCallback = Box<dyn FnMut(UtteranceId)>;
+pub trait UtteranceCallback: FnMut(UtteranceId) + 'static {}
+#[cfg(target_arch = "wasm32")]
+impl<T: FnMut(UtteranceId) + 'static> UtteranceCallback for T {}
 
 #[derive(Default)]
 struct Callbacks {
-    begin: Option<UtteranceCallback>,
-    end: Option<UtteranceCallback>,
-    stop: Option<UtteranceCallback>,
+    begin: Option<Box<dyn UtteranceCallback>>,
+    end: Option<Box<dyn UtteranceCallback>>,
+    stop: Option<Box<dyn UtteranceCallback>>,
 }
 
 impl Callbacks {
@@ -333,7 +304,9 @@ impl Tts {
             #[cfg(target_arch = "wasm32")]
             Backends::Web => Box::new(backends::Web::new(callbacks.clone())?),
             #[cfg(all(windows, feature = "tolk"))]
-            Backends::Tolk => Box::new(backends::Tolk::new().ok_or(Error::NoneError)?),
+            Backends::Tolk => Box::new(
+                backends::Tolk::new().ok_or(Error::BackendUnavailable("Tolk failed to load"))?,
+            ),
             #[cfg(windows)]
             Backends::WinRt => Box::new(backends::WinRt::new(callbacks.clone())?),
             #[cfg(target_vendor = "apple")]
@@ -386,15 +359,9 @@ impl Tts {
     /// # Errors
     ///
     /// Returns an error if the backend fails to synthesize the text.
-    #[instrument(level = "debug", skip(self, text), fields(text = Empty), err, ret)]
-    pub fn speak<S: Into<String>>(
-        &mut self,
-        text: S,
-        interrupt: bool,
-    ) -> Result<Option<UtteranceId>, Error> {
-        let text = text.into();
-        Span::current().record("text", text.as_str());
-        self.backend.write().speak(&text, interrupt)
+    #[instrument(level = "debug", skip(self), err, ret)]
+    pub fn speak(&self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error> {
+        self.backend.write().speak(text, interrupt)
     }
 
     /// Stops current speech.
@@ -403,12 +370,11 @@ impl Tts {
     ///
     /// Returns [`Error::UnsupportedFeature`] if the backend cannot stop speech, or another error
     /// if stopping fails.
-    #[instrument(level = "debug", skip(self))]
-    pub fn stop(&mut self) -> Result<&Self, Error> {
+    #[instrument(level = "debug", skip(self), err)]
+    pub fn stop(&self) -> Result<(), Error> {
         let Features { stop, .. } = self.supported_features();
         if stop {
-            self.backend.write().stop()?;
-            Ok(self)
+            self.backend.write().stop()
         } else {
             Err(Error::UnsupportedFeature)
         }
@@ -458,8 +424,8 @@ impl Tts {
     /// Returns [`Error::UnsupportedFeature`] if the backend cannot change its rate,
     /// [`Error::OutOfRange`] if the rate is outside the backend's supported range, or another
     /// error if setting it fails.
-    #[instrument(level = "debug", skip(self))]
-    pub fn set_rate(&mut self, rate: f32) -> Result<&Self, Error> {
+    #[instrument(level = "debug", skip(self), err)]
+    pub fn set_rate(&self, rate: f32) -> Result<(), Error> {
         let Features {
             rate: rate_feature, ..
         } = self.supported_features();
@@ -468,8 +434,7 @@ impl Tts {
             if rate < backend.min_rate() || rate > backend.max_rate() {
                 Err(Error::OutOfRange)
             } else {
-                backend.set_rate(rate)?;
-                Ok(self)
+                backend.set_rate(rate)
             }
         } else {
             Err(Error::UnsupportedFeature)
@@ -520,8 +485,8 @@ impl Tts {
     /// Returns [`Error::UnsupportedFeature`] if the backend cannot change its pitch,
     /// [`Error::OutOfRange`] if the pitch is outside the backend's supported range, or another
     /// error if setting it fails.
-    #[instrument(level = "debug", skip(self))]
-    pub fn set_pitch(&mut self, pitch: f32) -> Result<&Self, Error> {
+    #[instrument(level = "debug", skip(self), err)]
+    pub fn set_pitch(&self, pitch: f32) -> Result<(), Error> {
         let Features {
             pitch: pitch_feature,
             ..
@@ -531,8 +496,7 @@ impl Tts {
             if pitch < backend.min_pitch() || pitch > backend.max_pitch() {
                 Err(Error::OutOfRange)
             } else {
-                backend.set_pitch(pitch)?;
-                Ok(self)
+                backend.set_pitch(pitch)
             }
         } else {
             Err(Error::UnsupportedFeature)
@@ -583,8 +547,8 @@ impl Tts {
     /// Returns [`Error::UnsupportedFeature`] if the backend cannot change its volume,
     /// [`Error::OutOfRange`] if the volume is outside the backend's supported range, or another
     /// error if setting it fails.
-    #[instrument(level = "debug", skip(self))]
-    pub fn set_volume(&mut self, volume: f32) -> Result<&Self, Error> {
+    #[instrument(level = "debug", skip(self), err)]
+    pub fn set_volume(&self, volume: f32) -> Result<(), Error> {
         let Features {
             volume: volume_feature,
             ..
@@ -594,8 +558,7 @@ impl Tts {
             if volume < backend.min_volume() || volume > backend.max_volume() {
                 Err(Error::OutOfRange)
             } else {
-                backend.set_volume(volume)?;
-                Ok(self)
+                backend.set_volume(volume)
             }
         } else {
             Err(Error::UnsupportedFeature)
@@ -657,7 +620,7 @@ impl Tts {
     /// Returns [`Error::UnsupportedFeature`] if the backend cannot change voices, or another
     /// error if setting the voice fails.
     #[instrument(level = "debug", skip(self), err)]
-    pub fn set_voice(&mut self, voice: &Voice) -> Result<(), Error> {
+    pub fn set_voice(&self, voice: &Voice) -> Result<(), Error> {
         let Features {
             voice: voice_feature,
             ..
@@ -674,19 +637,14 @@ impl Tts {
     /// # Errors
     ///
     /// Returns [`Error::UnsupportedFeature`] if the backend does not support utterance callbacks.
-    #[instrument(
-        level = "debug",
-        skip(self, callback),
-        fields(registered = callback.is_some()),
-        err
-    )]
-    pub fn on_utterance_begin(&self, callback: Option<UtteranceCallback>) -> Result<(), Error> {
+    #[instrument(level = "debug", skip(self, callback), err)]
+    pub fn on_utterance_begin(&self, callback: impl UtteranceCallback) -> Result<(), Error> {
         let Features {
             utterance_callbacks,
             ..
         } = self.supported_features();
         if utterance_callbacks {
-            self.callbacks.lock().begin = callback;
+            self.callbacks.lock().begin = Some(Box::new(callback));
             Ok(())
         } else {
             Err(Error::UnsupportedFeature)
@@ -698,19 +656,14 @@ impl Tts {
     /// # Errors
     ///
     /// Returns [`Error::UnsupportedFeature`] if the backend does not support utterance callbacks.
-    #[instrument(
-        level = "debug",
-        skip(self, callback),
-        fields(registered = callback.is_some()),
-        err
-    )]
-    pub fn on_utterance_end(&self, callback: Option<UtteranceCallback>) -> Result<(), Error> {
+    #[instrument(level = "debug", skip(self, callback), err)]
+    pub fn on_utterance_end(&self, callback: impl UtteranceCallback) -> Result<(), Error> {
         let Features {
             utterance_callbacks,
             ..
         } = self.supported_features();
         if utterance_callbacks {
-            self.callbacks.lock().end = callback;
+            self.callbacks.lock().end = Some(Box::new(callback));
             Ok(())
         } else {
             Err(Error::UnsupportedFeature)
@@ -722,23 +675,27 @@ impl Tts {
     /// # Errors
     ///
     /// Returns [`Error::UnsupportedFeature`] if the backend does not support utterance callbacks.
-    #[instrument(
-        level = "debug",
-        skip(self, callback),
-        fields(registered = callback.is_some()),
-        err
-    )]
-    pub fn on_utterance_stop(&self, callback: Option<UtteranceCallback>) -> Result<(), Error> {
+    #[instrument(level = "debug", skip(self, callback), err)]
+    pub fn on_utterance_stop(&self, callback: impl UtteranceCallback) -> Result<(), Error> {
         let Features {
             utterance_callbacks,
             ..
         } = self.supported_features();
         if utterance_callbacks {
-            self.callbacks.lock().stop = callback;
+            self.callbacks.lock().stop = Some(Box::new(callback));
             Ok(())
         } else {
             Err(Error::UnsupportedFeature)
         }
+    }
+
+    /// Clears all registered utterance callbacks.
+    #[instrument(level = "debug", skip(self))]
+    pub fn clear_utterance_callbacks(&self) {
+        let mut callbacks = self.callbacks.lock();
+        callbacks.begin = None;
+        callbacks.end = None;
+        callbacks.stop = None;
     }
 
     /*
@@ -763,6 +720,7 @@ impl Tts {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
 pub enum Gender {
     Male,
     Female,
@@ -779,14 +737,14 @@ pub struct Voice {
 impl Voice {
     #[instrument(level = "trace", skip(self))]
     #[must_use]
-    pub fn id(&self) -> String {
-        self.id.clone()
+    pub fn id(&self) -> &str {
+        &self.id
     }
 
     #[instrument(level = "trace", skip(self))]
     #[must_use]
-    pub fn name(&self) -> String {
-        self.name.clone()
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     #[instrument(level = "trace", skip(self))]
@@ -797,7 +755,7 @@ impl Voice {
 
     #[instrument(level = "trace", skip(self))]
     #[must_use]
-    pub fn language(&self) -> LanguageTag<String> {
-        self.language.clone()
+    pub fn language(&self) -> &LanguageTag<String> {
+        &self.language
     }
 }

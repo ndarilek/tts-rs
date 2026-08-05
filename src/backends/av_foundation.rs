@@ -20,7 +20,7 @@ use oxilangtag::LanguageTag;
 use parking_lot::Mutex;
 use tracing::{Span, info_span, instrument, trace};
 
-use crate::{Backend, BackendId, Callbacks, Error, Features, Gender, UtteranceId, Voice};
+use crate::{Backend, Callbacks, Error, Features, Gender, UtteranceId, Voice};
 
 #[derive(Debug)]
 struct Ivars {
@@ -163,9 +163,9 @@ fn speak_utterance(
         utterance.setVolume(volume);
         utterance.setPitchMultiplier(pitch);
         if let Some(voice_id) = voice_id {
-            let voice_id = NSString::from_str(voice_id);
-            let voice = AVSpeechSynthesisVoice::voiceWithIdentifier(&voice_id)
-                .ok_or(Error::OperationFailed)?;
+            let ns_voice_id = NSString::from_str(voice_id);
+            let voice = AVSpeechSynthesisVoice::voiceWithIdentifier(&ns_voice_id)
+                .ok_or_else(|| Error::VoiceNotFound(voice_id.to_string()))?;
             utterance.setVoice(Some(&voice));
         }
         synth.speakUtterance(&utterance);
@@ -175,7 +175,6 @@ fn speak_utterance(
 
 #[derive(Clone, Debug)]
 pub(crate) struct AvFoundation {
-    id: BackendId,
     commands: Sender<Command>,
     rate: f32,
     volume: f32,
@@ -188,15 +187,14 @@ static NEXT_BACKEND_ID: AtomicU64 = AtomicU64::new(0);
 impl AvFoundation {
     #[instrument(level = "info", skip(callbacks), err)]
     pub(crate) fn new(callbacks: Arc<Mutex<Callbacks>>) -> Result<Self, Error> {
-        let id = BackendId::AvFoundation(NEXT_BACKEND_ID.fetch_add(1, Ordering::Relaxed));
-        let span = info_span!("av_foundation", backend_id = ?id);
+        let id = NEXT_BACKEND_ID.fetch_add(1, Ordering::Relaxed);
+        let span = info_span!("av_foundation", backend_id = id);
         let (commands, receiver) = channel();
         thread::Builder::new()
             .name("tts-av-foundation".into())
             .spawn(move || run_synthesizer(callbacks, span, receiver))?;
 
         Ok(AvFoundation {
-            id,
             commands,
             rate: 0.5,
             volume: 1.,
@@ -210,17 +208,14 @@ impl AvFoundation {
         let (reply, response) = channel();
         self.commands
             .send(build(reply))
-            .map_err(|_| Error::OperationFailed)?;
-        response.recv().map_err(|_| Error::OperationFailed)
+            .map_err(|_| Error::BackendUnavailable("synthesizer thread terminated"))?;
+        response
+            .recv()
+            .map_err(|_| Error::BackendUnavailable("synthesizer thread terminated"))
     }
 }
 
 impl Backend for AvFoundation {
-    #[instrument(level = "trace", skip(self))]
-    fn id(&self) -> Option<BackendId> {
-        Some(self.id)
-    }
-
     #[instrument(level = "trace", skip(self))]
     fn supported_features(&self) -> Features {
         Features {
@@ -248,7 +243,7 @@ impl Backend for AvFoundation {
             rate: self.rate,
             volume: self.volume,
             pitch: self.pitch,
-            voice_id: self.voice.as_ref().map(Voice::id),
+            voice_id: self.voice.as_ref().map(|v| v.id().to_string()),
             reply,
         })??;
         Ok(Some(UtteranceId::AvFoundation(address)))

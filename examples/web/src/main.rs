@@ -20,7 +20,7 @@ enum Msg {
 }
 
 fn init(_: Url, _: &mut impl Orders<Msg>) -> Model {
-    let mut tts = Tts::default().unwrap();
+    let tts = Tts::default().unwrap();
     if tts.voices().unwrap().iter().len() > 0 {
         if tts.voice().unwrap().is_none() {
             tts.set_voice(tts.voices().unwrap().first().unwrap())

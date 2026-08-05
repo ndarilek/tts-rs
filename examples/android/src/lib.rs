@@ -4,21 +4,15 @@ use tts::*;
 // Without it, the `TTS` instance gets dropped before callbacks can run.
 #[allow(unreachable_code)]
 fn run() -> Result<(), Error> {
-    let mut tts = Tts::default()?;
+    let tts = Tts::default()?;
     let Features {
         utterance_callbacks,
         ..
     } = tts.supported_features();
     if utterance_callbacks {
-        tts.on_utterance_begin(Some(Box::new(|utterance| {
-            println!("Started speaking {:?}", utterance)
-        })))?;
-        tts.on_utterance_end(Some(Box::new(|utterance| {
-            println!("Finished speaking {:?}", utterance)
-        })))?;
-        tts.on_utterance_stop(Some(Box::new(|utterance| {
-            println!("Stopped speaking {:?}", utterance)
-        })))?;
+        tts.on_utterance_begin(|utterance| println!("Started speaking {:?}", utterance))?;
+        tts.on_utterance_end(|utterance| println!("Finished speaking {:?}", utterance))?;
+        tts.on_utterance_stop(|utterance| println!("Stopped speaking {:?}", utterance))?;
     }
     let Features { is_speaking, .. } = tts.supported_features();
     if is_speaking {
@@ -28,7 +22,7 @@ fn run() -> Result<(), Error> {
     let Features { rate, .. } = tts.supported_features();
     if rate {
         let original_rate = tts.get_rate()?;
-        tts.speak(format!("Current rate: {}", original_rate), false)?;
+        tts.speak(&format!("Current rate: {}", original_rate), false)?;
         tts.set_rate(tts.max_rate())?;
         tts.speak("This is very fast.", false)?;
         tts.set_rate(tts.min_rate())?;

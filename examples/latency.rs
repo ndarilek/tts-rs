@@ -8,7 +8,7 @@ fn main() -> Result<(), Error> {
         .with_env_filter(EnvFilter::from_default_env())
         .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
         .init();
-    let mut tts = Tts::default()?;
+    let tts = Tts::default()?;
     println!("Press Enter and wait for speech.");
     loop {
         let mut input = String::new();

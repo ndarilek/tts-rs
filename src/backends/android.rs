@@ -19,7 +19,7 @@ use jni::{
 use parking_lot::{Mutex, RwLock};
 use tracing::{Span, error, field::Empty, info_span, instrument};
 
-use crate::{Backend, BackendId, Callbacks, Error, Features, UtteranceId, Voice};
+use crate::{Backend, Callbacks, Error, Features, UtteranceId, Voice};
 
 static BRIDGE: OnceLock<Global<JClass<'static>>> = OnceLock::new();
 static NEXT_BACKEND_ID: AtomicU64 = AtomicU64::new(0);
@@ -179,7 +179,7 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onError(
 
 #[derive(Clone)]
 pub(crate) struct Android {
-    id: BackendId,
+    id: u64,
     tts: Arc<Global<JObject<'static>>>,
     rate: f32,
     pitch: f32,
@@ -190,12 +190,14 @@ impl Android {
     pub(crate) fn new(callbacks: Arc<Mutex<Callbacks>>) -> Result<Self, Error> {
         const MAX_WAIT_TIME: Duration = Duration::from_millis(500);
         let bid = NEXT_BACKEND_ID.fetch_add(1, Ordering::Relaxed);
-        let id = BackendId::Android(bid);
         let tts = Self::vm().attach_current_thread(|env| -> Result<_, Error> {
             let ctx = ndk_context::android_context();
             let context = unsafe { JObject::from_raw(env, ctx.context().cast()) };
-            let bridge = BRIDGE.get().ok_or(Error::NoneError)?;
-            let bid_jint = jint::try_from(bid).map_err(|_| Error::OperationFailed)?;
+            let bridge = BRIDGE.get().ok_or(Error::BackendUnavailable(
+                "Android TTS bridge not registered",
+            ))?;
+            let bid_jint =
+                jint::try_from(bid).map_err(|_| Error::OperationFailed("backend id conversion"))?;
             let bridge = env.new_object(bridge, jni_sig!("(I)V"), &[bid_jint.into()])?;
             let tts = env.new_object(
                 jni_str!("android/speech/tts/TextToSpeech"),
@@ -223,7 +225,9 @@ impl Android {
                     break;
                 }
                 if start.elapsed() > MAX_WAIT_TIME {
-                    return Err(Error::OperationFailed);
+                    return Err(Error::BackendUnavailable(
+                        "Android TTS initialization timed out",
+                    ));
                 }
             }
             thread::sleep(Duration::from_millis(5));
@@ -232,7 +236,7 @@ impl Android {
             .lock()
             .push((bid, info_span!("android", backend_id = bid), callbacks));
         Ok(Self {
-            id,
+            id: bid,
             tts: Arc::new(tts),
             rate: 1.,
             pitch: 1.,
@@ -247,11 +251,6 @@ impl Android {
 }
 
 impl Backend for Android {
-    #[instrument(level = "trace", skip(self))]
-    fn id(&self) -> Option<BackendId> {
-        Some(self.id)
-    }
-
     #[instrument(level = "trace", skip(self))]
     fn supported_features(&self) -> Features {
         Features {
@@ -290,7 +289,7 @@ impl Backend for Android {
         if rv == 0 {
             Ok(Some(id))
         } else {
-            Err(Error::OperationFailed)
+            Err(Error::OperationFailed("speak"))
         }
     }
 
@@ -303,7 +302,7 @@ impl Backend for Android {
         if rv == 0 {
             Ok(())
         } else {
-            Err(Error::OperationFailed)
+            Err(Error::OperationFailed("stop"))
         }
     }
 
@@ -343,7 +342,7 @@ impl Backend for Android {
             self.rate = rate;
             Ok(())
         } else {
-            Err(Error::OperationFailed)
+            Err(Error::OperationFailed("set_rate"))
         }
     }
 
@@ -383,7 +382,7 @@ impl Backend for Android {
             self.pitch = pitch;
             Ok(())
         } else {
-            Err(Error::OperationFailed)
+            Err(Error::OperationFailed("set_pitch"))
         }
     }
 
@@ -443,7 +442,6 @@ impl Backend for Android {
 
 impl Drop for Android {
     fn drop(&mut self) {
-        let BackendId::Android(bid) = self.id;
-        CALLBACKS.lock().retain(|(id, _, _)| *id != bid);
+        CALLBACKS.lock().retain(|(id, _, _)| *id != self.id);
     }
 }

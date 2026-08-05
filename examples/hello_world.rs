@@ -8,7 +8,7 @@ fn main() -> Result<(), Error> {
         .with_env_filter(EnvFilter::from_default_env())
         .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
         .init();
-    let mut tts = Tts::default()?;
+    let tts = Tts::default()?;
     if Tts::screen_reader_available() {
         println!("A screen reader is available on this platform.");
     } else {
@@ -19,15 +19,15 @@ fn main() -> Result<(), Error> {
         ..
     } = tts.supported_features();
     if utterance_callbacks {
-        tts.on_utterance_begin(Some(Box::new(|utterance| {
+        tts.on_utterance_begin(|utterance| {
             println!("Started speaking {utterance:?}");
-        })))?;
-        tts.on_utterance_end(Some(Box::new(|utterance| {
+        })?;
+        tts.on_utterance_end(|utterance| {
             println!("Finished speaking {utterance:?}");
-        })))?;
-        tts.on_utterance_stop(Some(Box::new(|utterance| {
+        })?;
+        tts.on_utterance_stop(|utterance| {
             println!("Stopped speaking {utterance:?}");
-        })))?;
+        })?;
     }
     let Features { is_speaking, .. } = tts.supported_features();
     if is_speaking {
@@ -37,7 +37,7 @@ fn main() -> Result<(), Error> {
     let Features { rate, .. } = tts.supported_features();
     if rate {
         let original_rate = tts.get_rate()?;
-        tts.speak(format!("Current rate: {original_rate}"), false)?;
+        tts.speak(&format!("Current rate: {original_rate}"), false)?;
         tts.set_rate(tts.max_rate())?;
         tts.speak("This is very fast.", false)?;
         tts.set_rate(tts.min_rate())?;

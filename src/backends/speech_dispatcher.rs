@@ -21,7 +21,7 @@ use ssip_client_async::{
 };
 use tracing::{info_span, instrument, trace, warn};
 
-use crate::{Backend, BackendId, Callbacks, Error, Features, UtteranceId, Voice};
+use crate::{Backend, Callbacks, Error, Features, UtteranceId, Voice};
 
 const POLL_INTERVAL: Duration = Duration::from_millis(10);
 
@@ -101,8 +101,8 @@ impl Connection {
     fn get_value(&self, request: Request) -> Result<f32, Error> {
         let mut client = self.lock_for_command();
         match self.transact(&mut client, request)? {
-            Response::Get(value) => value.parse().map_err(|_| Error::NoneError),
-            _ => Err(Error::NoneError),
+            Response::Get(value) => value.parse().map_err(|_| Error::UnexpectedResponse),
+            _ => Err(Error::UnexpectedResponse),
         }
     }
 
@@ -118,7 +118,7 @@ impl Connection {
                     return lines
                         .first()
                         .and_then(|line| line.parse().ok())
-                        .ok_or(Error::NoneError);
+                        .ok_or(Error::UnexpectedResponse);
                 }
                 Err(ClientError::UnexpectedStatus(code))
                     if (EVENT_INDEX_MARK..=EVENT_RESUMED).contains(&code) =>
@@ -362,7 +362,7 @@ impl SpeechDispatcher {
         let Response::HistoryClientIdSent(client_id) =
             setup_request(&mut client, Request::HistoryGetClientId)?
         else {
-            return Err(Error::NoneError);
+            return Err(Error::UnexpectedResponse);
         };
         let (events, receiver) = channel();
         let connection = Arc::new(Connection {
@@ -394,13 +394,6 @@ impl SpeechDispatcher {
 }
 
 impl Backend for SpeechDispatcher {
-    #[instrument(level = "trace", skip(self))]
-    fn id(&self) -> Option<BackendId> {
-        Some(BackendId::SpeechDispatcher(
-            self.connection.client_id as usize,
-        ))
-    }
-
     #[instrument(level = "trace", skip(self))]
     fn supported_features(&self) -> Features {
         Features {
@@ -552,7 +545,7 @@ impl Backend for SpeechDispatcher {
                     })
                 })
                 .collect()),
-            _ => Err(Error::NoneError),
+            _ => Err(Error::UnexpectedResponse),
         }
     }
 
@@ -576,10 +569,10 @@ impl Backend for SpeechDispatcher {
                     )?;
                     Ok(())
                 } else {
-                    Err(Error::OperationFailed)
+                    Err(Error::VoiceNotFound(voice.name.clone()))
                 }
             }
-            _ => Err(Error::NoneError),
+            _ => Err(Error::UnexpectedResponse),
         }
     }
 }

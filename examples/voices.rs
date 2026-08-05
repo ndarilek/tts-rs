@@ -8,7 +8,7 @@ fn main() -> Result<(), Error> {
         .with_env_filter(EnvFilter::from_default_env())
         .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
         .init();
-    let mut tts = Tts::default()?;
+    let tts = Tts::default()?;
     let Features { voice, .. } = tts.supported_features();
     if !voice {
         println!("This backend does not support voice selection.");
@@ -23,7 +23,7 @@ fn main() -> Result<(), Error> {
     let original_voice = if get_voice { tts.voice()? } else { None };
     for v in &voices {
         tts.set_voice(v)?;
-        tts.speak(format!("This is {}.", v.name()), false)?;
+        tts.speak(&format!("This is {}.", v.name()), false)?;
     }
     if let Some(original_voice) = original_voice {
         tts.set_voice(&original_voice)?;

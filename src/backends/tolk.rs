@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tolk::Tolk as TolkPtr;
 use tracing::instrument;
 
-use crate::{Backend, BackendId, Error, Features, UtteranceId, Voice};
+use crate::{Backend, Error, Features, UtteranceId, Voice};
 
 #[derive(Clone, Debug)]
 pub(crate) struct Tolk(Arc<TolkPtr>);
@@ -22,11 +22,6 @@ impl Tolk {
 }
 
 impl Backend for Tolk {
-    #[instrument(level = "trace", skip(self))]
-    fn id(&self) -> Option<BackendId> {
-        None
-    }
-
     #[instrument(level = "trace", skip(self))]
     fn supported_features(&self) -> Features {
         Features {

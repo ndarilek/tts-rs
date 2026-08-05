@@ -19,17 +19,17 @@ fn main() -> Result<(), Error> {
         ..
     } = tts.supported_features();
     if utterance_callbacks {
-        tts.on_utterance_begin(Some(Box::new(|utterance| {
+        tts.on_utterance_begin(|utterance| {
             println!("Started speaking {utterance:?}");
-        })))?;
-        tts.on_utterance_end(Some(Box::new(|utterance| {
+        })?;
+        tts.on_utterance_end(|utterance| {
             println!("Finished speaking {utterance:?}");
-        })))?;
-        tts.on_utterance_stop(Some(Box::new(|utterance| {
+        })?;
+        tts.on_utterance_stop(|utterance| {
             println!("Stopped speaking {utterance:?}");
-        })))?;
+        })?;
     }
-    let mut tts_clone = tts.clone();
+    let tts_clone = tts.clone();
     drop(tts);
     let Features { is_speaking, .. } = tts_clone.supported_features();
     if is_speaking {
@@ -39,7 +39,7 @@ fn main() -> Result<(), Error> {
     let Features { rate, .. } = tts_clone.supported_features();
     if rate {
         let original_rate = tts_clone.get_rate()?;
-        tts_clone.speak(format!("Current rate: {original_rate}"), false)?;
+        tts_clone.speak(&format!("Current rate: {original_rate}"), false)?;
         tts_clone.set_rate(tts_clone.max_rate())?;
         tts_clone.speak("This is very fast.", false)?;
         tts_clone.set_rate(tts_clone.min_rate())?;

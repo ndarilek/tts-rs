@@ -20,13 +20,7 @@ use windows::{
     core::Ref,
 };
 
-use crate::{Backend, BackendId, Callbacks, Error, Features, Gender, UtteranceId, Voice};
-
-impl From<windows::core::Error> for Error {
-    fn from(e: windows::core::Error) -> Self {
-        Error::WinRt(e)
-    }
-}
+use crate::{Backend, Callbacks, Error, Features, Gender, UtteranceId, Voice};
 
 static NEXT_BACKEND_ID: AtomicU64 = AtomicU64::new(0);
 static NEXT_UTTERANCE_ID: AtomicU64 = AtomicU64::new(0);
@@ -71,7 +65,6 @@ impl Utterance {
 
 #[derive(Clone)]
 pub struct WinRt {
-    id: BackendId,
     synth: SpeechSynthesizer,
     player: MediaPlayer,
     utterances: Arc<Mutex<VecDeque<Utterance>>>,
@@ -88,9 +81,8 @@ impl WinRt {
         let player = MediaPlayer::new()?;
         player.SetRealTimePlayback(true)?;
         player.SetAudioCategory(MediaPlayerAudioCategory::Speech)?;
-        let id = BackendId::WinRt(NEXT_BACKEND_ID.fetch_add(1, Ordering::Relaxed));
+        let id = NEXT_BACKEND_ID.fetch_add(1, Ordering::Relaxed);
         let tts = Self {
-            id,
             synth: SpeechSynthesizer::new()?,
             player,
             utterances: Arc::new(Mutex::new(VecDeque::new())),
@@ -102,7 +94,7 @@ impl WinRt {
         };
         // Media events arrive on a system thread; entering this span there connects them back
         // to the backend that registered the handler.
-        let span = info_span!("winrt", backend_id = ?id);
+        let span = info_span!("winrt", backend_id = id);
         let synth = tts.synth.clone();
         let utterances = tts.utterances.clone();
         let callbacks = tts.callbacks.clone();
@@ -128,11 +120,6 @@ impl WinRt {
 }
 
 impl Backend for WinRt {
-    #[instrument(level = "trace", skip(self))]
-    fn id(&self) -> Option<BackendId> {
-        Some(self.id)
-    }
-
     #[instrument(level = "trace", skip(self))]
     fn supported_features(&self) -> Features {
         Features {
@@ -306,7 +293,7 @@ impl Backend for WinRt {
                 return Ok(());
             }
         }
-        Err(Error::OperationFailed)
+        Err(Error::VoiceNotFound(voice.id.clone()))
     }
 }
 

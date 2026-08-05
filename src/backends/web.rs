@@ -14,11 +14,10 @@ use web_sys::{
     SpeechSynthesisUtterance, SpeechSynthesisVoice,
 };
 
-use crate::{Backend, BackendId, Callbacks, Error, Features, UtteranceId, Voice};
+use crate::{Backend, Callbacks, Error, Features, UtteranceId, Voice};
 
 #[derive(Clone, Debug)]
 pub struct Web {
-    id: BackendId,
     callbacks: Arc<Mutex<Callbacks>>,
     rate: f32,
     pitch: f32,
@@ -37,25 +36,19 @@ impl Web {
     #[allow(clippy::unnecessary_wraps)]
     #[instrument(level = "info", skip(callbacks), err)]
     pub fn new(callbacks: Arc<Mutex<Callbacks>>) -> Result<Self, Error> {
-        let id = BackendId::Web(NEXT_BACKEND_ID.fetch_add(1, Ordering::Relaxed));
+        let id = NEXT_BACKEND_ID.fetch_add(1, Ordering::Relaxed);
         Ok(Web {
-            id,
             callbacks,
             rate: 1.,
             pitch: 1.,
             volume: 1.,
             voice: None,
-            span: info_span!("web", backend_id = ?id),
+            span: info_span!("web", backend_id = id),
         })
     }
 }
 
 impl Backend for Web {
-    #[instrument(level = "trace", skip(self))]
-    fn id(&self) -> Option<BackendId> {
-        Some(self.id)
-    }
-
     #[instrument(level = "trace", skip(self))]
     fn supported_features(&self) -> Features {
         Features {
@@ -117,7 +110,7 @@ impl Backend for Web {
             speech_synthesis.speak(&utterance);
             Ok(Some(utterance_id))
         } else {
-            Err(Error::NoneError)
+            Err(Error::BackendUnavailable("no window object"))
         }
     }
 
@@ -216,7 +209,7 @@ impl Backend for Web {
                 Err(e) => Err(Error::JavaScriptError(e)),
             }
         } else {
-            Err(Error::NoneError)
+            Err(Error::BackendUnavailable("no window object"))
         }
     }
 
@@ -234,7 +227,7 @@ impl Backend for Web {
                     }
                 }
             } else {
-                return Err(Error::NoneError);
+                return Err(Error::BackendUnavailable("no window object"));
             }
             Ok(None)
         }
@@ -251,7 +244,7 @@ impl Backend for Web {
             }
             Ok(rv)
         } else {
-            Err(Error::NoneError)
+            Err(Error::BackendUnavailable("no window object"))
         }
     }
 
@@ -266,9 +259,9 @@ impl Backend for Web {
                     return Ok(());
                 }
             }
-            Err(Error::OperationFailed)
+            Err(Error::VoiceNotFound(voice.id.clone()))
         } else {
-            Err(Error::NoneError)
+            Err(Error::BackendUnavailable("no window object"))
         }
     }
 }

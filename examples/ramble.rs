@@ -8,10 +8,10 @@ fn main() -> Result<(), Error> {
         .with_env_filter(EnvFilter::from_default_env())
         .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
         .init();
-    let mut tts = Tts::default()?;
+    let tts = Tts::default()?;
     let mut phrase = 1;
     loop {
-        tts.speak(format!("Phrase {phrase}"), false)?;
+        tts.speak(&format!("Phrase {phrase}"), false)?;
         #[cfg(target_os = "macos")]
         {
             let run_loop = objc2_foundation::NSRunLoop::currentRunLoop();
