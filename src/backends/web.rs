@@ -53,6 +53,7 @@ impl Backend for Web {
     fn supported_features(&self) -> Features {
         Features {
             stop: true,
+            pause: true,
             rate: true,
             pitch: true,
             volume: true,
@@ -103,6 +104,24 @@ impl Backend for Web {
             }
         }) as Box<dyn Fn(_)>);
         utterance.set_onerror(Some(callback.as_ref().unchecked_ref()));
+        let callback = Closure::wrap(Box::new({
+            let callbacks = self.callbacks.clone();
+            let span = self.span.clone();
+            move |_evt: SpeechSynthesisEvent| {
+                let _entered = span.enter();
+                callbacks.lock().utterance_pause(utterance_id);
+            }
+        }) as Box<dyn Fn(_)>);
+        utterance.set_onpause(Some(callback.as_ref().unchecked_ref()));
+        let callback = Closure::wrap(Box::new({
+            let callbacks = self.callbacks.clone();
+            let span = self.span.clone();
+            move |_evt: SpeechSynthesisEvent| {
+                let _entered = span.enter();
+                callbacks.lock().utterance_resume(utterance_id);
+            }
+        }) as Box<dyn Fn(_)>);
+        utterance.set_onresume(Some(callback.as_ref().unchecked_ref()));
         if interrupt {
             self.stop()?;
         }
@@ -127,6 +146,39 @@ impl Backend for Web {
             speech_synthesis.cancel();
         }
         Ok(())
+    }
+
+    #[instrument(level = "debug", skip(self), err)]
+    fn pause(&mut self) -> Result<(), Error> {
+        if let Some(window) = web_sys::window() {
+            let speech_synthesis = window.speech_synthesis().unwrap();
+            // Pausing while idle would latch, deferring future utterances until `resume`.
+            if speech_synthesis.speaking() {
+                speech_synthesis.pause();
+            }
+        }
+        Ok(())
+    }
+
+    #[instrument(level = "debug", skip(self), err)]
+    fn resume(&mut self) -> Result<(), Error> {
+        if let Some(window) = web_sys::window() {
+            let speech_synthesis = window.speech_synthesis().unwrap();
+            speech_synthesis.resume();
+        }
+        Ok(())
+    }
+
+    #[instrument(level = "trace", skip(self), err, ret)]
+    fn is_paused(&self) -> Result<bool, Error> {
+        if let Some(window) = web_sys::window() {
+            match window.speech_synthesis() {
+                Ok(speech_synthesis) => Ok(speech_synthesis.paused()),
+                Err(e) => Err(Error::JavaScriptError(e)),
+            }
+        } else {
+            Err(Error::BackendUnavailable("no window object"))
+        }
     }
 
     #[instrument(level = "trace", skip(self))]

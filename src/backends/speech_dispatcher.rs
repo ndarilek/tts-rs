@@ -19,7 +19,7 @@ use ssip_client_async::{
     NotificationType, OK_MESSAGE_QUEUED, Priority, PunctuationMode, Request, Response,
     fifo::synchronous::{Builder, UnixStream},
 };
-use tracing::{info_span, instrument, trace, warn};
+use tracing::{info_span, instrument, warn};
 
 use crate::{Backend, Callbacks, Error, Features, SynthesizedAudio, UtteranceId, Voice};
 
@@ -36,6 +36,7 @@ struct State {
     queued: VecDeque<u64>,
     active: Option<u64>,
     speaking: bool,
+    paused: bool,
 }
 
 struct Connection {
@@ -188,8 +189,14 @@ impl Connection {
                     }
                     state.speaking = false;
                 }
-                EventType::Pause => state.speaking = false,
-                EventType::Resume => state.speaking = true,
+                EventType::Pause => {
+                    state.speaking = false;
+                    state.paused = true;
+                }
+                EventType::Resume => {
+                    state.speaking = true;
+                    state.paused = false;
+                }
                 EventType::IndexMark(_) => return,
             }
         }
@@ -299,8 +306,8 @@ fn dispatch(callbacks: &Mutex<Callbacks>, ntype: &EventType, id: u64) {
         EventType::Begin => callbacks.lock().utterance_begin(utterance_id),
         EventType::End => callbacks.lock().utterance_end(utterance_id),
         EventType::Cancel => callbacks.lock().utterance_stop(utterance_id),
-        EventType::Pause => trace!(id, "Speech paused"),
-        EventType::Resume => trace!(id, "Speech resumed"),
+        EventType::Pause => callbacks.lock().utterance_pause(utterance_id),
+        EventType::Resume => callbacks.lock().utterance_resume(utterance_id),
         EventType::IndexMark(_) => {}
     }
 }
@@ -398,6 +405,7 @@ impl Backend for SpeechDispatcher {
     fn supported_features(&self) -> Features {
         Features {
             stop: true,
+            pause: true,
             rate: true,
             pitch: true,
             volume: true,
@@ -443,6 +451,27 @@ impl Backend for SpeechDispatcher {
     fn stop(&mut self) -> Result<(), Error> {
         // `MessageScope::Last` is "self" on the wire: all of this connection's messages.
         self.connection.command(Request::Cancel(MessageScope::Last))
+    }
+
+    #[instrument(level = "debug", skip(self), err)]
+    fn pause(&mut self) -> Result<(), Error> {
+        {
+            let state = self.connection.state.lock();
+            if state.paused || (!state.speaking && state.queued.is_empty()) {
+                return Ok(());
+            }
+        }
+        self.connection.command(Request::Pause(MessageScope::Last))
+    }
+
+    #[instrument(level = "debug", skip(self), err)]
+    fn resume(&mut self) -> Result<(), Error> {
+        self.connection.command(Request::Resume(MessageScope::Last))
+    }
+
+    #[instrument(level = "trace", skip(self), err, ret)]
+    fn is_paused(&self) -> Result<bool, Error> {
+        Ok(self.connection.state.lock().paused)
     }
 
     #[instrument(level = "trace", skip(self))]

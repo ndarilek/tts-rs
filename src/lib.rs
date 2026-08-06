@@ -160,6 +160,7 @@ impl fmt::Debug for SynthesizedAudio {
 #[non_exhaustive]
 pub struct Features {
     pub is_speaking: bool,
+    pub pause: bool,
     pub pitch: bool,
     pub rate: bool,
     pub stop: bool,
@@ -235,6 +236,18 @@ pub(crate) trait Backend: Clone {
     ///
     /// Returns an error if speech cannot be stopped.
     fn stop(&mut self) -> Result<(), Error>;
+    /// # Errors
+    ///
+    /// Returns an error if speech cannot be paused.
+    fn pause(&mut self) -> Result<(), Error>;
+    /// # Errors
+    ///
+    /// Returns an error if speech cannot be resumed.
+    fn resume(&mut self) -> Result<(), Error>;
+    /// # Errors
+    ///
+    /// Returns an error if paused state cannot be determined.
+    fn is_paused(&self) -> Result<bool, Error>;
     fn min_rate(&self) -> f32;
     fn max_rate(&self) -> f32;
     fn normal_rate(&self) -> f32;
@@ -303,6 +316,8 @@ struct Callbacks {
     begin: Option<Box<dyn UtteranceCallback>>,
     end: Option<Box<dyn UtteranceCallback>>,
     stop: Option<Box<dyn UtteranceCallback>>,
+    pause: Option<Box<dyn UtteranceCallback>>,
+    resume: Option<Box<dyn UtteranceCallback>>,
     synthesis_begin: Option<Box<dyn UtteranceCallback>>,
     synthesis_complete: Option<Box<dyn UtteranceCallback>>,
 }
@@ -325,6 +340,32 @@ impl Callbacks {
     #[instrument(level = "trace", skip(self))]
     fn utterance_stop(&mut self, utterance_id: UtteranceId) {
         if let Some(callback) = self.stop.as_mut() {
+            callback(utterance_id);
+        }
+    }
+
+    #[cfg(any(
+        windows,
+        target_os = "linux",
+        target_vendor = "apple",
+        target_arch = "wasm32"
+    ))]
+    #[instrument(level = "trace", skip(self))]
+    fn utterance_pause(&mut self, utterance_id: UtteranceId) {
+        if let Some(callback) = self.pause.as_mut() {
+            callback(utterance_id);
+        }
+    }
+
+    #[cfg(any(
+        windows,
+        target_os = "linux",
+        target_vendor = "apple",
+        target_arch = "wasm32"
+    ))]
+    #[instrument(level = "trace", skip(self))]
+    fn utterance_resume(&mut self, utterance_id: UtteranceId) {
+        if let Some(callback) = self.resume.as_mut() {
             callback(utterance_id);
         }
     }
@@ -352,6 +393,8 @@ impl fmt::Debug for Callbacks {
             .field("begin", &self.begin.is_some())
             .field("end", &self.end.is_some())
             .field("stop", &self.stop.is_some())
+            .field("pause", &self.pause.is_some())
+            .field("resume", &self.resume.is_some())
             .field("synthesis_begin", &self.synthesis_begin.is_some())
             .field("synthesis_complete", &self.synthesis_complete.is_some())
             .finish()
@@ -479,6 +522,76 @@ impl Tts {
         let Features { stop, .. } = self.supported_features();
         if stop {
             self.backend.write().stop()
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
+    }
+
+    /// Pauses current speech, retaining it for [`resume`](Self::resume). Does nothing if no
+    /// speech is active or queued.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::UnsupportedFeature`] if the backend cannot pause speech, or another
+    /// error if pausing fails.
+    #[instrument(level = "debug", skip(self), err)]
+    pub fn pause(&self) -> Result<(), Error> {
+        let Features { pause, .. } = self.supported_features();
+        if pause {
+            self.backend.write().pause()
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
+    }
+
+    /// Resumes previously paused speech.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::UnsupportedFeature`] if the backend cannot pause speech, or another
+    /// error if resuming fails.
+    #[instrument(level = "debug", skip(self), err)]
+    pub fn resume(&self) -> Result<(), Error> {
+        let Features { pause, .. } = self.supported_features();
+        if pause {
+            self.backend.write().resume()
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
+    }
+
+    /// Pauses current speech, or resumes it if already paused.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::UnsupportedFeature`] if the backend cannot pause speech, or another
+    /// error if toggling fails.
+    #[instrument(level = "debug", skip(self), err)]
+    pub fn toggle_pause(&self) -> Result<(), Error> {
+        let Features { pause, .. } = self.supported_features();
+        if pause {
+            let mut backend = self.backend.write();
+            if backend.is_paused()? {
+                backend.resume()
+            } else {
+                backend.pause()
+            }
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
+    }
+
+    /// Returns whether this speech synthesizer is paused.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::UnsupportedFeature`] if the backend cannot pause speech, or another
+    /// error if reading the paused state fails.
+    #[instrument(level = "trace", skip(self), err, ret)]
+    pub fn is_paused(&self) -> Result<bool, Error> {
+        let Features { pause, .. } = self.supported_features();
+        if pause {
+            self.backend.read().is_paused()
         } else {
             Err(Error::UnsupportedFeature)
         }
@@ -793,6 +906,38 @@ impl Tts {
         }
     }
 
+    /// Called when this speech synthesizer pauses an utterance.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::UnsupportedFeature`] if the backend cannot pause speech.
+    #[instrument(level = "debug", skip(self, callback), err)]
+    pub fn on_utterance_pause(&self, callback: impl UtteranceCallback) -> Result<(), Error> {
+        let Features { pause, .. } = self.supported_features();
+        if pause {
+            self.callbacks.lock().pause = Some(Box::new(callback));
+            Ok(())
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
+    }
+
+    /// Called when this speech synthesizer resumes a previously paused utterance.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::UnsupportedFeature`] if the backend cannot pause speech.
+    #[instrument(level = "debug", skip(self, callback), err)]
+    pub fn on_utterance_resume(&self, callback: impl UtteranceCallback) -> Result<(), Error> {
+        let Features { pause, .. } = self.supported_features();
+        if pause {
+            self.callbacks.lock().resume = Some(Box::new(callback));
+            Ok(())
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
+    }
+
     /// Clears all registered utterance callbacks.
     #[instrument(level = "debug", skip(self))]
     pub fn clear_utterance_callbacks(&self) {
@@ -800,6 +945,8 @@ impl Tts {
         callbacks.begin = None;
         callbacks.end = None;
         callbacks.stop = None;
+        callbacks.pause = None;
+        callbacks.resume = None;
     }
 
     /// Called when this speech synthesizer begins synthesizing an utterance to audio.

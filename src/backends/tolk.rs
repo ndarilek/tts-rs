@@ -47,6 +47,21 @@ impl Backend for Tolk {
         Ok(())
     }
 
+    #[instrument(level = "debug", skip(self), err)]
+    fn pause(&mut self) -> Result<(), Error> {
+        Err(Error::UnsupportedFeature)
+    }
+
+    #[instrument(level = "debug", skip(self), err)]
+    fn resume(&mut self) -> Result<(), Error> {
+        Err(Error::UnsupportedFeature)
+    }
+
+    #[instrument(level = "trace", skip(self), err, ret)]
+    fn is_paused(&self) -> Result<bool, Error> {
+        Err(Error::UnsupportedFeature)
+    }
+
     #[instrument(level = "trace", skip(self))]
     fn min_rate(&self) -> f32 {
         unimplemented!()

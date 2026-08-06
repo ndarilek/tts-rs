@@ -80,11 +80,18 @@ impl Utterance {
     }
 }
 
+/// Playback state shared with the `MediaEnded` handler.
+#[derive(Default)]
+struct State {
+    utterances: VecDeque<Utterance>,
+    paused: bool,
+}
+
 #[derive(Clone)]
 pub struct WinRt {
     synth: SpeechSynthesizer,
     player: MediaPlayer,
-    utterances: Arc<Mutex<VecDeque<Utterance>>>,
+    state: Arc<Mutex<State>>,
     callbacks: Arc<Mutex<Callbacks>>,
     rate: f32,
     pitch: f32,
@@ -102,7 +109,7 @@ impl WinRt {
         let tts = Self {
             synth: SpeechSynthesizer::new()?,
             player,
-            utterances: Arc::new(Mutex::new(VecDeque::new())),
+            state: Arc::new(Mutex::new(State::default())),
             callbacks,
             rate: 1.,
             pitch: 1.,
@@ -113,18 +120,18 @@ impl WinRt {
         // to the backend that registered the handler.
         let span = info_span!("winrt", backend_id = id);
         let synth = tts.synth.clone();
-        let utterances = tts.utterances.clone();
+        let state = tts.state.clone();
         let callbacks = tts.callbacks.clone();
         tts.player.MediaEnded(&TypedEventHandler::new(
             move |player: Ref<MediaPlayer>, _args| {
                 let _entered = span.enter();
                 trace!("Media ended");
                 if let Some(player) = player.as_ref() {
-                    let mut utterances = utterances.lock();
+                    let mut state = state.lock();
                     let mut callbacks = callbacks.lock();
-                    if let Some(utterance) = utterances.pop_front() {
+                    if let Some(utterance) = state.utterances.pop_front() {
                         callbacks.utterance_end(utterance.id);
-                        if let Some(utterance) = utterances.front() {
+                        if let Some(utterance) = state.utterances.front() {
                             utterance.speak(&synth, player, &mut callbacks)?;
                         }
                     }
@@ -141,6 +148,7 @@ impl Backend for WinRt {
     fn supported_features(&self) -> Features {
         Features {
             stop: true,
+            pause: true,
             rate: true,
             pitch: true,
             volume: true,
@@ -170,12 +178,13 @@ impl Backend for WinRt {
             voice: self.voice.clone(),
         };
         let utterance_id = utterance.id;
-        let mut utterances = self.utterances.lock();
-        if utterances.is_empty() {
+        let mut state = self.state.lock();
+        // `paused` implies a non-empty queue.
+        if state.utterances.is_empty() {
             let mut callbacks = self.callbacks.lock();
             utterance.speak(&self.synth, &self.player, &mut callbacks)?;
         }
-        utterances.push_back(utterance);
+        state.utterances.push_back(utterance);
         Ok(Some(utterance_id))
     }
 
@@ -204,17 +213,51 @@ impl Backend for WinRt {
 
     #[instrument(level = "debug", skip(self), err)]
     fn stop(&mut self) -> std::result::Result<(), Error> {
-        let mut utterances = self.utterances.lock();
-        if utterances.is_empty() {
+        let mut state = self.state.lock();
+        state.paused = false;
+        if state.utterances.is_empty() {
             return Ok(());
         }
         let mut callbacks = self.callbacks.lock();
-        for utterance in utterances.iter() {
+        for utterance in &state.utterances {
             callbacks.utterance_stop(utterance.id);
         }
-        utterances.clear();
+        state.utterances.clear();
         self.player.Pause()?;
         Ok(())
+    }
+
+    #[instrument(level = "debug", skip(self), err)]
+    fn pause(&mut self) -> std::result::Result<(), Error> {
+        let mut state = self.state.lock();
+        if state.paused {
+            return Ok(());
+        }
+        if let Some(id) = state.utterances.front().map(|u| u.id) {
+            self.player.Pause()?;
+            state.paused = true;
+            self.callbacks.lock().utterance_pause(id);
+        }
+        Ok(())
+    }
+
+    #[instrument(level = "debug", skip(self), err)]
+    fn resume(&mut self) -> std::result::Result<(), Error> {
+        let mut state = self.state.lock();
+        if !state.paused {
+            return Ok(());
+        }
+        state.paused = false;
+        if let Some(id) = state.utterances.front().map(|u| u.id) {
+            self.player.Play()?;
+            self.callbacks.lock().utterance_resume(id);
+        }
+        Ok(())
+    }
+
+    #[instrument(level = "trace", skip(self), err, ret)]
+    fn is_paused(&self) -> std::result::Result<bool, Error> {
+        Ok(self.state.lock().paused)
     }
 
     #[instrument(level = "trace", skip(self))]
@@ -306,7 +349,7 @@ impl Backend for WinRt {
 
     #[instrument(level = "trace", skip(self), err, ret)]
     fn is_speaking(&self) -> std::result::Result<bool, Error> {
-        Ok(!self.utterances.lock().is_empty())
+        Ok(!self.state.lock().utterances.is_empty())
     }
 
     #[instrument(level = "debug", skip(self), err, ret)]

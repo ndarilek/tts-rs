@@ -101,6 +101,40 @@ define_class!(
             }
             ivars.callbacks.lock().utterance_stop(utterance_id);
         }
+
+        #[unsafe(method(speechSynthesizer:didPauseSpeechUtterance:))]
+        fn speech_synthesizer_did_pause_speech_utterance(
+            &self,
+            _synthesizer: &AVSpeechSynthesizer,
+            utterance: &AVSpeechUtterance,
+        ) {
+            let ivars = self.ivars();
+            let _entered = ivars.span.enter();
+            let address = ptr::from_ref(utterance) as usize;
+            let utterance_id = UtteranceId::AvFoundation(address);
+            trace!(?utterance_id, "Utterance paused");
+            if ivars.syntheses.lock().contains(&address) {
+                return;
+            }
+            ivars.callbacks.lock().utterance_pause(utterance_id);
+        }
+
+        #[unsafe(method(speechSynthesizer:didContinueSpeechUtterance:))]
+        fn speech_synthesizer_did_continue_speech_utterance(
+            &self,
+            _synthesizer: &AVSpeechSynthesizer,
+            utterance: &AVSpeechUtterance,
+        ) {
+            let ivars = self.ivars();
+            let _entered = ivars.span.enter();
+            let address = ptr::from_ref(utterance) as usize;
+            let utterance_id = UtteranceId::AvFoundation(address);
+            trace!(?utterance_id, "Utterance resumed");
+            if ivars.syntheses.lock().contains(&address) {
+                return;
+            }
+            ivars.callbacks.lock().utterance_resume(utterance_id);
+        }
     }
 );
 
@@ -128,7 +162,16 @@ enum Command {
     Stop {
         reply: Sender<()>,
     },
+    Pause {
+        reply: Sender<()>,
+    },
+    Resume {
+        reply: Sender<()>,
+    },
     IsSpeaking {
+        reply: Sender<bool>,
+    },
+    IsPaused {
         reply: Sender<bool>,
     },
 }
@@ -190,8 +233,19 @@ fn run_synthesizer(callbacks: Arc<Mutex<Callbacks>>, span: Span, commands: Recei
                 unsafe { synth.stopSpeakingAtBoundary(AVSpeechBoundary::Immediate) };
                 let _ = reply.send(());
             }
+            Command::Pause { reply } => {
+                unsafe { synth.pauseSpeakingAtBoundary(AVSpeechBoundary::Immediate) };
+                let _ = reply.send(());
+            }
+            Command::Resume { reply } => {
+                unsafe { synth.continueSpeaking() };
+                let _ = reply.send(());
+            }
             Command::IsSpeaking { reply } => {
                 let _ = reply.send(unsafe { synth.isSpeaking() });
+            }
+            Command::IsPaused { reply } => {
+                let _ = reply.send(unsafe { synth.isPaused() });
             }
         }
     }
@@ -453,6 +507,7 @@ impl Backend for AvFoundation {
     fn supported_features(&self) -> Features {
         Features {
             stop: true,
+            pause: true,
             rate: true,
             pitch: true,
             volume: true,
@@ -503,6 +558,21 @@ impl Backend for AvFoundation {
     #[instrument(level = "debug", skip(self), err)]
     fn stop(&mut self) -> Result<(), Error> {
         self.request(|reply| Command::Stop { reply })
+    }
+
+    #[instrument(level = "debug", skip(self), err)]
+    fn pause(&mut self) -> Result<(), Error> {
+        self.request(|reply| Command::Pause { reply })
+    }
+
+    #[instrument(level = "debug", skip(self), err)]
+    fn resume(&mut self) -> Result<(), Error> {
+        self.request(|reply| Command::Resume { reply })
+    }
+
+    #[instrument(level = "trace", skip(self), err, ret)]
+    fn is_paused(&self) -> Result<bool, Error> {
+        self.request(|reply| Command::IsPaused { reply })
     }
 
     #[instrument(level = "trace", skip(self))]
