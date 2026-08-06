@@ -149,7 +149,7 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onStop(
         }
         let utterance_id = UtteranceId::Android(utterance_id);
         with_callbacks(backend_id, |callbacks| {
-            callbacks.utterance_end(utterance_id);
+            callbacks.utterance_stop(utterance_id);
         });
         Ok(())
     })
@@ -176,7 +176,7 @@ pub unsafe extern "C" fn Java_rs_tts_Bridge_onDone(
         }
         let utterance_id = UtteranceId::Android(utterance_id);
         with_callbacks(backend_id, |callbacks| {
-            callbacks.utterance_stop(utterance_id);
+            callbacks.utterance_end(utterance_id);
         });
         Ok(())
     })
