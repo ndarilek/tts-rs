@@ -9,7 +9,7 @@ jobs:
     name: Check Formatting
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: |
           rustup toolchain install stable
           cargo fmt --all --check
@@ -23,7 +23,7 @@ jobs:
         os: [windows-latest, ubuntu-22.04, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: sudo apt-get update; sudo apt-get install -y libspeechd-dev
         if: ${{ runner.os == 'Linux' }}
       - run: |
@@ -34,7 +34,7 @@ jobs:
     name: Check Web
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: |
           rustup target add wasm32-unknown-unknown
           rustup toolchain install stable
@@ -44,7 +44,7 @@ jobs:
     name: Check Android
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: |
           rustup target add aarch64-linux-android
           rustup toolchain install stable
@@ -54,7 +54,7 @@ jobs:
     name: Check Web Example
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: |
           rustup target add wasm32-unknown-unknown
           rustup toolchain install stable
