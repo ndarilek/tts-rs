@@ -3,6 +3,7 @@
 This library provides a high-level Text-To-Speech (TTS) interface supporting various backends. Currently supported backends are:
 
 * Windows
+  * NVDA via the [NVDA Controller Client](https://github.com/nvaccess/nvda/tree/master/extras/controllerClient) (requires shipping `nvdaControllerClient.dll` with your application)
   * Screen readers/SAPI via Tolk (requires `tolk` Cargo feature)
   * WinRT
 * Linux via [Speech Dispatcher](https://freebsoft.org/speechd)

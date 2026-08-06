@@ -1,6 +1,7 @@
 //! * a Text-To-Speech (TTS) library providing high-level interfaces to a variety of backends.
 //!  * Currently supported backends are:
 //!  * * Windows
+//!  *   * NVDA via the [NVDA Controller Client](https://github.com/nvaccess/nvda/tree/master/extras/controllerClient) (requires shipping `nvdaControllerClient.dll` with your application)
 //!  *   * Screen readers/SAPI via Tolk (requires `tolk` Cargo feature)
 //!  *   * `WinRT`
 //!  * * Linux via [Speech Dispatcher](https://freebsoft.org/speechd)
@@ -34,6 +35,8 @@ pub enum Backends {
     Android,
     #[cfg(target_vendor = "apple")]
     AvFoundation,
+    #[cfg(windows)]
+    Nvda,
     #[cfg(target_os = "linux")]
     Orca,
     #[cfg(target_os = "linux")]
@@ -56,6 +59,8 @@ impl Backends {
             Backends::Android => backends::Android::NAME,
             #[cfg(target_vendor = "apple")]
             Backends::AvFoundation => backends::AvFoundation::NAME,
+            #[cfg(windows)]
+            Backends::Nvda => backends::Nvda::NAME,
             #[cfg(target_os = "linux")]
             Backends::Orca => backends::Orca::NAME,
             #[cfg(target_os = "linux")]
@@ -81,6 +86,8 @@ impl Backends {
             Backends::Android => backends::Android::is_available(),
             #[cfg(target_vendor = "apple")]
             Backends::AvFoundation => backends::AvFoundation::is_available(),
+            #[cfg(windows)]
+            Backends::Nvda => backends::Nvda::is_available(),
             #[cfg(target_os = "linux")]
             Backends::Orca => backends::Orca::is_available(),
             #[cfg(target_os = "linux")]
@@ -474,6 +481,8 @@ impl Tts {
             Backends::SpeechDispatcher => Box::new(backends::SpeechDispatcher::new(&callbacks)?),
             #[cfg(target_arch = "wasm32")]
             Backends::Web => Box::new(backends::Web::new(callbacks.clone())?),
+            #[cfg(windows)]
+            Backends::Nvda => Box::new(backends::Nvda::new()?),
             #[cfg(all(windows, feature = "tolk"))]
             Backends::Tolk => Box::new(
                 backends::Tolk::new().ok_or(Error::BackendUnavailable("Tolk failed to load"))?,
@@ -498,6 +507,8 @@ impl Tts {
     #[must_use]
     pub fn backends() -> Vec<Backends> {
         let candidates: &[Backends] = &[
+            #[cfg(windows)]
+            Backends::Nvda,
             #[cfg(all(windows, feature = "tolk"))]
             Backends::Tolk,
             #[cfg(windows)]
@@ -1059,15 +1070,22 @@ impl Tts {
     #[instrument(level = "debug", ret)]
     #[must_use]
     pub fn screen_reader_available() -> bool {
-        #[cfg(all(windows, feature = "tolk"))]
+        #[cfg(windows)]
         {
-            backends::Tolk::is_available()
+            if backends::Nvda::is_available() {
+                return true;
+            }
+            #[cfg(feature = "tolk")]
+            if backends::Tolk::is_available() {
+                return true;
+            }
+            false
         }
         #[cfg(target_os = "linux")]
         {
             backends::a11y_screen_reader_enabled()
         }
-        #[cfg(not(any(all(windows, feature = "tolk"), target_os = "linux")))]
+        #[cfg(not(any(windows, target_os = "linux")))]
         {
             false
         }

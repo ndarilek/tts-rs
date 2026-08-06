@@ -4,6 +4,9 @@ mod orca;
 #[cfg(target_os = "linux")]
 mod speech_dispatcher;
 
+#[cfg(windows)]
+mod nvda;
+
 #[cfg(all(windows, feature = "tolk"))]
 mod tolk;
 
@@ -24,6 +27,9 @@ pub(crate) use self::orca::*;
 
 #[cfg(target_os = "linux")]
 pub(crate) use self::speech_dispatcher::*;
+
+#[cfg(windows)]
+pub(crate) use self::nvda::*;
 
 #[cfg(all(windows, feature = "tolk"))]
 pub(crate) use self::tolk::*;
