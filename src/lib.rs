@@ -35,6 +35,8 @@ pub enum Backends {
     #[cfg(target_vendor = "apple")]
     AvFoundation,
     #[cfg(target_os = "linux")]
+    Orca,
+    #[cfg(target_os = "linux")]
     SpeechDispatcher,
     #[cfg(all(windows, feature = "tolk"))]
     Tolk,
@@ -54,6 +56,8 @@ impl Backends {
             Backends::Android => backends::Android::NAME,
             #[cfg(target_vendor = "apple")]
             Backends::AvFoundation => backends::AvFoundation::NAME,
+            #[cfg(target_os = "linux")]
+            Backends::Orca => backends::Orca::NAME,
             #[cfg(target_os = "linux")]
             Backends::SpeechDispatcher => backends::SpeechDispatcher::NAME,
             #[cfg(all(windows, feature = "tolk"))]
@@ -77,6 +81,8 @@ impl Backends {
             Backends::Android => backends::Android::is_available(),
             #[cfg(target_vendor = "apple")]
             Backends::AvFoundation => backends::AvFoundation::is_available(),
+            #[cfg(target_os = "linux")]
+            Backends::Orca => backends::Orca::is_available(),
             #[cfg(target_os = "linux")]
             Backends::SpeechDispatcher => backends::SpeechDispatcher::is_available(),
             #[cfg(all(windows, feature = "tolk"))]
@@ -226,6 +232,9 @@ pub enum Error {
     #[cfg(target_os = "linux")]
     #[error("Speech Dispatcher error: {0}")]
     SpeechDispatcher(SpeechDispatcherError),
+    #[cfg(target_os = "linux")]
+    #[error(transparent)]
+    Zbus(#[from] zbus::Error),
     #[cfg(windows)]
     #[error(transparent)]
     WinRt(#[from] windows::core::Error),
@@ -441,6 +450,7 @@ type BoxedBackend = Box<dyn Backend>;
 #[derive(Clone)]
 pub struct Tts {
     backend: Arc<RwLock<BoxedBackend>>,
+    backend_name: &'static str,
     callbacks: Arc<Mutex<Callbacks>>,
 }
 
@@ -456,7 +466,10 @@ impl Tts {
     #[instrument(level = "info", err)]
     pub fn new(backend: Backends) -> Result<Tts, Error> {
         let callbacks = Arc::new(Mutex::new(Callbacks::default()));
+        let backend_name = backend.name();
         let backend: BoxedBackend = match backend {
+            #[cfg(target_os = "linux")]
+            Backends::Orca => Box::new(backends::Orca::new()?),
             #[cfg(target_os = "linux")]
             Backends::SpeechDispatcher => Box::new(backends::SpeechDispatcher::new(&callbacks)?),
             #[cfg(target_arch = "wasm32")]
@@ -474,6 +487,7 @@ impl Tts {
         };
         Ok(Tts {
             backend: Arc::new(RwLock::new(backend)),
+            backend_name,
             callbacks,
         })
     }
@@ -488,6 +502,8 @@ impl Tts {
             Backends::Tolk,
             #[cfg(windows)]
             Backends::WinRt,
+            #[cfg(target_os = "linux")]
+            Backends::Orca,
             #[cfg(target_os = "linux")]
             Backends::SpeechDispatcher,
             #[cfg(target_vendor = "apple")]
@@ -516,6 +532,13 @@ impl Tts {
             .first()
             .ok_or(Error::BackendUnavailable("no backend for this platform"))?;
         Tts::new(backend)
+    }
+
+    /// Returns the name of the backend powering this instance.
+    #[instrument(level = "trace", skip(self))]
+    #[must_use]
+    pub fn backend_name(&self) -> &'static str {
+        self.backend_name
     }
 
     /// Returns the features supported by this TTS engine
@@ -1040,7 +1063,11 @@ impl Tts {
         {
             backends::Tolk::is_available()
         }
-        #[cfg(not(all(windows, feature = "tolk")))]
+        #[cfg(target_os = "linux")]
+        {
+            backends::a11y_screen_reader_enabled()
+        }
+        #[cfg(not(any(all(windows, feature = "tolk"), target_os = "linux")))]
         {
             false
         }

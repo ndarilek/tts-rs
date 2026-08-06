@@ -1,4 +1,7 @@
 #[cfg(target_os = "linux")]
+mod orca;
+
+#[cfg(target_os = "linux")]
 mod speech_dispatcher;
 
 #[cfg(all(windows, feature = "tolk"))]
@@ -15,6 +18,9 @@ mod av_foundation;
 
 #[cfg(target_os = "android")]
 mod android;
+
+#[cfg(target_os = "linux")]
+pub(crate) use self::orca::*;
 
 #[cfg(target_os = "linux")]
 pub(crate) use self::speech_dispatcher::*;

@@ -39,7 +39,10 @@ fn main() -> Result<(), Error> {
     if is_speaking {
         println!("Are we speaking? {}", tts_clone.is_speaking()?);
     }
-    tts_clone.speak("Hello, world.", false)?;
+    tts_clone.speak(
+        &format!("Hello, world from {}.", tts_clone.backend_name()),
+        false,
+    )?;
     let Features { rate, .. } = tts_clone.supported_features();
     if rate {
         let original_rate = tts_clone.get_rate()?;

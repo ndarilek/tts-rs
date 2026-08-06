@@ -13,10 +13,11 @@ fn main() -> Result<(), Error> {
     let Some(tts) = common::tts_from_args()? else {
         return Ok(());
     };
+    let message = format!("Hello, world from {}.", tts.backend_name());
     println!("Press Enter and wait for speech.");
     loop {
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
-        tts.speak("Hello, world.", true)?;
+        tts.speak(&message, true)?;
     }
 }

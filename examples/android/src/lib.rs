@@ -18,7 +18,7 @@ fn run() -> Result<(), Error> {
     if is_speaking {
         println!("Are we speaking? {}", tts.is_speaking()?);
     }
-    tts.speak("Hello, world.", false)?;
+    tts.speak(&format!("Hello, world from {}.", tts.backend_name()), false)?;
     let Features { rate, .. } = tts.supported_features();
     if rate {
         let original_rate = tts.get_rate()?;

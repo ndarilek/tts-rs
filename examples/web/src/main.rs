@@ -28,7 +28,10 @@ fn init(_: Url, _: &mut impl Orders<Msg>) -> Model {
         }
     }
     Model {
-        text: "Hello, world. This is a test of the current text-to-speech values.".into(),
+        text: format!(
+            "Hello, world from {}. This is a test of the current text-to-speech values.",
+            tts.backend_name()
+        ),
         tts,
     }
 }

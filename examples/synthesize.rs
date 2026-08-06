@@ -24,7 +24,7 @@ fn main() -> Result<(), Error> {
     tts.on_synthesis_complete(|utterance| {
         println!("Finished synthesizing {utterance}");
     })?;
-    let audio = tts.synthesize("Hello, world.")?;
+    let audio = tts.synthesize(&format!("Hello, world from {}.", tts.backend_name()))?;
     println!(
         "Synthesized {} bytes of audio: {:?}",
         audio.as_bytes().len(),
