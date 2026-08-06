@@ -513,6 +513,7 @@ impl Backend for AvFoundation {
             volume: true,
             is_speaking: true,
             voice: true,
+            get_voice: true,
             utterance_callbacks: true,
             synthesis: true,
             ..Default::default()
@@ -660,40 +661,47 @@ impl Backend for AvFoundation {
 
     #[instrument(level = "debug", skip(self), err, ret)]
     fn voice(&self) -> Result<Option<Voice>, Error> {
-        unimplemented!()
+        if let Some(voice) = &self.voice {
+            return Ok(Some(voice.clone()));
+        }
+        Ok(unsafe { AVSpeechSynthesisVoice::voiceWithLanguage(None) }
+            .as_deref()
+            .map(Voice::from))
     }
 
     #[instrument(level = "debug", skip(self), err)]
     fn voices(&self) -> Result<Vec<Voice>, Error> {
         let voices = unsafe { AVSpeechSynthesisVoice::speechVoices() };
-        let rv = voices
-            .iter()
-            .map(|v| {
-                let id = unsafe { v.identifier() };
-                let name = unsafe { v.name() };
-                let gender = unsafe { v.gender() };
-                let gender = match gender {
-                    AVSpeechSynthesisVoiceGender::Male => Some(Gender::Male),
-                    AVSpeechSynthesisVoiceGender::Female => Some(Gender::Female),
-                    _ => None,
-                };
-                let language = unsafe { v.language() };
-                let language = language.to_string();
-                let language = LanguageTag::parse(language).unwrap();
-                Voice {
-                    id: id.to_string(),
-                    name: name.to_string(),
-                    gender,
-                    language,
-                }
-            })
-            .collect();
-        Ok(rv)
+        Ok(voices.iter().map(|v| Voice::from(&*v)).collect())
     }
 
     #[instrument(level = "debug", skip(self), err)]
     fn set_voice(&mut self, voice: &Voice) -> Result<(), Error> {
+        // Validate eagerly so an unknown id fails here rather than at speak time.
+        unsafe { AVSpeechSynthesisVoice::voiceWithIdentifier(&NSString::from_str(voice.id())) }
+            .ok_or_else(|| Error::VoiceNotFound(voice.id().to_string()))?;
         self.voice = Some(voice.clone());
         Ok(())
+    }
+}
+
+impl From<&AVSpeechSynthesisVoice> for Voice {
+    fn from(voice: &AVSpeechSynthesisVoice) -> Self {
+        let id = unsafe { voice.identifier() };
+        let name = unsafe { voice.name() };
+        let gender = match unsafe { voice.gender() } {
+            AVSpeechSynthesisVoiceGender::Male => Some(Gender::Male),
+            AVSpeechSynthesisVoiceGender::Female => Some(Gender::Female),
+            _ => None,
+        };
+        // Apple documents voice languages as BCP 47 tags.
+        let language = unsafe { voice.language() }.to_string();
+        let language = LanguageTag::parse_and_normalize(&language).unwrap();
+        Voice {
+            id: id.to_string(),
+            name: name.to_string(),
+            gender,
+            language,
+        }
     }
 }
