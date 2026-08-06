@@ -1,14 +1,24 @@
 {
-    "image": "debian:13",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
     "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
     "postCreateCommand": ".devcontainer/postCreate.sh",
+    // The emulator needs KVM; x86_64 images won't boot without it. Note this makes the container
+    // itself fail to start where /dev/kvm is absent.
+    "runArgs": [
+        "--device=/dev/kvm"
+    ],
     "containerEnv": {
         "ANDROID_HOME": "/usr/local/android",
+        // The only way `cargo apk` finds the NDK, and it wants an exact version directory.
+        // Keep in step with `ndkVersion` in the android-sdk feature below.
+        "ANDROID_NDK_ROOT": "/usr/local/android/ndk/28.2.13676358",
         "LIBGL_ALWAYS_SOFTWARE": "1",
         "GALLIUM_DRIVER": "llvmpipe"
     },
     "remoteEnv": {
-        "PATH": "${containerEnv:PATH}:/root/.local/bin"
+        "PATH": "${containerWorkspaceFolder}/.devcontainer/bin:${containerEnv:PATH}:/root/.local/bin"
     },
     "features": {
         "ghcr.io/devcontainers/features/rust:1": {
@@ -17,8 +27,13 @@
         "ghcr.io/devcontainers/features/java:1": {
             "version": 21
         },
+        // build.rs needs `d8` from build-tools and `android.jar` from platforms. The NDK version
+        // is the one ANDROID_NDK_ROOT above names; keep the two in step.
         "ghcr.io/CASL0/devcontainer-features/android-sdk:1": {
-            "installNdk": true
+            "platformsVersion": "36",
+            "buildToolsVersion": "36.0.0",
+            "installNdk": true,
+            "ndkVersion": "28.2.13676358"
         }
     }
 }

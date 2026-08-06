@@ -17,3 +17,9 @@ cargo clippy --all-targets --target wasm32-unknown-unknown
 cargo clippy --all-targets --target aarch64-linux-android
 
 (cd examples/web && cargo build --target wasm32-unknown-unknown)
+
+if command -v cargo-apk >/dev/null 2>&1 && [ -n "${ANDROID_NDK_ROOT:-}" ]; then
+    cargo apk build --example android_hello_world
+else
+    echo "Skipping Android example: cargo-apk or ANDROID_NDK_ROOT is unavailable"
+fi

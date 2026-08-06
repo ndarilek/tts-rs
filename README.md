@@ -11,14 +11,34 @@ This library provides a high-level Text-To-Speech (TTS) interface supporting var
 * Android
 * WebAssembly
 
-## Android Setup
+## Android
 
-On most platforms, this library is plug-and-play. Because of JNI's complexity, Android setup is a bit more involved. In general, look to the Android example for guidance. Here are some rough steps to get going:
+Plug-and-play like the other platforms — no Java sources, Gradle plugin, or manifest entries in your
+app — given two things:
 
-* Set up _Cargo.toml_ as the example does. Be sure to depend on `ndk-glue`.
-* Place _Bridge.java_ appropriately in your app. This is needed to support various Android TTS callbacks.
-* Create a main activity similar to _MainActivity.kt_. In particular, you need to derive `android.app.NativeActivity`, and you need a `System.loadLibrary(...)` call appropriate for your app. `System.loadLibrary(...)` is needed to trigger `JNI_OnLoad`.
-* * Even though you've loaded the library in your main activity, add a metadata tag to your activity in _AndroidManifest.xml_ referencing it. Yes, this is redundant but necessary.
-* Set if your various build.gradle scripts to reference the plugins, dependencies, etc. from the example. In particular, you'll want to set up [cargo-ndk-android-gradle](https://github.com/willir/cargo-ndk-android-gradle/) and either [depend on androidx.annotation](https://developer.android.com/reference/androidx/annotation/package-summary) or otherwise configure your app to keep the class _rs.tts.Bridge_.
+* **`minSdkVersion` 26 or above.** The `UtteranceProgressListener` subclass Android callbacks need
+  ships as an embedded dex, loaded with `InMemoryDexClassLoader`.
+* **A `Context` published to [`ndk-context`]** before the first `Tts`. [`android-activity`] does
+  this for you, including by way of `winit` or a game engine; otherwise call
+  `ndk_context::initialize_android_context`.
+Nothing here waits for the engine. Android reports it ready on the app's Java main thread, so a
+backend that blocked for that would deadlock any app whose main thread is itself waiting on the
+caller — which is every `NativeActivity` app, since [`android-activity`] holds the main thread until
+the event loop acknowledges each lifecycle callback. `Tts::default()` therefore returns as soon as
+the engine has been *asked* to connect, and anything spoken before it answers is queued and replayed
+in order. The one exception is `synthesize`, which returns audio and so has to wait for it; call
+that off your event-loop thread.
 
-And I think that should about do it. Good luck!
+See _examples/android\_hello\_world.rs_, built with [`cargo-apk`]:
+
+```shell
+cargo apk run --example android_hello_world
+adb logcat -s tts
+```
+
+Editing _android/Bridge.java_ needs a JDK and `ANDROID_HOME`; _build.rs_ rebuilds the checked-in dex
+from it.
+
+[`ndk-context`]: https://crates.io/crates/ndk-context
+[`android-activity`]: https://crates.io/crates/android-activity
+[`cargo-apk`]: https://crates.io/crates/cargo-apk

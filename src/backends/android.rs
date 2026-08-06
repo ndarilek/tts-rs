@@ -1,35 +1,140 @@
 #[cfg(target_os = "android")]
 use std::{
     fs,
-    os::raw::c_void,
     sync::{
         Arc, OnceLock,
         atomic::{AtomicU64, Ordering},
         mpsc::{Sender, channel},
     },
-    thread,
-    time::{Duration, Instant},
 };
 
 use jni::{
-    EnvUnowned, JavaVM,
-    errors::ThrowRuntimeExAndDefault,
-    jni_sig, jni_str,
+    Env, JavaVM, NativeMethod, jni_sig, jni_str, native_method,
     objects::{Global, JClass, JObject, JString},
-    sys::{self, JNI_VERSION_1_6, jfloat, jint},
+    sys::{jboolean, jfloat, jint},
 };
-use parking_lot::{Mutex, RwLock};
+use parking_lot::{Condvar, Mutex};
 use tracing::{Span, error, field::Empty, info_span, instrument};
 
 use crate::{Backend, Callbacks, Error, Features, SynthesizedAudio, UtteranceId, Voice};
 
+/// `rs.tts.Bridge`, compiled from _android/Bridge.java_ by the build script.
+static BRIDGE_DEX: &[u8] =
+    include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/android/bridge.dex"));
 static BRIDGE: OnceLock<Global<JClass<'static>>> = OnceLock::new();
 static NEXT_BACKEND_ID: AtomicU64 = AtomicU64::new(0);
-static PENDING_INITIALIZATIONS: RwLock<Vec<u64>> = RwLock::new(Vec::new());
 static NEXT_UTTERANCE_ID: AtomicU64 = AtomicU64::new(0);
-// The JNI callbacks below only receive a backend ID from Java, so per-instance
-// callbacks must be reachable through a process-wide registry. Each backend's span rides
-// along so JNI callback executions can be connected back to the backend that spawned them.
+
+/// Per-backend engine state, reached from the JNI callbacks through [`INSTANCES`].
+///
+/// Android reports the engine ready on the app's Java main thread, which a `NativeActivity` app
+/// keeps blocked until its event loop acknowledges each lifecycle callback. Waiting for that from
+/// the event loop's own thread deadlocks, so nothing here waits: early utterances queue and
+/// `on_init` replays them.
+struct Instance {
+    state: Mutex<State>,
+    ready: Condvar,
+}
+
+struct State {
+    /// `None` until `on_init` reports, then whether the engine came up.
+    initialized: Option<bool>,
+    /// `on_init` can arrive before this is set: with no engine installed at all, Android dispatches
+    /// it synchronously from the `TextToSpeech` constructor.
+    tts: Option<Arc<Global<JObject<'static>>>>,
+    queued: Vec<Queued>,
+    /// What the app last asked for, restored after a replay leaves the engine on the last
+    /// utterance's settings.
+    rate: f32,
+    pitch: f32,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            initialized: None,
+            tts: None,
+            queued: Vec::new(),
+            rate: 1.,
+            pitch: 1.,
+        }
+    }
+}
+
+struct Queued {
+    id: u64,
+    text: String,
+    interrupt: bool,
+    /// Frozen at the `speak` call; the app can change them again before the queue drains.
+    rate: f32,
+    pitch: f32,
+}
+
+static INSTANCES: Mutex<Vec<(u64, Arc<Instance>)>> = Mutex::new(Vec::new());
+
+fn instance(backend_id: u64) -> Option<Arc<Instance>> {
+    INSTANCES
+        .lock()
+        .iter()
+        .find(|(id, _)| *id == backend_id)
+        .map(|(_, instance)| Arc::clone(instance))
+}
+
+/// Leaves late callbacks for the backend with nothing to find, so they become no-ops.
+fn unregister(backend_id: u64) {
+    INSTANCES.lock().retain(|(id, _)| *id != backend_id);
+    CALLBACKS.lock().retain(|(id, _, _)| *id != backend_id);
+}
+
+/// `TextToSpeech` only writes these into its parameter bundle, so they work while disconnected.
+fn set_rate_pitch_now(
+    env: &mut Env,
+    tts: &JObject<'static>,
+    rate: f32,
+    pitch: f32,
+) -> Result<(), Error> {
+    for (method, value, failure) in [
+        (jni_str!("setSpeechRate"), rate, "set_rate"),
+        (jni_str!("setPitch"), pitch, "set_pitch"),
+    ] {
+        let rv = env.call_method(tts, method, jni_sig!("(F)I"), &[(value as jfloat).into()])?;
+        if rv.i()? != 0 {
+            return Err(Error::OperationFailed(failure));
+        }
+    }
+    Ok(())
+}
+
+fn speak_now(
+    env: &mut Env,
+    tts: &JObject<'static>,
+    id: u64,
+    text: &str,
+    interrupt: bool,
+) -> Result<(), Error> {
+    let text = env.new_string(text)?;
+    let queue_mode = jint::from(!interrupt);
+    let id = env.new_string(id.to_string())?;
+    let rv = env.call_method(
+        tts,
+        jni_str!("speak"),
+        jni_sig!("(Ljava/lang/CharSequence;ILandroid/os/Bundle;Ljava/lang/String;)I"),
+        &[
+            (&text).into(),
+            queue_mode.into(),
+            (&JObject::null()).into(),
+            (&id).into(),
+        ],
+    )?;
+    if rv.i()? == 0 {
+        Ok(())
+    } else {
+        Err(Error::OperationFailed("speak"))
+    }
+}
+
+// The JNI callbacks only receive a backend ID, so per-instance callbacks need a process-wide
+// registry. Each backend's span rides along to connect callback executions back to it.
 type CallbacksEntry = (u64, Span, Arc<Mutex<Callbacks>>);
 static CALLBACKS: Mutex<Vec<CallbacksEntry>> = Mutex::new(Vec::new());
 /// In-flight `synthesize` calls by utterance ID; their progress events complete the blocked
@@ -64,158 +169,200 @@ fn with_callbacks(backend_id: u64, f: impl FnOnce(&mut Callbacks)) {
     f(&mut callbacks);
 }
 
-#[allow(non_snake_case)]
-#[unsafe(no_mangle)]
-#[instrument(level = "debug", skip_all)]
-pub extern "system" fn JNI_OnLoad(vm: *mut sys::JavaVM, _: *mut c_void) -> jint {
-    let vm = unsafe { JavaVM::from_raw(vm) };
-    vm.attach_current_thread(|env| -> jni::errors::Result<()> {
-        let b = env.find_class(jni_str!("rs/tts/Bridge"))?;
-        let b = env.new_global_ref(&b)?;
-        BRIDGE.set(b).expect("`Bridge` already initialized");
-        Ok(())
-    })
-    .expect("Failed to initialize `Bridge`");
-    JNI_VERSION_1_6
+/// Bound with `RegisterNatives`, since the bridge's own class loader puts it out of reach of
+/// symbol-based binding. Names are `lowerCamelCase`d and must match _android/Bridge.java_.
+const BRIDGE_METHODS: &[NativeMethod] = &[
+    native_method! { fn on_init(status: jint), },
+    native_method! { fn on_start(utterance_id: JString), },
+    native_method! { fn on_stop(utterance_id: JString, interrupted: jboolean), },
+    native_method! { fn on_done(utterance_id: JString), },
+    native_method! { fn on_error(utterance_id: JString), },
+];
+
+/// Defines the class from [`BRIDGE_DEX`] on first use — deferred, because the parent class loader
+/// comes from the context `ndk-context` publishes once the app runs.
+#[instrument(level = "debug", skip_all, err)]
+fn bridge(env: &mut Env) -> Result<&'static Global<JClass<'static>>, Error> {
+    if let Some(bridge) = BRIDGE.get() {
+        return Ok(bridge);
+    }
+    let ctx = ndk_context::android_context();
+    let context = unsafe { JObject::from_raw(env, ctx.context().cast()) };
+    let parent = env
+        .call_method(
+            &context,
+            jni_str!("getClassLoader"),
+            jni_sig!("()Ljava/lang/ClassLoader;"),
+            &[],
+        )?
+        .l()?;
+    // The class loader keeps referencing the buffer, so leak a copy of the read-only dex data.
+    let dex = Box::leak(Box::<[u8]>::from(BRIDGE_DEX));
+    let buffer = unsafe { env.new_direct_byte_buffer(dex.as_mut_ptr(), dex.len()) }?;
+    let loader = env.new_object(
+        jni_str!("dalvik/system/InMemoryDexClassLoader"),
+        jni_sig!("(Ljava/nio/ByteBuffer;Ljava/lang/ClassLoader;)V"),
+        &[(&buffer).into(), (&parent).into()],
+    )?;
+    let name = env.new_string("rs.tts.Bridge")?;
+    let class = env
+        .call_method(
+            &loader,
+            jni_str!("loadClass"),
+            jni_sig!("(Ljava/lang/String;)Ljava/lang/Class;"),
+            &[(&name).into()],
+        )?
+        .l()?;
+    let class = env.cast_local::<JClass>(class)?;
+    unsafe { env.register_native_methods(&class, BRIDGE_METHODS) }?;
+    let class = env.new_global_ref(&class)?;
+    // A racing thread may have won, in which case its class wins and ours is dropped.
+    Ok(BRIDGE.get_or_init(|| class))
 }
 
-#[unsafe(no_mangle)]
-#[allow(non_snake_case)]
-#[instrument(level = "debug", skip(env, obj), fields(backend_id = Empty))]
-pub unsafe extern "C" fn Java_rs_tts_Bridge_onInit(
-    mut env: EnvUnowned,
-    obj: JObject,
-    status: jint,
-) {
-    env.with_env(|env| -> jni::errors::Result<()> {
-        let id = env
-            .get_field(&obj, jni_str!("backendId"), jni_sig!(int))?
-            .i()?;
-        let id = u64::try_from(id).expect("Backend ID must be non-negative");
-        Span::current().record("backend_id", id);
-        let mut pending = PENDING_INITIALIZATIONS.write();
-        pending.retain(|v| *v != id);
-        if status != 0 {
-            error!("Failed to initialize TTS engine");
-        }
-        Ok(())
-    })
-    .resolve::<ThrowRuntimeExAndDefault>();
+/// The `backendId` a bridge was constructed with, the only instance state a callback carries.
+fn backend_id(env: &mut Env, bridge: JObject) -> jni::errors::Result<u64> {
+    let id = env
+        .get_field(bridge, jni_str!("backendId"), jni_sig!(int))?
+        .i()?;
+    Ok(u64::try_from(id).expect("Backend ID must be non-negative"))
 }
 
-#[unsafe(no_mangle)]
-#[allow(non_snake_case)]
-#[instrument(level = "trace", skip_all)]
-pub unsafe extern "C" fn Java_rs_tts_Bridge_onStart(
-    mut env: EnvUnowned,
-    obj: JObject,
+// Taken by value so the callbacks, whose signatures `native_method!` fixes, can hand off ownership.
+#[allow(clippy::needless_pass_by_value)]
+fn utterance(
+    env: &mut Env,
+    bridge: JObject,
     utterance_id: JString,
-) {
-    env.with_env(|env| -> jni::errors::Result<()> {
-        let backend_id = env
-            .get_field(&obj, jni_str!("backendId"), jni_sig!(int))?
-            .i()?;
-        let backend_id = u64::try_from(backend_id).expect("Backend ID must be non-negative");
-        let utterance_id = utterance_id.to_string().parse::<u64>().unwrap();
-        if is_synthesis(utterance_id) {
-            return Ok(());
-        }
-        let utterance_id = UtteranceId::Android(utterance_id);
-        with_callbacks(backend_id, |callbacks| {
-            callbacks.utterance_begin(utterance_id);
-        });
-        Ok(())
-    })
-    .resolve::<ThrowRuntimeExAndDefault>();
+) -> jni::errors::Result<(u64, u64)> {
+    let backend_id = backend_id(env, bridge)?;
+    let utterance_id = utterance_id
+        .try_to_string(env)?
+        .parse()
+        .expect("Utterance IDs are generated as integers");
+    Ok((backend_id, utterance_id))
 }
 
-#[unsafe(no_mangle)]
-#[allow(non_snake_case)]
-#[instrument(level = "trace", skip_all)]
-pub unsafe extern "C" fn Java_rs_tts_Bridge_onStop(
-    mut env: EnvUnowned,
-    obj: JObject,
-    utterance_id: JString,
-) {
-    env.with_env(|env| -> jni::errors::Result<()> {
-        let backend_id = env
-            .get_field(&obj, jni_str!("backendId"), jni_sig!(int))?
-            .i()?;
-        let backend_id = u64::try_from(backend_id).expect("Backend ID must be non-negative");
-        let utterance_id = utterance_id.to_string().parse::<u64>().unwrap();
-        if let Some(done) = take_synthesis(utterance_id) {
-            let _ = done.send(Err(Error::OperationFailed("synthesis stopped")));
-            return Ok(());
+#[instrument(level = "debug", skip(env, this), fields(backend_id = Empty))]
+fn on_init(env: &mut Env, this: JObject, status: jint) -> jni::errors::Result<()> {
+    let id = backend_id(env, this)?;
+    Span::current().record("backend_id", id);
+    let Some(instance) = instance(id) else {
+        // Dropped before the engine finished connecting.
+        return Ok(());
+    };
+    // Collect under the lock, then release it: replaying re-enters Java, which can call the
+    // progress callbacks back synchronously.
+    let (tts, queued, rate, pitch) = {
+        let mut state = instance.state.lock();
+        state.initialized = Some(status == 0);
+        instance.ready.notify_all();
+        (
+            state.tts.clone(),
+            std::mem::take(&mut state.queued),
+            state.rate,
+            state.pitch,
+        )
+    };
+    if status != 0 {
+        error!("Failed to initialize TTS engine");
+        // Nothing will speak these, so release anyone waiting on their IDs.
+        for utterance in queued {
+            with_callbacks(id, |callbacks| {
+                callbacks.utterance_stop(UtteranceId::Android(utterance.id));
+            });
         }
-        let utterance_id = UtteranceId::Android(utterance_id);
-        with_callbacks(backend_id, |callbacks| {
-            callbacks.utterance_stop(utterance_id);
-        });
-        Ok(())
-    })
-    .resolve::<ThrowRuntimeExAndDefault>();
+        return Ok(());
+    }
+    let Some(tts) = tts else {
+        // Unreachable on success: that `onInit` arrives long after the constructor returned.
+        return Ok(());
+    };
+    for utterance in queued {
+        let replay = set_rate_pitch_now(env, tts.as_obj(), utterance.rate, utterance.pitch)
+            .and_then(|()| {
+                speak_now(
+                    env,
+                    tts.as_obj(),
+                    utterance.id,
+                    &utterance.text,
+                    utterance.interrupt,
+                )
+            });
+        if let Err(e) = replay {
+            error!("Failed to speak queued utterance: {e}");
+        }
+    }
+    // The replay left the engine on the last utterance's settings.
+    if let Err(e) = set_rate_pitch_now(env, tts.as_obj(), rate, pitch) {
+        error!("Failed to restore rate and pitch: {e}");
+    }
+    Ok(())
 }
 
-#[unsafe(no_mangle)]
-#[allow(non_snake_case)]
 #[instrument(level = "trace", skip_all)]
-pub unsafe extern "C" fn Java_rs_tts_Bridge_onDone(
-    mut env: EnvUnowned,
-    obj: JObject,
-    utterance_id: JString,
-) {
-    env.with_env(|env| -> jni::errors::Result<()> {
-        let backend_id = env
-            .get_field(&obj, jni_str!("backendId"), jni_sig!(int))?
-            .i()?;
-        let backend_id = u64::try_from(backend_id).expect("Backend ID must be non-negative");
-        let utterance_id = utterance_id.to_string().parse::<u64>().unwrap();
-        if let Some(done) = take_synthesis(utterance_id) {
-            let _ = done.send(Ok(()));
-            return Ok(());
-        }
-        let utterance_id = UtteranceId::Android(utterance_id);
-        with_callbacks(backend_id, |callbacks| {
-            callbacks.utterance_end(utterance_id);
-        });
-        Ok(())
-    })
-    .resolve::<ThrowRuntimeExAndDefault>();
+fn on_start(env: &mut Env, this: JObject, utterance_id: JString) -> jni::errors::Result<()> {
+    let (backend_id, utterance_id) = utterance(env, this, utterance_id)?;
+    // A `synthesize` call reports its own progress.
+    if is_synthesis(utterance_id) {
+        return Ok(());
+    }
+    with_callbacks(backend_id, |callbacks| {
+        callbacks.utterance_begin(UtteranceId::Android(utterance_id));
+    });
+    Ok(())
 }
 
-#[unsafe(no_mangle)]
-#[allow(non_snake_case)]
 #[instrument(level = "trace", skip_all)]
-pub unsafe extern "C" fn Java_rs_tts_Bridge_onError(
-    mut env: EnvUnowned,
-    obj: JObject,
+fn on_stop(
+    env: &mut Env,
+    this: JObject,
     utterance_id: JString,
-) {
-    env.with_env(|env| -> jni::errors::Result<()> {
-        let backend_id = env
-            .get_field(&obj, jni_str!("backendId"), jni_sig!(int))?
-            .i()?;
-        let backend_id = u64::try_from(backend_id).expect("Backend ID must be non-negative");
-        let utterance_id = utterance_id.to_string().parse::<u64>().unwrap();
-        if let Some(done) = take_synthesis(utterance_id) {
-            let _ = done.send(Err(Error::OperationFailed("synthesis")));
-            return Ok(());
-        }
-        let utterance_id = UtteranceId::Android(utterance_id);
-        with_callbacks(backend_id, |callbacks| {
-            callbacks.utterance_end(utterance_id);
-        });
-        Ok(())
-    })
-    .resolve::<ThrowRuntimeExAndDefault>();
+    _interrupted: jboolean,
+) -> jni::errors::Result<()> {
+    let (backend_id, utterance_id) = utterance(env, this, utterance_id)?;
+    if let Some(done) = take_synthesis(utterance_id) {
+        let _ = done.send(Err(Error::OperationFailed("synthesis stopped")));
+        return Ok(());
+    }
+    with_callbacks(backend_id, |callbacks| {
+        callbacks.utterance_stop(UtteranceId::Android(utterance_id));
+    });
+    Ok(())
+}
+
+#[instrument(level = "trace", skip_all)]
+fn on_done(env: &mut Env, this: JObject, utterance_id: JString) -> jni::errors::Result<()> {
+    let (backend_id, utterance_id) = utterance(env, this, utterance_id)?;
+    if let Some(done) = take_synthesis(utterance_id) {
+        let _ = done.send(Ok(()));
+        return Ok(());
+    }
+    with_callbacks(backend_id, |callbacks| {
+        callbacks.utterance_end(UtteranceId::Android(utterance_id));
+    });
+    Ok(())
+}
+
+#[instrument(level = "trace", skip_all)]
+fn on_error(env: &mut Env, this: JObject, utterance_id: JString) -> jni::errors::Result<()> {
+    let (backend_id, utterance_id) = utterance(env, this, utterance_id)?;
+    if let Some(done) = take_synthesis(utterance_id) {
+        let _ = done.send(Err(Error::OperationFailed("synthesis")));
+        return Ok(());
+    }
+    with_callbacks(backend_id, |callbacks| {
+        callbacks.utterance_end(UtteranceId::Android(utterance_id));
+    });
+    Ok(())
 }
 
 #[derive(Clone)]
 pub(crate) struct Android {
     id: u64,
+    /// Holds rate and pitch too, since the post-init drain needs them.
+    instance: Arc<Instance>,
     tts: Arc<Global<JObject<'static>>>,
-    rate: f32,
-    pitch: f32,
 }
 
 impl Android {
@@ -227,16 +374,25 @@ impl Android {
         true
     }
 
+    /// Returns as soon as the engine has been *asked* to connect; see [`Instance`] for why it must
+    /// not wait for the answer.
     #[instrument(level = "info", skip(callbacks), err)]
     pub(crate) fn new(callbacks: Arc<Mutex<Callbacks>>) -> Result<Self, Error> {
-        const MAX_WAIT_TIME: Duration = Duration::from_millis(500);
         let bid = NEXT_BACKEND_ID.fetch_add(1, Ordering::Relaxed);
+        let instance = Arc::new(Instance {
+            state: Mutex::new(State::default()),
+            ready: Condvar::new(),
+        });
+        // Both live before the constructor runs, which calls `onInit` from inside itself when no
+        // engine is installed.
+        INSTANCES.lock().push((bid, Arc::clone(&instance)));
+        CALLBACKS
+            .lock()
+            .push((bid, info_span!("android", backend_id = bid), callbacks));
         let tts = Self::vm().attach_current_thread(|env| -> Result<_, Error> {
             let ctx = ndk_context::android_context();
             let context = unsafe { JObject::from_raw(env, ctx.context().cast()) };
-            let bridge = BRIDGE.get().ok_or(Error::BackendUnavailable(
-                "Android TTS bridge not registered",
-            ))?;
+            let bridge = bridge(env)?;
             let bid_jint =
                 jint::try_from(bid).map_err(|_| Error::OperationFailed("backend id conversion"))?;
             let bridge = env.new_object(bridge, jni_sig!("(I)V"), &[bid_jint.into()])?;
@@ -253,35 +409,33 @@ impl Android {
                 jni_sig!("(Landroid/speech/tts/UtteranceProgressListener;)I"),
                 &[(&bridge).into()],
             )?;
-            PENDING_INITIALIZATIONS.write().push(bid);
             Ok(env.new_global_ref(&tts)?)
-        })?;
-        // This hack makes my brain bleed.
-        let start = Instant::now();
-        // Wait a max of 500ms for initialization, then return an error to avoid hanging.
-        loop {
-            {
-                let pending = PENDING_INITIALIZATIONS.read();
-                if !pending.contains(&bid) {
-                    break;
-                }
-                if start.elapsed() > MAX_WAIT_TIME {
-                    return Err(Error::BackendUnavailable(
-                        "Android TTS initialization timed out",
-                    ));
-                }
-            }
-            thread::sleep(Duration::from_millis(5));
-        }
-        CALLBACKS
-            .lock()
-            .push((bid, info_span!("android", backend_id = bid), callbacks));
+        });
+        // Nothing will answer for this ID now.
+        let tts = tts.inspect_err(|_| unregister(bid))?;
+        let tts = Arc::new(tts);
+        // `on_init` needs this to replay the queue.
+        instance.state.lock().tts = Some(Arc::clone(&tts));
         Ok(Self {
             id: bid,
-            tts: Arc::new(tts),
-            rate: 1.,
-            pitch: 1.,
+            instance,
+            tts,
         })
+    }
+
+    /// Blocks until the engine answers. Only [`Backend::synthesize`] needs it, being blocking by
+    /// nature; see [`Instance`] for the thread that rules out.
+    #[instrument(level = "debug", skip(self), err)]
+    fn wait_until_ready(&self) -> Result<(), Error> {
+        let mut state = self.instance.state.lock();
+        while state.initialized.is_none() {
+            self.instance.ready.wait(&mut state);
+        }
+        if state.initialized == Some(true) {
+            Ok(())
+        } else {
+            Err(Error::BackendUnavailable("Android TTS engine"))
+        }
     }
 
     #[instrument(level = "trace")]
@@ -309,37 +463,40 @@ impl Backend for Android {
     fn speak(&mut self, text: &str, interrupt: bool) -> Result<Option<UtteranceId>, Error> {
         let uid = NEXT_UTTERANCE_ID.fetch_add(1, Ordering::Relaxed);
         let id = UtteranceId::Android(uid);
-        let rv = Self::vm().attach_current_thread(|env| -> Result<jint, Error> {
-            let text = env.new_string(text)?;
-            let queue_mode = jint::from(!interrupt);
-            let uid = env.new_string(uid.to_string())?;
-            let rv = env.call_method(
-                self.tts.as_obj(),
-                jni_str!("speak"),
-                jni_sig!("(Ljava/lang/CharSequence;ILandroid/os/Bundle;Ljava/lang/String;)I"),
-                &[
-                    (&text).into(),
-                    queue_mode.into(),
-                    (&JObject::null()).into(),
-                    (&uid).into(),
-                ],
-            )?;
-            Ok(rv.i()?)
-        })?;
-        if rv == 0 {
-            Ok(Some(id))
-        } else {
-            Err(Error::OperationFailed("speak"))
+        // Queued rather than refused while the engine connects; the ID is live either way.
+        {
+            let mut state = self.instance.state.lock();
+            match state.initialized {
+                None => {
+                    if interrupt {
+                        state.queued.clear();
+                    }
+                    let (rate, pitch) = (state.rate, state.pitch);
+                    state.queued.push(Queued {
+                        id: uid,
+                        text: text.to_owned(),
+                        interrupt,
+                        rate,
+                        pitch,
+                    });
+                    return Ok(Some(id));
+                }
+                Some(false) => return Err(Error::BackendUnavailable("Android TTS engine")),
+                Some(true) => {}
+            }
         }
+        Self::vm()
+            .attach_current_thread(|env| speak_now(env, self.tts.as_obj(), uid, text, interrupt))?;
+        Ok(Some(id))
     }
 
     #[instrument(level = "debug", skip(self), err)]
     fn synthesize(&mut self, text: &str) -> Result<SynthesizedAudio, Error> {
+        self.wait_until_ready()?;
         let uid = NEXT_UTTERANCE_ID.fetch_add(1, Ordering::Relaxed);
         let id = UtteranceId::Android(uid);
-        // The engine can only synthesize to a file, so stage a temporary one in the app's cache
-        // directory: dropping it deletes it on every exit path, and the OS evicts anything a
-        // hard kill leaves behind.
+        // The engine only synthesizes to a file. In the cache directory, so dropping it cleans up
+        // on every exit path and the OS evicts whatever a hard kill leaves behind.
         let cache_dir = Self::vm().attach_current_thread(|env| -> Result<String, Error> {
             let ctx = ndk_context::android_context();
             let context = unsafe { JObject::from_raw(env, ctx.context().cast()) };
@@ -424,6 +581,21 @@ impl Backend for Android {
 
     #[instrument(level = "debug", skip(self), err)]
     fn stop(&mut self) -> Result<(), Error> {
+        // Discarding the queue is what stopping means for utterances the engine never saw; report
+        // them the way it reports flushing its own.
+        let (initialized, queued) = {
+            let mut state = self.instance.state.lock();
+            (state.initialized, std::mem::take(&mut state.queued))
+        };
+        for utterance in queued {
+            with_callbacks(self.id, |callbacks| {
+                callbacks.utterance_stop(UtteranceId::Android(utterance.id));
+            });
+        }
+        // `TextToSpeech.stop` only errors while disconnected, when there is nothing to stop.
+        if initialized != Some(true) {
+            return Ok(());
+        }
         let rv = Self::vm().attach_current_thread(|env| -> Result<jint, Error> {
             let rv = env.call_method(self.tts.as_obj(), jni_str!("stop"), jni_sig!("()I"), &[])?;
             Ok(rv.i()?)
@@ -467,27 +639,16 @@ impl Backend for Android {
 
     #[instrument(level = "debug", skip(self), err, ret)]
     fn get_rate(&self) -> Result<f32, Error> {
-        Ok(self.rate)
+        Ok(self.instance.state.lock().rate)
     }
 
     #[instrument(level = "debug", skip(self), err)]
     fn set_rate(&mut self, rate: f32) -> Result<(), Error> {
-        let rate = rate as jfloat;
-        let rv = Self::vm().attach_current_thread(|env| -> Result<jint, Error> {
-            let rv = env.call_method(
-                self.tts.as_obj(),
-                jni_str!("setSpeechRate"),
-                jni_sig!("(F)I"),
-                &[rate.into()],
-            )?;
-            Ok(rv.i()?)
-        })?;
-        if rv == 0 {
-            self.rate = rate;
-            Ok(())
-        } else {
-            Err(Error::OperationFailed("set_rate"))
-        }
+        let pitch = self.instance.state.lock().pitch;
+        Self::vm()
+            .attach_current_thread(|env| set_rate_pitch_now(env, self.tts.as_obj(), rate, pitch))?;
+        self.instance.state.lock().rate = rate;
+        Ok(())
     }
 
     #[instrument(level = "trace", skip(self))]
@@ -507,27 +668,16 @@ impl Backend for Android {
 
     #[instrument(level = "debug", skip(self), err, ret)]
     fn get_pitch(&self) -> Result<f32, Error> {
-        Ok(self.pitch)
+        Ok(self.instance.state.lock().pitch)
     }
 
     #[instrument(level = "debug", skip(self), err)]
     fn set_pitch(&mut self, pitch: f32) -> Result<(), Error> {
-        let pitch = pitch as jfloat;
-        let rv = Self::vm().attach_current_thread(|env| -> Result<jint, Error> {
-            let rv = env.call_method(
-                self.tts.as_obj(),
-                jni_str!("setPitch"),
-                jni_sig!("(F)I"),
-                &[pitch.into()],
-            )?;
-            Ok(rv.i()?)
-        })?;
-        if rv == 0 {
-            self.pitch = pitch;
-            Ok(())
-        } else {
-            Err(Error::OperationFailed("set_pitch"))
-        }
+        let rate = self.instance.state.lock().rate;
+        Self::vm()
+            .attach_current_thread(|env| set_rate_pitch_now(env, self.tts.as_obj(), rate, pitch))?;
+        self.instance.state.lock().pitch = pitch;
+        Ok(())
     }
 
     #[instrument(level = "trace", skip(self))]
@@ -586,6 +736,6 @@ impl Backend for Android {
 
 impl Drop for Android {
     fn drop(&mut self) {
-        CALLBACKS.lock().retain(|(id, _, _)| *id != self.id);
+        unregister(self.id);
     }
 }

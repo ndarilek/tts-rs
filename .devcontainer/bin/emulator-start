@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# Boot the medium_phone AVD headless and block until it is ready for adb.
+#
+# The `android emulator start` wrapper always launches the windowed qemu binary,
+# which crashes during renderer setup in this rootless container (no usable host
+# display, GPU present blocked). `-no-window` selects the qemu *-headless* binary,
+# which boots reliably on software (lavapipe) rendering — but the wrapper can't
+# pass it, so we drive the raw emulator binary here. The headless binary also needs
+# none of the Qt or PulseAudio libraries the windowed one links, hence the thin image.
+set -euo pipefail
+
+AVD="${AVD:-medium_phone}"
+EMULATOR="${ANDROID_HOME:-/usr/local/android}/emulator/emulator"
+ADB="${ANDROID_HOME:-/usr/local/android}/platform-tools/adb"
+AVD_DIR="${ANDROID_AVD_HOME:-$HOME/.android/avd}/${AVD}.avd"
+SERIAL=emulator-5554
+
+# Qt must not reach for the host X/Wayland display; the offscreen platform keeps
+# the headless qemu binary from touching a display that present can't use.
+unset DISPLAY WAYLAND_DISPLAY
+export QT_QPA_PLATFORM=offscreen
+
+# adb authorizes the emulator from this keypair; generate it once if absent.
+[ -f "$HOME/.android/adbkey" ] || "$ADB" keygen "$HOME/.android/adbkey"
+[ -f "$HOME/.android/adbkey.pub" ] || "$ADB" pubkey "$HOME/.android/adbkey" > "$HOME/.android/adbkey.pub"
+
+# Stale lock files (left by a non-clean shutdown) make the emulator refuse to
+# launch with "Running multiple emulators with the same AVD".
+pkill -9 qemu-system 2>/dev/null || true
+sleep 1
+rm -f "$AVD_DIR"/*.lock
+rm -rf /tmp/user/0/avd/running/* 2>/dev/null || true
+
+"$ADB" start-server >/dev/null 2>&1
+
+# Fresh userdata never carries the adb pubkey, so the device comes up
+# "unauthorized" until one cold boot writes the key into a clean image. The
+# sentinel makes that wipe a one-time cost rather than every launch.
+wipe=()
+if [ ! -f "$AVD_DIR/.avd-initialized" ]; then
+  wipe=(-wipe-data)
+fi
+
+nohup "$EMULATOR" -avd "$AVD" \
+  -no-window -gpu lavapipe -no-snapshot -no-boot-anim -no-audio \
+  -ports 5554,5555 "${wipe[@]}" \
+  > /tmp/emulator.log 2>&1 &
+emu_pid=$!
+echo "Emulator launched (pid $emu_pid), log: /tmp/emulator.log"
+
+# Track the launched pid directly rather than pgrep'ing by name: the `emulator`
+# binary execs into qemu-system in place (pid preserved), and there is a window
+# during launch where the process is not yet named qemu-system. A name match
+# there yields a false "died"; kill -0 stays true across the exec.
+until [ "$("$ADB" -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; do
+  kill -0 "$emu_pid" 2>/dev/null || { echo "Emulator process died; see /tmp/emulator.log" >&2; exit 1; }
+  sleep 3
+done
+
+touch "$AVD_DIR/.avd-initialized"
+"$ADB" devices
+echo "$AVD booted and ready (${SERIAL})."

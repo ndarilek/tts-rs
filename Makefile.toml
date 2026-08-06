@@ -1,18 +1,20 @@
+[tasks.install-cargo-apk]
+install_crate = { crate_name = "cargo-apk", binary = "cargo-apk", test_arg = "--help" }
+
 [tasks.build-android-example]
-script = [
-    "cd examples/android",
-    "./gradlew assembleDebug",
-]
+dependencies = ["install-cargo-apk"]
+command = "cargo"
+args = ["apk", "build", "--example", "android_hello_world"]
 
 [tasks.run-android-example]
-script = [
-    "cd examples/android",
-    "./gradlew runDebug",
-]
+dependencies = ["install-cargo-apk"]
+command = "cargo"
+args = ["apk", "run", "--example", "android_hello_world"]
 
+# `tts` is the example's logging tag.
 [tasks.log-android]
 command = "adb"
-args = ["logcat", "RustStdoutStderr:D", "*:S"]
+args = ["logcat", "-s", "tts"]
 
 [tasks.install-trunk]
 install_crate = { crate_name = "trunk", binary = "trunk", test_arg = "--help" }

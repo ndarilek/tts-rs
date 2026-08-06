@@ -4,7 +4,11 @@ cache = [
     ], paths = [
         "/root/.local",
         "/root/.android",
+        "/usr/local/android/build-tools",
+        "/usr/local/android/ndk",
+        "/usr/local/android/platforms",
         "/usr/local/android/system-images",
+        "/usr/local/cargo/bin",
     ] },
     { inputs = [
         "Cargo.lock",

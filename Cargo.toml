@@ -12,6 +12,25 @@ edition = "2024"
 [lib]
 crate-type = ["lib", "cdylib", "staticlib"]
 
+# `cdylib` so `NativeActivity` can load it. Not named `android`: that would build a `libandroid.so`
+# colliding with the NDK's own.
+[[example]]
+name = "android_hello_world"
+crate-type = ["cdylib"]
+
+# Generates the APK manifest. `min_sdk_version` 26 is what `InMemoryDexClassLoader` needs.
+[package.metadata.android]
+package = "rs.tts.example"
+# `cargo apk` takes only one `--target`, so the shipped ABIs live here. 64-bit only.
+build_targets = ["aarch64-linux-android", "x86_64-linux-android"]
+
+[package.metadata.android.sdk]
+min_sdk_version = 26
+target_sdk_version = 36
+
+[package.metadata.android.application]
+label = "TTS Hello World"
+
 [dependencies]
 dyn-clonable = "0.9"
 hound = "3.5"
@@ -81,6 +100,10 @@ web-sys = { version = "0.3", features = [
 jni = "0.22"
 ndk-context = "0.1"
 tempfile = "3"
+
+[target.'cfg(target_os="android")'.dev-dependencies]
+android-activity = { version = "0.6", features = ["native-activity"] }
+paranoid-android = "0.2"
 
 [lints.rust]
 warnings = "deny"

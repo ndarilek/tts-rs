@@ -6,7 +6,7 @@
 //!  *   * `WinRT`
 //!  * * Linux via [Speech Dispatcher](https://freebsoft.org/speechd)
 //!  * * macOS/iOS/tvOS/watchOS/visionOS via `AVFoundation` (macOS 10.14 and above)
-//!  * * Android
+//!  * * Android (`minSdkVersion` 26 and above; see the README for its one setup requirement)
 //!  * * WebAssembly
 
 use std::{boxed::Box, fmt, sync::Arc};
