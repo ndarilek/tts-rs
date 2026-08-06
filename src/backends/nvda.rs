@@ -127,7 +127,7 @@ impl Backend for Nvda {
 
     #[instrument(level = "debug", skip(self, _text), err)]
     fn synthesize(&mut self, _text: &str) -> Result<SynthesizedAudio, Error> {
-        Err(Error::UnsupportedFeature)
+        unimplemented!()
     }
 
     #[instrument(level = "debug", skip(self), err)]
@@ -137,17 +137,17 @@ impl Backend for Nvda {
 
     #[instrument(level = "debug", skip(self), err)]
     fn pause(&mut self) -> Result<(), Error> {
-        Err(Error::UnsupportedFeature)
+        unimplemented!()
     }
 
     #[instrument(level = "debug", skip(self), err)]
     fn resume(&mut self) -> Result<(), Error> {
-        Err(Error::UnsupportedFeature)
+        unimplemented!()
     }
 
     #[instrument(level = "trace", skip(self), err, ret)]
     fn is_paused(&self) -> Result<bool, Error> {
-        Err(Error::UnsupportedFeature)
+        unimplemented!()
     }
 
     #[instrument(level = "trace", skip(self))]
@@ -227,11 +227,9 @@ impl Backend for Nvda {
 
     #[instrument(level = "trace", skip(self), err, ret)]
     fn is_speaking(&self) -> Result<bool, Error> {
-        let is_speaking = self
-            .0
-            .is_speaking
-            .as_ref()
-            .ok_or(Error::UnsupportedFeature)?;
+        let Some(is_speaking) = self.0.is_speaking.as_ref() else {
+            unimplemented!()
+        };
         let mut speaking = 0u8;
         check(unsafe { is_speaking(&raw mut speaking) })?;
         Ok(speaking != 0)

@@ -675,24 +675,48 @@ impl Tts {
     }
 
     /// Returns the minimum rate for this speech synthesizer.
-    #[instrument(level = "trace", skip(self))]
-    #[must_use]
-    pub fn min_rate(&self) -> f32 {
-        self.backend.read().min_rate()
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::UnsupportedFeature`] if the backend cannot change its rate.
+    #[instrument(level = "trace", skip(self), err, ret)]
+    pub fn min_rate(&self) -> Result<f32, Error> {
+        let Features { rate, .. } = self.supported_features();
+        if rate {
+            Ok(self.backend.read().min_rate())
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
     }
 
     /// Returns the maximum rate for this speech synthesizer.
-    #[instrument(level = "trace", skip(self))]
-    #[must_use]
-    pub fn max_rate(&self) -> f32 {
-        self.backend.read().max_rate()
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::UnsupportedFeature`] if the backend cannot change its rate.
+    #[instrument(level = "trace", skip(self), err, ret)]
+    pub fn max_rate(&self) -> Result<f32, Error> {
+        let Features { rate, .. } = self.supported_features();
+        if rate {
+            Ok(self.backend.read().max_rate())
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
     }
 
     /// Returns the normal rate for this speech synthesizer.
-    #[instrument(level = "trace", skip(self))]
-    #[must_use]
-    pub fn normal_rate(&self) -> f32 {
-        self.backend.read().normal_rate()
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::UnsupportedFeature`] if the backend cannot change its rate.
+    #[instrument(level = "trace", skip(self), err, ret)]
+    pub fn normal_rate(&self) -> Result<f32, Error> {
+        let Features { rate, .. } = self.supported_features();
+        if rate {
+            Ok(self.backend.read().normal_rate())
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
     }
 
     /// Gets the current speech rate.
@@ -736,24 +760,48 @@ impl Tts {
     }
 
     /// Returns the minimum pitch for this speech synthesizer.
-    #[instrument(level = "trace", skip(self))]
-    #[must_use]
-    pub fn min_pitch(&self) -> f32 {
-        self.backend.read().min_pitch()
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::UnsupportedFeature`] if the backend cannot change its pitch.
+    #[instrument(level = "trace", skip(self), err, ret)]
+    pub fn min_pitch(&self) -> Result<f32, Error> {
+        let Features { pitch, .. } = self.supported_features();
+        if pitch {
+            Ok(self.backend.read().min_pitch())
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
     }
 
     /// Returns the maximum pitch for this speech synthesizer.
-    #[instrument(level = "trace", skip(self))]
-    #[must_use]
-    pub fn max_pitch(&self) -> f32 {
-        self.backend.read().max_pitch()
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::UnsupportedFeature`] if the backend cannot change its pitch.
+    #[instrument(level = "trace", skip(self), err, ret)]
+    pub fn max_pitch(&self) -> Result<f32, Error> {
+        let Features { pitch, .. } = self.supported_features();
+        if pitch {
+            Ok(self.backend.read().max_pitch())
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
     }
 
     /// Returns the normal pitch for this speech synthesizer.
-    #[instrument(level = "trace", skip(self))]
-    #[must_use]
-    pub fn normal_pitch(&self) -> f32 {
-        self.backend.read().normal_pitch()
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::UnsupportedFeature`] if the backend cannot change its pitch.
+    #[instrument(level = "trace", skip(self), err, ret)]
+    pub fn normal_pitch(&self) -> Result<f32, Error> {
+        let Features { pitch, .. } = self.supported_features();
+        if pitch {
+            Ok(self.backend.read().normal_pitch())
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
     }
 
     /// Gets the current speech pitch.
@@ -798,24 +846,48 @@ impl Tts {
     }
 
     /// Returns the minimum volume for this speech synthesizer.
-    #[instrument(level = "trace", skip(self))]
-    #[must_use]
-    pub fn min_volume(&self) -> f32 {
-        self.backend.read().min_volume()
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::UnsupportedFeature`] if the backend cannot change its volume.
+    #[instrument(level = "trace", skip(self), err, ret)]
+    pub fn min_volume(&self) -> Result<f32, Error> {
+        let Features { volume, .. } = self.supported_features();
+        if volume {
+            Ok(self.backend.read().min_volume())
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
     }
 
     /// Returns the maximum volume for this speech synthesizer.
-    #[instrument(level = "trace", skip(self))]
-    #[must_use]
-    pub fn max_volume(&self) -> f32 {
-        self.backend.read().max_volume()
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::UnsupportedFeature`] if the backend cannot change its volume.
+    #[instrument(level = "trace", skip(self), err, ret)]
+    pub fn max_volume(&self) -> Result<f32, Error> {
+        let Features { volume, .. } = self.supported_features();
+        if volume {
+            Ok(self.backend.read().max_volume())
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
     }
 
     /// Returns the normal volume for this speech synthesizer.
-    #[instrument(level = "trace", skip(self))]
-    #[must_use]
-    pub fn normal_volume(&self) -> f32 {
-        self.backend.read().normal_volume()
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::UnsupportedFeature`] if the backend cannot change its volume.
+    #[instrument(level = "trace", skip(self), err, ret)]
+    pub fn normal_volume(&self) -> Result<f32, Error> {
+        let Features { volume, .. } = self.supported_features();
+        if volume {
+            Ok(self.backend.read().normal_volume())
+        } else {
+            Err(Error::UnsupportedFeature)
+        }
     }
 
     /// Gets the current speech volume.

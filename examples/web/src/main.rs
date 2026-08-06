@@ -84,8 +84,8 @@ fn view(model: &Model) -> Node<Msg> {
                 attrs! {
                     At::Type => "number",
                     At::Value => model.tts.get_rate().unwrap(),
-                    At::Min => model.tts.min_rate(),
-                    At::Max => model.tts.max_rate()
+                    At::Min => model.tts.min_rate().unwrap(),
+                    At::Max => model.tts.max_rate().unwrap()
                 },
                 input_ev(Ev::Input, Msg::RateChanged)
             ],
@@ -96,8 +96,8 @@ fn view(model: &Model) -> Node<Msg> {
                 attrs! {
                     At::Type => "number",
                     At::Value => model.tts.get_pitch().unwrap(),
-                    At::Min => model.tts.min_pitch(),
-                    At::Max => model.tts.max_pitch()
+                    At::Min => model.tts.min_pitch().unwrap(),
+                    At::Max => model.tts.max_pitch().unwrap()
                 },
                 input_ev(Ev::Input, Msg::PitchChanged)
             ],
@@ -108,8 +108,8 @@ fn view(model: &Model) -> Node<Msg> {
                 attrs! {
                     At::Type => "number",
                     At::Value => model.tts.get_volume().unwrap(),
-                    At::Min => model.tts.min_volume(),
-                    At::Max => model.tts.max_volume()
+                    At::Min => model.tts.min_volume().unwrap(),
+                    At::Max => model.tts.max_volume().unwrap()
                 },
                 input_ev(Ev::Input, Msg::VolumeChanged)
             ],

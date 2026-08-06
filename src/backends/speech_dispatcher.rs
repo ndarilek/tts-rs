@@ -452,7 +452,7 @@ impl Backend for SpeechDispatcher {
 
     #[instrument(level = "debug", skip(self, _text), err)]
     fn synthesize(&mut self, _text: &str) -> Result<SynthesizedAudio, Error> {
-        Err(Error::UnsupportedFeature)
+        unimplemented!()
     }
 
     #[instrument(level = "debug", skip(self), err)]

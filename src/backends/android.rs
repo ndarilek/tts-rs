@@ -609,17 +609,17 @@ impl Backend for Android {
 
     #[instrument(level = "debug", skip(self), err)]
     fn pause(&mut self) -> Result<(), Error> {
-        Err(Error::UnsupportedFeature)
+        unimplemented!()
     }
 
     #[instrument(level = "debug", skip(self), err)]
     fn resume(&mut self) -> Result<(), Error> {
-        Err(Error::UnsupportedFeature)
+        unimplemented!()
     }
 
     #[instrument(level = "trace", skip(self), err, ret)]
     fn is_paused(&self) -> Result<bool, Error> {
-        Err(Error::UnsupportedFeature)
+        unimplemented!()
     }
 
     #[instrument(level = "trace", skip(self))]
@@ -682,27 +682,27 @@ impl Backend for Android {
 
     #[instrument(level = "trace", skip(self))]
     fn min_volume(&self) -> f32 {
-        todo!()
+        unimplemented!()
     }
 
     #[instrument(level = "trace", skip(self))]
     fn max_volume(&self) -> f32 {
-        todo!()
+        unimplemented!()
     }
 
     #[instrument(level = "trace", skip(self))]
     fn normal_volume(&self) -> f32 {
-        todo!()
+        unimplemented!()
     }
 
     #[instrument(level = "debug", skip(self), err, ret)]
     fn get_volume(&self) -> Result<f32, Error> {
-        todo!()
+        unimplemented!()
     }
 
     #[instrument(level = "debug", skip(self, _volume), err)]
     fn set_volume(&mut self, _volume: f32) -> Result<(), Error> {
-        todo!()
+        unimplemented!()
     }
 
     #[instrument(level = "trace", skip(self), err, ret)]

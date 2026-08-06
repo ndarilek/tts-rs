@@ -47,33 +47,33 @@ fn main() -> Result<(), Error> {
     if rate {
         let original_rate = tts_clone.get_rate()?;
         tts_clone.speak(&format!("Current rate: {original_rate}"), false)?;
-        tts_clone.set_rate(tts_clone.max_rate())?;
+        tts_clone.set_rate(tts_clone.max_rate()?)?;
         tts_clone.speak("This is very fast.", false)?;
-        tts_clone.set_rate(tts_clone.min_rate())?;
+        tts_clone.set_rate(tts_clone.min_rate()?)?;
         tts_clone.speak("This is very slow.", false)?;
-        tts_clone.set_rate(tts_clone.normal_rate())?;
+        tts_clone.set_rate(tts_clone.normal_rate()?)?;
         tts_clone.speak("This is the normal rate.", false)?;
         tts_clone.set_rate(original_rate)?;
     }
     let Features { pitch, .. } = tts_clone.supported_features();
     if pitch {
         let original_pitch = tts_clone.get_pitch()?;
-        tts_clone.set_pitch(tts_clone.max_pitch())?;
+        tts_clone.set_pitch(tts_clone.max_pitch()?)?;
         tts_clone.speak("This is high-pitch.", false)?;
-        tts_clone.set_pitch(tts_clone.min_pitch())?;
+        tts_clone.set_pitch(tts_clone.min_pitch()?)?;
         tts_clone.speak("This is low pitch.", false)?;
-        tts_clone.set_pitch(tts_clone.normal_pitch())?;
+        tts_clone.set_pitch(tts_clone.normal_pitch()?)?;
         tts_clone.speak("This is normal pitch.", false)?;
         tts_clone.set_pitch(original_pitch)?;
     }
     let Features { volume, .. } = tts_clone.supported_features();
     if volume {
         let original_volume = tts_clone.get_volume()?;
-        tts_clone.set_volume(tts_clone.max_volume())?;
+        tts_clone.set_volume(tts_clone.max_volume()?)?;
         tts_clone.speak("This is loud!", false)?;
-        tts_clone.set_volume(tts_clone.min_volume())?;
+        tts_clone.set_volume(tts_clone.min_volume()?)?;
         tts_clone.speak("This is quiet.", false)?;
-        tts_clone.set_volume(tts_clone.normal_volume())?;
+        tts_clone.set_volume(tts_clone.normal_volume()?)?;
         tts_clone.speak("This is normal volume.", false)?;
         tts_clone.set_volume(original_volume)?;
     }

@@ -162,7 +162,7 @@ impl Backend for Orca {
 
     #[instrument(level = "debug", skip(self, _text), err)]
     fn synthesize(&mut self, _text: &str) -> Result<SynthesizedAudio, Error> {
-        Err(Error::UnsupportedFeature)
+        unimplemented!()
     }
 
     #[instrument(level = "debug", skip(self), err)]
@@ -173,17 +173,17 @@ impl Backend for Orca {
 
     #[instrument(level = "debug", skip(self), err)]
     fn pause(&mut self) -> Result<(), Error> {
-        Err(Error::UnsupportedFeature)
+        unimplemented!()
     }
 
     #[instrument(level = "debug", skip(self), err)]
     fn resume(&mut self) -> Result<(), Error> {
-        Err(Error::UnsupportedFeature)
+        unimplemented!()
     }
 
     #[instrument(level = "trace", skip(self), err, ret)]
     fn is_paused(&self) -> Result<bool, Error> {
-        Err(Error::UnsupportedFeature)
+        unimplemented!()
     }
 
     #[instrument(level = "trace", skip(self))]
@@ -270,7 +270,7 @@ impl Backend for Orca {
 
     #[instrument(level = "trace", skip(self), err, ret)]
     fn is_speaking(&self) -> Result<bool, Error> {
-        Err(Error::UnsupportedFeature)
+        unimplemented!()
     }
 
     #[instrument(level = "debug", skip(self), err)]
