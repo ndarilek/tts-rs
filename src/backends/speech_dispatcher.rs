@@ -348,6 +348,14 @@ impl fmt::Debug for SpeechDispatcher {
 }
 
 impl SpeechDispatcher {
+    pub(crate) const NAME: &str = "Speech Dispatcher";
+
+    /// Always worth trying: whether speechd is actually reachable only surfaces on connect.
+    #[instrument(level = "debug", ret)]
+    pub(crate) fn is_available() -> bool {
+        true
+    }
+
     #[instrument(level = "info", skip(callbacks), err)]
     pub(crate) fn new(callbacks: &Arc<Mutex<Callbacks>>) -> std::result::Result<Self, Error> {
         let mut client = Builder::new().timeout(POLL_INTERVAL).build()?;

@@ -100,6 +100,14 @@ pub struct WinRt {
 }
 
 impl WinRt {
+    pub(crate) const NAME: &str = "Windows Runtime";
+
+    /// Always available: the synthesizer ships with the OS.
+    #[instrument(level = "debug", ret)]
+    pub(crate) fn is_available() -> bool {
+        true
+    }
+
     #[instrument(level = "info", skip(callbacks), err)]
     pub fn new(callbacks: Arc<Mutex<Callbacks>>) -> std::result::Result<Self, Error> {
         let player = MediaPlayer::new()?;

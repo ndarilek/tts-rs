@@ -1,14 +1,18 @@
 use std::{io, thread, time};
 
 use tracing_subscriber::{EnvFilter, fmt::format::FmtSpan};
-use tts::{Error, Tts};
+use tts::Error;
+
+mod common;
 
 fn main() -> Result<(), Error> {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
         .init();
-    let tts = Tts::default()?;
+    let Some(tts) = common::tts_from_args()? else {
+        return Ok(());
+    };
     let mut bottles = 99;
     while bottles > 0 {
         tts.speak(&format!("{bottles} bottles of beer on the wall,"), false)?;

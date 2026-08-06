@@ -10,6 +10,14 @@ use crate::{Backend, Error, Features, SynthesizedAudio, UtteranceId, Voice};
 pub(crate) struct Tolk(Arc<TolkPtr>);
 
 impl Tolk {
+    pub(crate) const NAME: &str = "Tolk";
+
+    /// Available only while a screen reader is running to receive the speech.
+    #[instrument(level = "debug", ret)]
+    pub(crate) fn is_available() -> bool {
+        TolkPtr::new().detect_screen_reader().is_some()
+    }
+
     #[instrument(level = "info")]
     pub(crate) fn new() -> Option<Self> {
         let tolk = TolkPtr::new();

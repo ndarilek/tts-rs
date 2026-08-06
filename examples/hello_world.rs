@@ -3,12 +3,16 @@ use std::io;
 use tracing_subscriber::{EnvFilter, fmt::format::FmtSpan};
 use tts::{Error, Features, Tts};
 
+mod common;
+
 fn main() -> Result<(), Error> {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
         .init();
-    let tts = Tts::default()?;
+    let Some(tts) = common::tts_from_args()? else {
+        return Ok(());
+    };
     if Tts::screen_reader_available() {
         println!("A screen reader is available on this platform.");
     } else {

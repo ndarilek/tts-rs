@@ -22,8 +22,6 @@ use parking_lot::{Mutex, RwLock};
 #[cfg(target_os = "linux")]
 use ssip_client_async::ClientError as SpeechDispatcherError;
 use thiserror::Error;
-#[cfg(all(windows, feature = "tolk"))]
-use tolk::Tolk;
 use tracing::instrument;
 
 mod backends;
@@ -46,22 +44,54 @@ pub enum Backends {
     WinRt,
 }
 
-impl fmt::Display for Backends {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+impl Backends {
+    /// Returns this backend's human-readable name.
+    #[instrument(level = "trace")]
+    #[must_use]
+    pub fn name(self) -> &'static str {
         match self {
             #[cfg(target_os = "android")]
-            Backends::Android => write!(f, "Android"),
+            Backends::Android => backends::Android::NAME,
             #[cfg(target_vendor = "apple")]
-            Backends::AvFoundation => write!(f, "AVFoundation"),
+            Backends::AvFoundation => backends::AvFoundation::NAME,
             #[cfg(target_os = "linux")]
-            Backends::SpeechDispatcher => write!(f, "Speech Dispatcher"),
+            Backends::SpeechDispatcher => backends::SpeechDispatcher::NAME,
             #[cfg(all(windows, feature = "tolk"))]
-            Backends::Tolk => write!(f, "Tolk"),
+            Backends::Tolk => backends::Tolk::NAME,
             #[cfg(target_arch = "wasm32")]
-            Backends::Web => write!(f, "Web"),
+            Backends::Web => backends::Web::NAME,
             #[cfg(windows)]
-            Backends::WinRt => write!(f, "Windows Runtime"),
+            Backends::WinRt => backends::WinRt::NAME,
         }
+    }
+
+    /// Returns whether this backend can currently provide speech.
+    ///
+    /// This is a cheap probe: `true` means the backend is worth trying, not that
+    /// [`Tts::new`] cannot fail.
+    #[instrument(level = "debug", ret)]
+    #[must_use]
+    pub fn is_available(self) -> bool {
+        match self {
+            #[cfg(target_os = "android")]
+            Backends::Android => backends::Android::is_available(),
+            #[cfg(target_vendor = "apple")]
+            Backends::AvFoundation => backends::AvFoundation::is_available(),
+            #[cfg(target_os = "linux")]
+            Backends::SpeechDispatcher => backends::SpeechDispatcher::is_available(),
+            #[cfg(all(windows, feature = "tolk"))]
+            Backends::Tolk => backends::Tolk::is_available(),
+            #[cfg(target_arch = "wasm32")]
+            Backends::Web => backends::Web::is_available(),
+            #[cfg(windows)]
+            Backends::WinRt => backends::WinRt::is_available(),
+        }
+    }
+}
+
+impl fmt::Display for Backends {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{}", self.name())
     }
 }
 
@@ -448,31 +478,44 @@ impl Tts {
         })
     }
 
+    /// Returns the backends available on this platform, most preferred first, with screen
+    /// readers ahead of general-purpose synthesizers. Index 0 is the platform default.
+    #[instrument(level = "debug", ret)]
+    #[must_use]
+    pub fn backends() -> Vec<Backends> {
+        let candidates: &[Backends] = &[
+            #[cfg(all(windows, feature = "tolk"))]
+            Backends::Tolk,
+            #[cfg(windows)]
+            Backends::WinRt,
+            #[cfg(target_os = "linux")]
+            Backends::SpeechDispatcher,
+            #[cfg(target_vendor = "apple")]
+            Backends::AvFoundation,
+            #[cfg(target_os = "android")]
+            Backends::Android,
+            #[cfg(target_arch = "wasm32")]
+            Backends::Web,
+        ];
+        candidates
+            .iter()
+            .copied()
+            .filter(|backend| backend.is_available())
+            .collect()
+    }
+
     /// Create a new `TTS` instance with the default backend for the current platform.
     ///
     /// # Errors
     ///
-    /// Returns an error if the backend fails to initialize.
+    /// Returns an error if no backend is available or the backend fails to initialize.
     #[allow(clippy::should_implement_trait)]
     #[instrument(level = "info", err)]
     pub fn default() -> Result<Tts, Error> {
-        #[cfg(target_os = "linux")]
-        let tts = Tts::new(Backends::SpeechDispatcher);
-        #[cfg(all(windows, feature = "tolk"))]
-        let tts = if let Ok(tts) = Tts::new(Backends::Tolk) {
-            Ok(tts)
-        } else {
-            Tts::new(Backends::WinRt)
-        };
-        #[cfg(all(windows, not(feature = "tolk")))]
-        let tts = Tts::new(Backends::WinRt);
-        #[cfg(target_arch = "wasm32")]
-        let tts = Tts::new(Backends::Web);
-        #[cfg(target_vendor = "apple")]
-        let tts = Tts::new(Backends::AvFoundation);
-        #[cfg(target_os = "android")]
-        let tts = Tts::new(Backends::Android);
-        tts
+        let backend = *Tts::backends()
+            .first()
+            .ok_or(Error::BackendUnavailable("no backend for this platform"))?;
+        Tts::new(backend)
     }
 
     /// Returns the features supported by this TTS engine
@@ -989,24 +1032,18 @@ impl Tts {
         callbacks.synthesis_complete = None;
     }
 
-    /*
-     * Returns `true` if a screen reader is available to provide speech.
-     */
-    #[allow(unreachable_code)]
+    /// Returns `true` if a screen reader is available to provide speech.
     #[instrument(level = "debug", ret)]
     #[must_use]
     pub fn screen_reader_available() -> bool {
-        #[cfg(target_os = "windows")]
+        #[cfg(all(windows, feature = "tolk"))]
         {
-            #[cfg(feature = "tolk")]
-            {
-                let tolk = Tolk::new();
-                return tolk.detect_screen_reader().is_some();
-            }
-            #[cfg(not(feature = "tolk"))]
-            return false;
+            backends::Tolk::is_available()
         }
-        false
+        #[cfg(not(all(windows, feature = "tolk")))]
+        {
+            false
+        }
     }
 }
 

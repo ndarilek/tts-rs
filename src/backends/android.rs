@@ -219,6 +219,14 @@ pub(crate) struct Android {
 }
 
 impl Android {
+    pub(crate) const NAME: &str = "Android";
+
+    /// Always worth trying: whether the JNI bridge is registered only surfaces on init.
+    #[instrument(level = "debug", ret)]
+    pub(crate) fn is_available() -> bool {
+        true
+    }
+
     #[instrument(level = "info", skip(callbacks), err)]
     pub(crate) fn new(callbacks: Arc<Mutex<Callbacks>>) -> Result<Self, Error> {
         const MAX_WAIT_TIME: Duration = Duration::from_millis(500);

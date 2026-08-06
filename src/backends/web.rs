@@ -32,6 +32,19 @@ static NEXT_BACKEND_ID: AtomicU64 = AtomicU64::new(0);
 static NEXT_UTTERANCE_ID: AtomicU64 = AtomicU64::new(0);
 
 impl Web {
+    pub(crate) const NAME: &str = "Web";
+
+    /// Absent in workers, which have no window, and in browsers that don't implement
+    /// `speechSynthesis`.
+    #[instrument(level = "debug", ret)]
+    pub(crate) fn is_available() -> bool {
+        web_sys::window().is_some_and(|window| {
+            window
+                .speech_synthesis()
+                .is_ok_and(|synthesis| !JsValue::from(synthesis).is_undefined())
+        })
+    }
+
     // Construction can't fail here, but backend constructors share a fallible signature.
     #[allow(clippy::unnecessary_wraps)]
     #[instrument(level = "info", skip(callbacks), err)]

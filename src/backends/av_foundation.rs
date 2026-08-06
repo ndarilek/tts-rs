@@ -472,6 +472,14 @@ pub(crate) struct AvFoundation {
 static NEXT_BACKEND_ID: AtomicU64 = AtomicU64::new(0);
 
 impl AvFoundation {
+    pub(crate) const NAME: &str = "AVFoundation";
+
+    /// Always available: the synthesizer ships with the OS.
+    #[instrument(level = "debug", ret)]
+    pub(crate) fn is_available() -> bool {
+        true
+    }
+
     #[instrument(level = "info", skip(callbacks), err)]
     pub(crate) fn new(callbacks: Arc<Mutex<Callbacks>>) -> Result<Self, Error> {
         let id = NEXT_BACKEND_ID.fetch_add(1, Ordering::Relaxed);
