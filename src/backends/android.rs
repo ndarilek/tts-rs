@@ -1,5 +1,6 @@
 #[cfg(target_os = "android")]
 use std::{
+    ffi::c_void,
     fs,
     sync::{
         Arc, OnceLock,
@@ -24,6 +25,78 @@ static BRIDGE_DEX: &[u8] =
 static BRIDGE: OnceLock<Global<JClass<'static>>> = OnceLock::new();
 static NEXT_BACKEND_ID: AtomicU64 = AtomicU64::new(0);
 static NEXT_UTTERANCE_ID: AtomicU64 = AtomicU64::new(0);
+/// App-supplied VM and context, consulted ahead of `ndk-context`; see [`set_context`].
+static CONTEXT: Mutex<Option<(JavaVM, Arc<Global<JObject<'static>>>)>> = Mutex::new(None);
+
+/// Trades the supplied context for its application context when one exists, so holding the
+/// resulting reference for a backend's lifetime doesn't pin an `Activity`.
+fn application_context(
+    env: &mut Env,
+    context: &JObject<'_>,
+) -> Result<Global<JObject<'static>>, Error> {
+    let app = env
+        .call_method(
+            context,
+            jni_str!("getApplicationContext"),
+            jni_sig!("()Landroid/content/Context;"),
+            &[],
+        )?
+        .l()?;
+    if app.is_null() {
+        // Not yet attached to a base context; the supplied one is all there is.
+        Ok(env.new_global_ref(context)?)
+    } else {
+        Ok(env.new_global_ref(&app)?)
+    }
+}
+
+/// Supplies the `JavaVM` and `Context` every subsequently constructed backend uses, taking
+/// precedence over whatever `ndk-context` publishes.
+///
+/// Without this, backends resolve both through `ndk-context`, whose slot is typically owned by an
+/// `Activity`: a headless process (say, a foreground service that never shows UI) has nothing
+/// published there, and windowing crates like `tao` release it when their `Activity` is destroyed.
+/// Supplying a process-lived `Context` — a service works fine — keeps speech available in both
+/// cases.
+///
+/// The context is traded for its application context when one exists and held as a global
+/// reference. Calling again replaces the stored pair; backends keep whatever they were constructed
+/// with.
+///
+/// # Safety
+///
+/// `vm` must be a valid `JavaVM` pointer and `context` a valid JNI reference to an
+/// `android.content.Context`. Both only need to remain valid for the duration of the call.
+///
+/// # Errors
+///
+/// Returns an error if attaching to the VM or creating the global reference fails.
+#[instrument(level = "info", skip_all, err)]
+pub unsafe fn set_context(vm: *mut c_void, context: *mut c_void) -> Result<(), Error> {
+    let vm = unsafe { JavaVM::from_raw(vm.cast()) };
+    let context = vm.attach_current_thread(|env| -> Result<_, Error> {
+        let context = unsafe { JObject::from_raw(env, context.cast()) };
+        application_context(env, &context)
+    })?;
+    *CONTEXT.lock() = Some((vm, Arc::new(context)));
+    Ok(())
+}
+
+/// The override if set, otherwise a fresh read of `ndk-context` — per construction, not cached,
+/// since that slot's owner can republish it with a new `Activity`.
+#[instrument(level = "debug", err)]
+fn vm_and_context() -> Result<(JavaVM, Arc<Global<JObject<'static>>>), Error> {
+    if let Some((vm, context)) = &*CONTEXT.lock() {
+        return Ok((vm.clone(), Arc::clone(context)));
+    }
+    let ctx = ndk_context::android_context();
+    let vm = unsafe { JavaVM::from_raw(ctx.vm().cast()) };
+    let context = vm.attach_current_thread(|env| -> Result<_, Error> {
+        let context = unsafe { JObject::from_raw(env, ctx.context().cast()) };
+        application_context(env, &context)
+    })?;
+    Ok((vm, Arc::new(context)))
+}
 
 /// Per-backend engine state, reached from the JNI callbacks through [`INSTANCES`].
 ///
@@ -180,17 +253,15 @@ const BRIDGE_METHODS: &[NativeMethod] = &[
 ];
 
 /// Defines the class from [`BRIDGE_DEX`] on first use — deferred, because the parent class loader
-/// comes from the context `ndk-context` publishes once the app runs.
+/// comes from a context that only exists once the app runs.
 #[instrument(level = "debug", skip_all, err)]
-fn bridge(env: &mut Env) -> Result<&'static Global<JClass<'static>>, Error> {
+fn bridge(env: &mut Env, context: &JObject<'_>) -> Result<&'static Global<JClass<'static>>, Error> {
     if let Some(bridge) = BRIDGE.get() {
         return Ok(bridge);
     }
-    let ctx = ndk_context::android_context();
-    let context = unsafe { JObject::from_raw(env, ctx.context().cast()) };
     let parent = env
         .call_method(
-            &context,
+            context,
             jni_str!("getClassLoader"),
             jni_sig!("()Ljava/lang/ClassLoader;"),
             &[],
@@ -363,6 +434,10 @@ pub(crate) struct Android {
     /// Holds rate and pitch too, since the post-init drain needs them.
     instance: Arc<Instance>,
     tts: Arc<Global<JObject<'static>>>,
+    vm: JavaVM,
+    /// Application context, owned for the backend's lifetime so nothing outside the crate can
+    /// invalidate it.
+    context: Arc<Global<JObject<'static>>>,
 }
 
 impl Android {
@@ -389,10 +464,10 @@ impl Android {
         CALLBACKS
             .lock()
             .push((bid, info_span!("android", backend_id = bid), callbacks));
-        let tts = Self::vm().attach_current_thread(|env| -> Result<_, Error> {
-            let ctx = ndk_context::android_context();
-            let context = unsafe { JObject::from_raw(env, ctx.context().cast()) };
-            let bridge = bridge(env)?;
+        let resolved = vm_and_context();
+        let (vm, context) = resolved.inspect_err(|_| unregister(bid))?;
+        let tts = vm.attach_current_thread(|env| -> Result<_, Error> {
+            let bridge = bridge(env, context.as_obj())?;
             let bid_jint =
                 jint::try_from(bid).map_err(|_| Error::OperationFailed("backend id conversion"))?;
             let bridge = env.new_object(bridge, jni_sig!("(I)V"), &[bid_jint.into()])?;
@@ -401,7 +476,7 @@ impl Android {
                 jni_sig!(
                     "(Landroid/content/Context;Landroid/speech/tts/TextToSpeech$OnInitListener;)V"
                 ),
-                &[(&context).into(), (&bridge).into()],
+                &[(context.as_obj()).into(), (&bridge).into()],
             )?;
             env.call_method(
                 &tts,
@@ -420,6 +495,8 @@ impl Android {
             id: bid,
             instance,
             tts,
+            vm,
+            context,
         })
     }
 
@@ -436,12 +513,6 @@ impl Android {
         } else {
             Err(Error::BackendUnavailable("Android TTS engine"))
         }
-    }
-
-    #[instrument(level = "trace")]
-    fn vm() -> JavaVM {
-        let ctx = ndk_context::android_context();
-        unsafe { JavaVM::from_raw(ctx.vm().cast()) }
     }
 }
 
@@ -485,7 +556,7 @@ impl Backend for Android {
                 Some(true) => {}
             }
         }
-        Self::vm()
+        self.vm
             .attach_current_thread(|env| speak_now(env, self.tts.as_obj(), uid, text, interrupt))?;
         Ok(Some(id))
     }
@@ -497,28 +568,28 @@ impl Backend for Android {
         let id = UtteranceId::Android(uid);
         // The engine only synthesizes to a file. In the cache directory, so dropping it cleans up
         // on every exit path and the OS evicts whatever a hard kill leaves behind.
-        let cache_dir = Self::vm().attach_current_thread(|env| -> Result<String, Error> {
-            let ctx = ndk_context::android_context();
-            let context = unsafe { JObject::from_raw(env, ctx.context().cast()) };
-            let cache_dir = env
-                .call_method(
-                    &context,
-                    jni_str!("getCacheDir"),
-                    jni_sig!("()Ljava/io/File;"),
-                    &[],
-                )?
-                .l()?;
-            let cache_dir = env
-                .call_method(
-                    &cache_dir,
-                    jni_str!("getAbsolutePath"),
-                    jni_sig!("()Ljava/lang/String;"),
-                    &[],
-                )?
-                .l()?;
-            let cache_dir = env.cast_local::<JString>(cache_dir)?;
-            Ok(cache_dir.to_string())
-        })?;
+        let cache_dir = self
+            .vm
+            .attach_current_thread(|env| -> Result<String, Error> {
+                let cache_dir = env
+                    .call_method(
+                        self.context.as_obj(),
+                        jni_str!("getCacheDir"),
+                        jni_sig!("()Ljava/io/File;"),
+                        &[],
+                    )?
+                    .l()?;
+                let cache_dir = env
+                    .call_method(
+                        &cache_dir,
+                        jni_str!("getAbsolutePath"),
+                        jni_sig!("()Ljava/lang/String;"),
+                        &[],
+                    )?
+                    .l()?;
+                let cache_dir = env.cast_local::<JString>(cache_dir)?;
+                Ok(cache_dir.to_string())
+            })?;
         let file = tempfile::Builder::new()
             .prefix("tts-synthesis-")
             .suffix(".wav")
@@ -533,7 +604,7 @@ impl Backend for Android {
         with_callbacks(self.id, |callbacks| {
             callbacks.synthesis_begin(id);
         });
-        let rv = Self::vm().attach_current_thread(|env| -> Result<jint, Error> {
+        let rv = self.vm.attach_current_thread(|env| -> Result<jint, Error> {
             let text = env.new_string(text)?;
             let jpath = env.new_string(&path)?;
             let file = env.new_object(
@@ -596,10 +667,13 @@ impl Backend for Android {
         if initialized != Some(true) {
             return Ok(());
         }
-        let rv = Self::vm().attach_current_thread(|env| -> Result<jint, Error> {
-            let rv = env.call_method(self.tts.as_obj(), jni_str!("stop"), jni_sig!("()I"), &[])?;
-            Ok(rv.i()?)
-        })?;
+        let rv = self
+            .vm
+            .attach_current_thread(|env| -> Result<jint, Error> {
+                let rv =
+                    env.call_method(self.tts.as_obj(), jni_str!("stop"), jni_sig!("()I"), &[])?;
+                Ok(rv.i()?)
+            })?;
         if rv == 0 {
             Ok(())
         } else {
@@ -645,7 +719,7 @@ impl Backend for Android {
     #[instrument(level = "debug", skip(self), err)]
     fn set_rate(&mut self, rate: f32) -> Result<(), Error> {
         let pitch = self.instance.state.lock().pitch;
-        Self::vm()
+        self.vm
             .attach_current_thread(|env| set_rate_pitch_now(env, self.tts.as_obj(), rate, pitch))?;
         self.instance.state.lock().rate = rate;
         Ok(())
@@ -674,7 +748,7 @@ impl Backend for Android {
     #[instrument(level = "debug", skip(self), err)]
     fn set_pitch(&mut self, pitch: f32) -> Result<(), Error> {
         let rate = self.instance.state.lock().rate;
-        Self::vm()
+        self.vm
             .attach_current_thread(|env| set_rate_pitch_now(env, self.tts.as_obj(), rate, pitch))?;
         self.instance.state.lock().pitch = pitch;
         Ok(())
@@ -707,7 +781,7 @@ impl Backend for Android {
 
     #[instrument(level = "trace", skip(self), err, ret)]
     fn is_speaking(&self) -> Result<bool, Error> {
-        Self::vm().attach_current_thread(|env| -> Result<bool, Error> {
+        self.vm.attach_current_thread(|env| -> Result<bool, Error> {
             let rv = env.call_method(
                 self.tts.as_obj(),
                 jni_str!("isSpeaking"),

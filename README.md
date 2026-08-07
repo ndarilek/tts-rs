@@ -18,9 +18,15 @@ app — given two things:
 
 * **`minSdkVersion` 26 or above.** The `UtteranceProgressListener` subclass Android callbacks need
   ships as an embedded dex, loaded with `InMemoryDexClassLoader`.
-* **A `Context` published to [`ndk-context`]** before the first `Tts`. [`android-activity`] does
-  this for you, including by way of `winit` or a game engine; otherwise call
-  `ndk_context::initialize_android_context`.
+* **A `Context` supplied before the first `Tts`**, one of two ways. [`ndk-context`] is consulted by
+  default; [`android-activity`] publishes there for you, including by way of `winit` or a game
+  engine. Or call `tts::android::set_context` with a `JavaVM` and `Context` of your choosing — it
+  takes precedence over `ndk-context` and is the right entry point when the process outlives its
+  `Activity` or never has one, such as speech from a foreground service: `ndk-context`'s slot is
+  typically owned by the `Activity`'s glue and released when it's destroyed, while `set_context`
+  holds its own reference for as long as backends need it. Either way the supplied context is traded
+  for its application context, so no `Activity` is pinned.
+
 Nothing here waits for the engine. Android reports it ready on the app's Java main thread, so a
 backend that blocked for that would deadlock any app whose main thread is itself waiting on the
 caller — which is every `NativeActivity` app, since [`android-activity`] holds the main thread until

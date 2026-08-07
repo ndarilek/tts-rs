@@ -20,7 +20,7 @@ mod web;
 mod av_foundation;
 
 #[cfg(target_os = "android")]
-mod android;
+pub(crate) mod android;
 
 #[cfg(target_os = "linux")]
 pub(crate) use self::orca::*;

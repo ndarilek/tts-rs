@@ -27,6 +27,12 @@ use tracing::instrument;
 
 mod backends;
 
+/// Process-wide Android configuration for apps that outlive — or never have — an `Activity`.
+#[cfg(target_os = "android")]
+pub mod android {
+    pub use crate::backends::android::set_context;
+}
+
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
