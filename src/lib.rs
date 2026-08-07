@@ -27,10 +27,10 @@ use tracing::instrument;
 
 mod backends;
 
-/// Process-wide Android configuration for apps that outlive — or never have — an `Activity`.
+/// Android-specific configuration with no counterpart on the other platforms.
 #[cfg(target_os = "android")]
 pub mod android {
-    pub use crate::backends::android::set_context;
+    pub use crate::backends::android::{AudioStream, set_context};
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
@@ -349,6 +349,13 @@ pub(crate) trait Backend: Clone {
     ///
     /// Returns an error if the voice cannot be set.
     fn set_voice(&mut self, voice: &Voice) -> Result<(), Error>;
+    #[cfg(target_os = "android")]
+    fn audio_stream(&self) -> android::AudioStream;
+    /// # Errors
+    ///
+    /// Returns an error if the audio stream cannot be set.
+    #[cfg(target_os = "android")]
+    fn set_audio_stream(&mut self, stream: android::AudioStream) -> Result<(), Error>;
 }
 
 /// An utterance lifecycle callback. Backends invoke these from their own event threads, so
@@ -1002,6 +1009,32 @@ impl Tts {
         } else {
             Err(Error::UnsupportedFeature)
         }
+    }
+
+    /// Returns the Android audio stream this instance speaks on.
+    ///
+    /// [`AudioStream::Music`](android::AudioStream::Music) until [`Tts::set_audio_stream`] says
+    /// otherwise, that being the engine's own default.
+    #[cfg(target_os = "android")]
+    #[instrument(level = "trace", skip(self), ret)]
+    #[must_use]
+    pub fn audio_stream(&self) -> android::AudioStream {
+        self.backend.read().audio_stream()
+    }
+
+    /// Sets the Android audio stream this instance speaks on.
+    ///
+    /// Takes effect for subsequent utterances. Anything spoken already keeps the stream that was in
+    /// effect when it was, including utterances still queued because the engine has yet to finish
+    /// connecting.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the stream cannot be set.
+    #[cfg(target_os = "android")]
+    #[instrument(level = "debug", skip(self), err)]
+    pub fn set_audio_stream(&self, stream: android::AudioStream) -> Result<(), Error> {
+        self.backend.write().set_audio_stream(stream)
     }
 
     /// Called when this speech synthesizer begins speaking an utterance.
