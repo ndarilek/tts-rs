@@ -117,9 +117,13 @@ struct State {
     tts: Option<Arc<Global<JObject<'static>>>>,
     queued: Vec<Queued>,
     /// What the app last asked for, restored after a replay leaves the engine on the last
-    /// utterance's settings.
-    rate: f32,
-    pitch: f32,
+    /// utterance's settings. `None` until it asks at all, leaving the engine on the user's own
+    /// default and picking up changes to it mid-session.
+    rate: Option<f32>,
+    pitch: Option<f32>,
+    /// The user's defaults, cached so the JNI callbacks can resolve a `None` without a context.
+    user_rate: f32,
+    user_pitch: f32,
 }
 
 impl Default for State {
@@ -128,8 +132,10 @@ impl Default for State {
             initialized: None,
             tts: None,
             queued: Vec::new(),
-            rate: 1.,
-            pitch: 1.,
+            rate: None,
+            pitch: None,
+            user_rate: widen(DEFAULT_RATE),
+            user_pitch: widen(DEFAULT_PITCH),
         }
     }
 }
@@ -139,8 +145,8 @@ struct Queued {
     text: String,
     interrupt: bool,
     /// Frozen at the `speak` call; the app can change them again before the queue drains.
-    rate: f32,
-    pitch: f32,
+    rate: Option<f32>,
+    pitch: Option<f32>,
 }
 
 static INSTANCES: Mutex<Vec<(u64, Arc<Instance>)>> = Mutex::new(Vec::new());
@@ -159,18 +165,98 @@ fn unregister(backend_id: u64) {
     CALLBACKS.lock().retain(|(id, _, _)| *id != backend_id);
 }
 
-/// `TextToSpeech` only writes these into its parameter bundle, so they work while disconnected.
+/// Rate and pitch are in Android's own units, where 100 is normal, and bounded by what the system
+/// settings offer. Nothing reports an engine's real range, and engines clamp silently anyway.
+const MIN_RATE: jint = 10;
+const MAX_RATE: jint = 600;
+const MIN_PITCH: jint = 25;
+const MAX_PITCH: jint = 400;
+/// `TextToSpeech.Engine.DEFAULT_RATE` and `DEFAULT_PITCH`, used when the user has chosen neither.
+const DEFAULT_RATE: jint = 100;
+const DEFAULT_PITCH: jint = 100;
+
+/// Converts a rate or pitch to the `f32` the [`Backend`] trait speaks. Callers pass a constant or a
+/// clamped value, all small enough to convert exactly.
+#[allow(clippy::cast_precision_loss)]
+fn widen(value: jint) -> f32 {
+    value as f32
+}
+
+/// Reads one of the user's system-wide speech settings, which the engine applies to any utterance
+/// that leaves the corresponding value out.
+///
+/// The only view of them: `TextToSpeech` has no rate or pitch getter, and the engine service
+/// interface reports nothing beyond languages and voices. Reads need no permission, and
+/// `fallback` covers the key being unset.
+fn secure_setting(
+    env: &mut Env,
+    context: &JObject<'_>,
+    key: &str,
+    fallback: jint,
+) -> Result<jint, Error> {
+    let resolver = env
+        .call_method(
+            context,
+            jni_str!("getContentResolver"),
+            jni_sig!("()Landroid/content/ContentResolver;"),
+            &[],
+        )?
+        .l()?;
+    let key = env.new_string(key)?;
+    let rv = env.call_static_method(
+        jni_str!("android/provider/Settings$Secure"),
+        jni_str!("getInt"),
+        jni_sig!("(Landroid/content/ContentResolver;Ljava/lang/String;I)I"),
+        &[(&resolver).into(), (&key).into(), fallback.into()],
+    )?;
+    Ok(rv.i()?)
+}
+
+/// [`secure_setting`], with a failed read reported and then treated as an unset key.
+fn secure_setting_or(env: &mut Env, context: &JObject<'_>, key: &str, fallback: jint) -> jint {
+    secure_setting(env, context, key, fallback).unwrap_or_else(|e| {
+        error!("Failed to read {key}, falling back to {fallback}: {e}");
+        // Nothing propagates this, so a pending exception has to go before the next JNI call.
+        if env.exception_check() {
+            env.exception_clear();
+        }
+        fallback
+    })
+}
+
+/// Clamped to the advertised range, so handing it back to [`Backend::set_rate`] is always accepted.
+fn user_rate(env: &mut Env, context: &JObject<'_>) -> f32 {
+    let rate = secure_setting_or(env, context, "tts_default_rate", DEFAULT_RATE);
+    widen(rate.clamp(MIN_RATE, MAX_RATE))
+}
+
+/// Clamped like [`user_rate`].
+fn user_pitch(env: &mut Env, context: &JObject<'_>) -> f32 {
+    let pitch = secure_setting_or(env, context, "tts_default_pitch", DEFAULT_PITCH);
+    widen(pitch.clamp(MIN_PITCH, MAX_PITCH))
+}
+
+/// The multiplier `TextToSpeech` takes, biased into the middle of the target percent so its own
+/// truncation back lands there. Plain division loses a percent to rounding for dozens of values.
+fn multiplier(percent: f32) -> jfloat {
+    (percent.trunc() + 0.5) / 100.
+}
+
+/// Pushes rate and pitch, skipping whichever the app has never set so the engine keeps applying the
+/// user's own default. `TextToSpeech` only writes these into its parameter bundle, so they work
+/// while disconnected.
 fn set_rate_pitch_now(
     env: &mut Env,
     tts: &JObject<'static>,
-    rate: f32,
-    pitch: f32,
+    rate: Option<f32>,
+    pitch: Option<f32>,
 ) -> Result<(), Error> {
     for (method, value, failure) in [
         (jni_str!("setSpeechRate"), rate, "set_rate"),
         (jni_str!("setPitch"), pitch, "set_pitch"),
     ] {
-        let rv = env.call_method(tts, method, jni_sig!("(F)I"), &[(value as jfloat).into()])?;
+        let Some(value) = value else { continue };
+        let rv = env.call_method(tts, method, jni_sig!("(F)I"), &[multiplier(value).into()])?;
         if rv.i()? != 0 {
             return Err(Error::OperationFailed(failure));
         }
@@ -324,7 +410,7 @@ fn on_init(env: &mut Env, this: JObject, status: jint) -> jni::errors::Result<()
     };
     // Collect under the lock, then release it: replaying re-enters Java, which can call the
     // progress callbacks back synchronously.
-    let (tts, queued, rate, pitch) = {
+    let (tts, queued, rate, pitch, user_rate, user_pitch) = {
         let mut state = instance.state.lock();
         state.initialized = Some(status == 0);
         instance.ready.notify_all();
@@ -333,6 +419,8 @@ fn on_init(env: &mut Env, this: JObject, status: jint) -> jni::errors::Result<()
             std::mem::take(&mut state.queued),
             state.rate,
             state.pitch,
+            state.user_rate,
+            state.user_pitch,
         )
     };
     if status != 0 {
@@ -349,22 +437,31 @@ fn on_init(env: &mut Env, this: JObject, status: jint) -> jni::errors::Result<()
         // Unreachable on success: that `onInit` arrives long after the constructor returned.
         return Ok(());
     };
+    // Only utterances queued after the app set a rate or pitch carry one; the rest leave the engine
+    // on the user's defaults. Once one has pinned a value there's no dropping it again, so the
+    // later ones push the user's default explicitly to get back to it.
+    let (mut rate_pinned, mut pitch_pinned) = (false, false);
     for utterance in queued {
-        let replay = set_rate_pitch_now(env, tts.as_obj(), utterance.rate, utterance.pitch)
-            .and_then(|()| {
-                speak_now(
-                    env,
-                    tts.as_obj(),
-                    utterance.id,
-                    &utterance.text,
-                    utterance.interrupt,
-                )
-            });
+        let rate = utterance.rate.or(rate_pinned.then_some(user_rate));
+        let pitch = utterance.pitch.or(pitch_pinned.then_some(user_pitch));
+        rate_pinned |= rate.is_some();
+        pitch_pinned |= pitch.is_some();
+        let replay = set_rate_pitch_now(env, tts.as_obj(), rate, pitch).and_then(|()| {
+            speak_now(
+                env,
+                tts.as_obj(),
+                utterance.id,
+                &utterance.text,
+                utterance.interrupt,
+            )
+        });
         if let Err(e) = replay {
             error!("Failed to speak queued utterance: {e}");
         }
     }
     // The replay left the engine on the last utterance's settings.
+    let rate = rate.or(rate_pinned.then_some(user_rate));
+    let pitch = pitch.or(pitch_pinned.then_some(user_pitch));
     if let Err(e) = set_rate_pitch_now(env, tts.as_obj(), rate, pitch) {
         error!("Failed to restore rate and pitch: {e}");
     }
@@ -468,6 +565,12 @@ impl Android {
         let (vm, context) = resolved.inspect_err(|_| unregister(bid))?;
         let tts = vm.attach_current_thread(|env| -> Result<_, Error> {
             let bridge = bridge(env, context.as_obj())?;
+            // Ahead of the constructor, so a synchronous `on_init` finds them.
+            {
+                let mut state = instance.state.lock();
+                state.user_rate = user_rate(env, context.as_obj());
+                state.user_pitch = user_pitch(env, context.as_obj());
+            }
             let bid_jint =
                 jint::try_from(bid).map_err(|_| Error::OperationFailed("backend id conversion"))?;
             let bridge = env.new_object(bridge, jni_sig!("(I)V"), &[bid_jint.into()])?;
@@ -698,59 +801,82 @@ impl Backend for Android {
 
     #[instrument(level = "trace", skip(self))]
     fn min_rate(&self) -> f32 {
-        0.1
+        widen(MIN_RATE)
     }
 
     #[instrument(level = "trace", skip(self))]
     fn max_rate(&self) -> f32 {
-        10.
+        widen(MAX_RATE)
     }
 
+    /// The user's own system-wide rate, re-read each call, so setting it back speaks the way
+    /// they've asked every app to.
     #[instrument(level = "trace", skip(self))]
     fn normal_rate(&self) -> f32 {
-        1.
+        let rate = self
+            .vm
+            .attach_current_thread(|env| Ok::<_, Error>(user_rate(env, self.context.as_obj())))
+            .unwrap_or_else(|e| {
+                error!("Failed to attach to read the default rate: {e}");
+                self.instance.state.lock().user_rate
+            });
+        self.instance.state.lock().user_rate = rate;
+        rate
     }
 
     #[instrument(level = "debug", skip(self), err, ret)]
     fn get_rate(&self) -> Result<f32, Error> {
-        Ok(self.instance.state.lock().rate)
+        let rate = self.instance.state.lock().rate;
+        // Untouched, so the engine is on the user's default.
+        Ok(rate.unwrap_or_else(|| self.normal_rate()))
     }
 
     #[instrument(level = "debug", skip(self), err)]
     fn set_rate(&mut self, rate: f32) -> Result<(), Error> {
-        let pitch = self.instance.state.lock().pitch;
-        self.vm
-            .attach_current_thread(|env| set_rate_pitch_now(env, self.tts.as_obj(), rate, pitch))?;
-        self.instance.state.lock().rate = rate;
+        self.vm.attach_current_thread(|env| {
+            set_rate_pitch_now(env, self.tts.as_obj(), Some(rate), None)
+        })?;
+        self.instance.state.lock().rate = Some(rate);
         Ok(())
     }
 
     #[instrument(level = "trace", skip(self))]
     fn min_pitch(&self) -> f32 {
-        0.1
+        widen(MIN_PITCH)
     }
 
     #[instrument(level = "trace", skip(self))]
     fn max_pitch(&self) -> f32 {
-        2.
+        widen(MAX_PITCH)
     }
 
+    /// The user's own system-wide pitch; see [`Android::normal_rate`].
     #[instrument(level = "trace", skip(self))]
     fn normal_pitch(&self) -> f32 {
-        1.
+        let pitch = self
+            .vm
+            .attach_current_thread(|env| Ok::<_, Error>(user_pitch(env, self.context.as_obj())))
+            .unwrap_or_else(|e| {
+                error!("Failed to attach to read the default pitch: {e}");
+                self.instance.state.lock().user_pitch
+            });
+        self.instance.state.lock().user_pitch = pitch;
+        pitch
     }
 
     #[instrument(level = "debug", skip(self), err, ret)]
     fn get_pitch(&self) -> Result<f32, Error> {
-        Ok(self.instance.state.lock().pitch)
+        let pitch = self.instance.state.lock().pitch;
+        // Untouched, so the engine is on the user's default.
+        Ok(pitch.unwrap_or_else(|| self.normal_pitch()))
     }
 
     #[instrument(level = "debug", skip(self), err)]
     fn set_pitch(&mut self, pitch: f32) -> Result<(), Error> {
-        let rate = self.instance.state.lock().rate;
-        self.vm
-            .attach_current_thread(|env| set_rate_pitch_now(env, self.tts.as_obj(), rate, pitch))?;
-        self.instance.state.lock().pitch = pitch;
+        self.vm.attach_current_thread(|env| {
+            set_rate_pitch_now(env, self.tts.as_obj(), None, Some(pitch))
+        })?;
+        self.instance.state.lock().pitch = Some(pitch);
         Ok(())
     }
 
