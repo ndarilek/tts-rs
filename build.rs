@@ -42,9 +42,13 @@ fn main() {
 }
 
 /// FNV-1a: detecting an edit needs no cryptographic hash, and this keeps the script dependency-free.
+/// Skips carriage returns so checkouts with CRLF conversion hash the same as LF checkouts.
 fn hash(bytes: &[u8]) -> String {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
     for b in bytes {
+        if *b == b'\r' {
+            continue;
+        }
         h ^= u64::from(*b);
         h = h.wrapping_mul(0x0000_0100_0000_01b3);
     }
@@ -71,7 +75,8 @@ fn build_dex() {
     let Some(d8) = newest(&build_tools, version_key) else {
         panic!("No build-tools found under {}", build_tools.display())
     };
-    let d8 = d8.join("d8");
+    // d8 ships as a batch script on Windows, and CreateProcess won't infer the .bat extension.
+    let d8 = d8.join(if cfg!(windows) { "d8.bat" } else { "d8" });
 
     let out = PathBuf::from(env::var_os("OUT_DIR").expect("Cargo always sets OUT_DIR"));
     let classes = out.join("bridge-classes");
