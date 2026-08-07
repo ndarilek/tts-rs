@@ -121,8 +121,8 @@ struct State {
     /// default and picking up changes to it mid-session.
     rate: Option<f32>,
     pitch: Option<f32>,
-    /// Likewise untouched until the app asks, leaving the engine on `Engine.DEFAULT_STREAM`.
-    stream: Option<AudioStream>,
+    /// Likewise untouched until the app asks, leaving the engine on its own default.
+    usage: Option<AudioUsage>,
     /// The user's defaults, cached so the JNI callbacks can resolve a `None` without a context.
     user_rate: f32,
     user_pitch: f32,
@@ -136,7 +136,7 @@ impl Default for State {
             queued: Vec::new(),
             rate: None,
             pitch: None,
-            stream: None,
+            usage: None,
             user_rate: widen(DEFAULT_RATE),
             user_pitch: widen(DEFAULT_PITCH),
         }
@@ -150,7 +150,7 @@ struct Queued {
     /// Frozen at the `speak` call; the app can change them again before the queue drains.
     rate: Option<f32>,
     pitch: Option<f32>,
-    stream: Option<AudioStream>,
+    usage: Option<AudioUsage>,
 }
 
 static INSTANCES: Mutex<Vec<(u64, Arc<Instance>)>> = Mutex::new(Vec::new());
@@ -178,52 +178,57 @@ const MAX_PITCH: jint = 400;
 /// `TextToSpeech.Engine.DEFAULT_RATE` and `DEFAULT_PITCH`, used when the user has chosen neither.
 const DEFAULT_RATE: jint = 100;
 const DEFAULT_PITCH: jint = 100;
-/// `AudioAttributes.CONTENT_TYPE_SPEECH`, which engines tag their own playback with when handed a
-/// bare stream type.
+/// `AudioAttributes.CONTENT_TYPE_SPEECH`, which engines tag their own speech playback with.
 const CONTENT_TYPE_SPEECH: jint = 1;
 
-/// Which of Android's audio streams speech plays on, named after its `AudioManager.STREAM_*`
-/// constant.
+/// What speech is for, as one of Android's `AudioAttributes.USAGE_*` constants.
 ///
 /// Affects playback only. [`Tts::synthesize`](crate::Tts::synthesize) writes a file and never
-/// reaches an output stream.
+/// reaches an output device.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
-pub enum AudioStream {
-    Accessibility,
+pub enum AudioUsage {
     Alarm,
-    Dtmf,
-    /// Android's `TextToSpeech.Engine.DEFAULT_STREAM`, and so this crate's default.
+    AssistanceAccessibility,
+    AssistanceNavigationGuidance,
+    AssistanceSonification,
+    Assistant,
+    Game,
+    /// What an engine given no attributes of its own falls back to, and so this crate's default.
     #[default]
-    Music,
+    Media,
     Notification,
-    Ring,
-    System,
-    VoiceCall,
+    NotificationEvent,
+    NotificationRingtone,
+    VoiceCommunication,
+    VoiceCommunicationSignalling,
 }
 
-impl AudioStream {
-    /// The matching `AudioManager.STREAM_*` constant, fixed by Android's audio ABI.
-    fn stream_type(self) -> jint {
+impl AudioUsage {
+    /// The matching `AudioAttributes.USAGE_*` constant, fixed by Android's audio ABI.
+    fn usage(self) -> jint {
         match self {
-            AudioStream::VoiceCall => 0,
-            AudioStream::System => 1,
-            AudioStream::Ring => 2,
-            AudioStream::Music => 3,
-            AudioStream::Alarm => 4,
-            AudioStream::Notification => 5,
-            AudioStream::Dtmf => 8,
-            AudioStream::Accessibility => 10,
+            AudioUsage::Media => 1,
+            AudioUsage::VoiceCommunication => 2,
+            AudioUsage::VoiceCommunicationSignalling => 3,
+            AudioUsage::Alarm => 4,
+            AudioUsage::Notification => 5,
+            AudioUsage::NotificationRingtone => 6,
+            AudioUsage::NotificationEvent => 10,
+            AudioUsage::AssistanceAccessibility => 11,
+            AudioUsage::AssistanceNavigationGuidance => 12,
+            AudioUsage::AssistanceSonification => 13,
+            AudioUsage::Game => 14,
+            AudioUsage::Assistant => 16,
         }
     }
 }
 
-/// Builds the `AudioAttributes` describing speech on `stream`, the form `TextToSpeech` accepts a
-/// stream in. Android maps the legacy stream type to the matching usage.
+/// Builds the `AudioAttributes` describing speech for `usage`, the only form `TextToSpeech` accepts.
 fn audio_attributes<'local>(
     env: &mut Env<'local>,
-    stream: AudioStream,
+    usage: AudioUsage,
 ) -> Result<JObject<'local>, Error> {
     let builder = env.new_object(
         jni_str!("android/media/AudioAttributes$Builder"),
@@ -233,9 +238,9 @@ fn audio_attributes<'local>(
     let builder = env
         .call_method(
             &builder,
-            jni_str!("setLegacyStreamType"),
+            jni_str!("setUsage"),
             jni_sig!("(I)Landroid/media/AudioAttributes$Builder;"),
-            &[stream.stream_type().into()],
+            &[usage.usage().into()],
         )?
         .l()?;
     let builder = env
@@ -324,15 +329,15 @@ fn multiplier(percent: f32) -> jfloat {
     (percent.trunc() + 0.5) / 100.
 }
 
-/// Pushes rate, pitch and audio stream, skipping whichever the app has never set so the engine keeps
-/// applying its own default — the user's for rate and pitch, `Engine.DEFAULT_STREAM` for the stream.
-/// `TextToSpeech` only writes these into its parameter bundle, so they work while disconnected.
+/// Pushes rate, pitch and audio usage, skipping whichever the app has never set so the engine keeps
+/// applying its own default. `TextToSpeech` only writes these into its parameter bundle, so they
+/// work while disconnected.
 fn set_params_now(
     env: &mut Env,
     tts: &JObject<'static>,
     rate: Option<f32>,
     pitch: Option<f32>,
-    stream: Option<AudioStream>,
+    usage: Option<AudioUsage>,
 ) -> Result<(), Error> {
     for (method, value, failure) in [
         (jni_str!("setSpeechRate"), rate, "set_rate"),
@@ -344,8 +349,8 @@ fn set_params_now(
             return Err(Error::OperationFailed(failure));
         }
     }
-    if let Some(stream) = stream {
-        let attributes = audio_attributes(env, stream)?;
+    if let Some(usage) = usage {
+        let attributes = audio_attributes(env, usage)?;
         let rv = env.call_method(
             tts,
             jni_str!("setAudioAttributes"),
@@ -353,7 +358,7 @@ fn set_params_now(
             &[(&attributes).into()],
         )?;
         if rv.i()? != 0 {
-            return Err(Error::OperationFailed("set_audio_stream"));
+            return Err(Error::OperationFailed("set_audio_usage"));
         }
     }
     Ok(())
@@ -505,7 +510,7 @@ fn on_init(env: &mut Env, this: JObject, status: jint) -> jni::errors::Result<()
     };
     // Collect under the lock, then release it: replaying re-enters Java, which can call the
     // progress callbacks back synchronously.
-    let (tts, queued, rate, pitch, stream, user_rate, user_pitch) = {
+    let (tts, queued, rate, pitch, usage, user_rate, user_pitch) = {
         let mut state = instance.state.lock();
         state.initialized = Some(status == 0);
         instance.ready.notify_all();
@@ -514,7 +519,7 @@ fn on_init(env: &mut Env, this: JObject, status: jint) -> jni::errors::Result<()
             std::mem::take(&mut state.queued),
             state.rate,
             state.pitch,
-            state.stream,
+            state.usage,
             state.user_rate,
             state.user_pitch,
         )
@@ -533,20 +538,20 @@ fn on_init(env: &mut Env, this: JObject, status: jint) -> jni::errors::Result<()
         // Unreachable on success: that `onInit` arrives long after the constructor returned.
         return Ok(());
     };
-    // Only utterances queued after the app set a rate, pitch or stream carry one; the rest leave the
+    // Only utterances queued after the app set a rate, pitch or usage carry one; the rest leave the
     // engine on its defaults. Once one has pinned a value there's no dropping it again, so the later
     // ones push the default explicitly to get back to it.
-    let (mut rate_pinned, mut pitch_pinned, mut stream_pinned) = (false, false, false);
+    let (mut rate_pinned, mut pitch_pinned, mut usage_pinned) = (false, false, false);
     for utterance in queued {
         let rate = utterance.rate.or(rate_pinned.then_some(user_rate));
         let pitch = utterance.pitch.or(pitch_pinned.then_some(user_pitch));
-        let stream = utterance
-            .stream
-            .or(stream_pinned.then_some(AudioStream::default()));
+        let usage = utterance
+            .usage
+            .or(usage_pinned.then_some(AudioUsage::default()));
         rate_pinned |= rate.is_some();
         pitch_pinned |= pitch.is_some();
-        stream_pinned |= stream.is_some();
-        let replay = set_params_now(env, tts.as_obj(), rate, pitch, stream).and_then(|()| {
+        usage_pinned |= usage.is_some();
+        let replay = set_params_now(env, tts.as_obj(), rate, pitch, usage).and_then(|()| {
             speak_now(
                 env,
                 tts.as_obj(),
@@ -562,9 +567,9 @@ fn on_init(env: &mut Env, this: JObject, status: jint) -> jni::errors::Result<()
     // The replay left the engine on the last utterance's settings.
     let rate = rate.or(rate_pinned.then_some(user_rate));
     let pitch = pitch.or(pitch_pinned.then_some(user_pitch));
-    let stream = stream.or(stream_pinned.then_some(AudioStream::default()));
-    if let Err(e) = set_params_now(env, tts.as_obj(), rate, pitch, stream) {
-        error!("Failed to restore rate, pitch and audio stream: {e}");
+    let usage = usage.or(usage_pinned.then_some(AudioUsage::default()));
+    if let Err(e) = set_params_now(env, tts.as_obj(), rate, pitch, usage) {
+        error!("Failed to restore rate, pitch and audio usage: {e}");
     }
     Ok(())
 }
@@ -746,14 +751,14 @@ impl Backend for Android {
                     if interrupt {
                         state.queued.clear();
                     }
-                    let (rate, pitch, stream) = (state.rate, state.pitch, state.stream);
+                    let (rate, pitch, usage) = (state.rate, state.pitch, state.usage);
                     state.queued.push(Queued {
                         id: uid,
                         text: text.to_owned(),
                         interrupt,
                         rate,
                         pitch,
-                        stream,
+                        usage,
                     });
                     return Ok(Some(id));
                 }
@@ -1037,16 +1042,16 @@ impl Backend for Android {
 
     /// The value last set here, which Android offers no getter for.
     #[instrument(level = "trace", skip(self))]
-    fn audio_stream(&self) -> AudioStream {
-        self.instance.state.lock().stream.unwrap_or_default()
+    fn audio_usage(&self) -> AudioUsage {
+        self.instance.state.lock().usage.unwrap_or_default()
     }
 
     #[instrument(level = "debug", skip(self), err)]
-    fn set_audio_stream(&mut self, stream: AudioStream) -> Result<(), Error> {
+    fn set_audio_usage(&mut self, usage: AudioUsage) -> Result<(), Error> {
         self.vm.attach_current_thread(|env| {
-            set_params_now(env, self.tts.as_obj(), None, None, Some(stream))
+            set_params_now(env, self.tts.as_obj(), None, None, Some(usage))
         })?;
-        self.instance.state.lock().stream = Some(stream);
+        self.instance.state.lock().usage = Some(usage);
         Ok(())
     }
 }

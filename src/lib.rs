@@ -30,7 +30,7 @@ mod backends;
 /// Android-specific configuration with no counterpart on the other platforms.
 #[cfg(target_os = "android")]
 pub mod android {
-    pub use crate::backends::android::{AudioStream, set_context};
+    pub use crate::backends::android::{AudioUsage, set_context};
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
@@ -350,12 +350,12 @@ pub(crate) trait Backend: Clone {
     /// Returns an error if the voice cannot be set.
     fn set_voice(&mut self, voice: &Voice) -> Result<(), Error>;
     #[cfg(target_os = "android")]
-    fn audio_stream(&self) -> android::AudioStream;
+    fn audio_usage(&self) -> android::AudioUsage;
     /// # Errors
     ///
-    /// Returns an error if the audio stream cannot be set.
+    /// Returns an error if the audio usage cannot be set.
     #[cfg(target_os = "android")]
-    fn set_audio_stream(&mut self, stream: android::AudioStream) -> Result<(), Error>;
+    fn set_audio_usage(&mut self, usage: android::AudioUsage) -> Result<(), Error>;
 }
 
 /// An utterance lifecycle callback. Backends invoke these from their own event threads, so
@@ -1011,30 +1011,30 @@ impl Tts {
         }
     }
 
-    /// Returns the Android audio stream this instance speaks on.
+    /// Returns the Android audio usage this instance declares for its speech.
     ///
-    /// [`AudioStream::Music`](android::AudioStream::Music) until [`Tts::set_audio_stream`] says
-    /// otherwise, that being the engine's own default.
+    /// [`AudioUsage::Media`](android::AudioUsage::Media) until [`Tts::set_audio_usage`] says
+    /// otherwise, that being what an engine falls back to.
     #[cfg(target_os = "android")]
     #[instrument(level = "trace", skip(self), ret)]
     #[must_use]
-    pub fn audio_stream(&self) -> android::AudioStream {
-        self.backend.read().audio_stream()
+    pub fn audio_usage(&self) -> android::AudioUsage {
+        self.backend.read().audio_usage()
     }
 
-    /// Sets the Android audio stream this instance speaks on.
+    /// Sets the Android audio usage this instance declares for its speech.
     ///
-    /// Takes effect for subsequent utterances. Anything spoken already keeps the stream that was in
+    /// Takes effect for subsequent utterances. Anything spoken already keeps the usage that was in
     /// effect when it was, including utterances still queued because the engine has yet to finish
     /// connecting.
     ///
     /// # Errors
     ///
-    /// Returns an error if the stream cannot be set.
+    /// Returns an error if the usage cannot be set.
     #[cfg(target_os = "android")]
     #[instrument(level = "debug", skip(self), err)]
-    pub fn set_audio_stream(&self, stream: android::AudioStream) -> Result<(), Error> {
-        self.backend.write().set_audio_stream(stream)
+    pub fn set_audio_usage(&self, usage: android::AudioUsage) -> Result<(), Error> {
+        self.backend.write().set_audio_usage(usage)
     }
 
     /// Called when this speech synthesizer begins speaking an utterance.

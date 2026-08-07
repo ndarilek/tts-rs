@@ -11,7 +11,7 @@ use std::time::Duration;
 use android_activity::{AndroidApp, MainEvent, PollEvent};
 use tracing::{error, info};
 use tracing_subscriber::{EnvFilter, fmt::format::FmtSpan};
-use tts::{Error, Features, Tts, android::AudioStream};
+use tts::{Error, Features, Tts, android::AudioUsage};
 
 // Signature dictated by `android-activity`, which looks this up by symbol name. It can't return a
 // `Result`, which is the only reason the example proper lives in `run`.
@@ -98,10 +98,10 @@ fn run(app: &AndroidApp) -> Result<(), Error> {
         tts.speak("This is normal volume.", false)?;
         tts.set_volume(original_volume)?;
     }
-    let original_stream = tts.audio_stream();
-    tts.set_audio_stream(AudioStream::Accessibility)?;
-    tts.speak("This is on the accessibility stream.", false)?;
-    tts.set_audio_stream(original_stream)?;
+    let original_usage = tts.audio_usage();
+    tts.set_audio_usage(AudioUsage::AssistanceAccessibility)?;
+    tts.speak("This is accessibility speech.", false)?;
+    tts.set_audio_usage(original_usage)?;
     tts.speak("Goodbye.", false)?;
     let mut destroyed = false;
     while !destroyed {
